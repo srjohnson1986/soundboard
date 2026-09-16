@@ -70,7 +70,7 @@ fun BoardScreen(vm: BoardViewModel = viewModel()) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(board.tiles, key = { it.id }) { tile ->
+            items(board.visibleTiles, key = { it.id }) { tile ->
                 TileCard(
                     tile = tile,
                     onTap = {
@@ -225,9 +225,10 @@ private fun GridSizeDialog(
                 Stepper("Columns", c) { c = it }
                 if (shrinking) {
                     Text(
-                        "Shrinking the grid removes the last tiles and their sounds.",
+                        "Shrinking just hides the last tiles — their sounds stay put " +
+                            "and come back if you grow the grid again.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

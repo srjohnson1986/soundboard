@@ -22,13 +22,21 @@ data class Board(
     val columns: Int = 4,
     val tiles: List<Tile> = List(16) { Tile() }
 ) {
-    /** Grows or trims the tile list to match rows x columns, keeping existing tiles in order. */
+    /** Tiles currently shown on the grid, in row-major order. */
+    val visibleTiles: List<Tile> get() = tiles.take(rows * columns)
+
+    /**
+     * Changes the visible grid size without ever dropping a tile. Shrinking just
+     * hides the trailing tiles — their sound stays assigned — and growing reveals
+     * them again, only appending fresh empty tiles if the board has never been
+     * this large. The only way to lose a tile's sound is clearing it directly.
+     */
     fun resized(newRows: Int, newColumns: Int): Board {
         val target = newRows * newColumns
         val next = if (tiles.size < target) {
             tiles + List(target - tiles.size) { Tile() }
         } else {
-            tiles.take(target)
+            tiles
         }
         return copy(rows = newRows, columns = newColumns, tiles = next)
     }

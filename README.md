@@ -37,6 +37,13 @@ but worth knowing if a tile seems dead for the first split second after import.
 referenced file names, unloads anything orphaned, saves the JSON, and deletes
 unused audio. Adding a feature means adding a function that calls `commit()`.
 
+**Shrinking hides, it doesn't delete.** `Board.tiles` only ever grows — the
+grid size just controls how many of those tiles `visibleTiles` shows. Shrink
+to 2x2 then back to 4x4 and the other 12 tiles, sounds included, are exactly
+as you left them. `commit()` only unloads/deletes audio for a tile once it's
+explicitly cleared, since that's the only way a file name drops out of the
+full `tiles` list.
+
 ## Worth adding next
 
 - **Long clips.** SoundPool holds everything in memory. If you want backing

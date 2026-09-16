@@ -9,6 +9,9 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.UUID
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
 
 /** Board layout lives in board.json; audio lives in filesDir/sounds. Both are app-private. */
 class BoardRepository(private val context: Context) {
@@ -54,6 +57,46 @@ class BoardRepository(private val context: Context) {
             if (file.name !in keep) file.delete()
         }
     }
+
+    /** Zips board.json and every sound into [uri]. The whole app state in one file. */
+    fun exportTo(uri: Uri): Boolean = runCatching {
+        val out = context.contentResolver.openOutputStream(uri) ?: error("no output stream")
+        out.use { stream ->
+            ZipOutputStream(stream).use { zip ->
+                zip.putNextEntry(ZipEntry("board.json"))
+                zip.write(boardFile.readBytes())
+                zip.closeEntry()
+
+                soundsDir.listFiles()?.forEach { file ->
+                    zip.putNextEntry(ZipEntry("sounds/${file.name}"))
+                    file.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
+            }
+        }
+    }.isSuccess
+
+    /** Restores board.json and sounds from a zip made by [exportTo], overwriting both. */
+    fun importFrom(uri: Uri): Boolean = runCatching {
+        val input = context.contentResolver.openInputStream(uri) ?: error("no input stream")
+        soundsDir.mkdirs()
+        input.use { stream ->
+            ZipInputStream(stream).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    when {
+                        entry.name == "board.json" -> boardFile.outputStream().use { zip.copyTo(it) }
+                        entry.name.startsWith("sounds/") && !entry.isDirectory -> {
+                            val target = File(soundsDir, entry.name.removePrefix("sounds/"))
+                            target.outputStream().use { zip.copyTo(it) }
+                        }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+        }
+    }.isSuccess
 
     private fun extensionFor(uri: Uri): String {
         context.contentResolver.getType(uri)

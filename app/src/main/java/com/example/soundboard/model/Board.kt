@@ -11,7 +11,9 @@ import java.util.UUID
 data class Tile(
     val id: String = UUID.randomUUID().toString(),
     val label: String = "",
-    val fileName: String? = null
+    val fileName: String? = null,
+    val volume: Float = 1f,
+    val colorArgb: Int? = null
 ) {
     val isEmpty: Boolean get() = fileName == null
 }
@@ -39,5 +41,17 @@ data class Board(
             tiles
         }
         return copy(rows = newRows, columns = newColumns, tiles = next)
+    }
+
+    /** Reorders the visible tiles by moving [fromIndex] to [toIndex]; hidden tiles are untouched. */
+    fun moved(fromIndex: Int, toIndex: Int): Board {
+        val visibleCount = rows * columns
+        if (fromIndex !in 0 until visibleCount || toIndex !in 0 until visibleCount || fromIndex == toIndex) {
+            return this
+        }
+        val visible = tiles.take(visibleCount).toMutableList()
+        val tile = visible.removeAt(fromIndex)
+        visible.add(toIndex, tile)
+        return copy(tiles = visible + tiles.drop(visibleCount))
     }
 }

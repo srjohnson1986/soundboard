@@ -23,24 +23,33 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
     private val _board = MutableStateFlow(Board())
     val board: StateFlow<Board> = _board.asStateFlow()
 
+    /** One-off status text for the UI to show (e.g. in a Snackbar), then clear. */
+    private val _message = MutableStateFlow<String?>(null)
+    val message: StateFlow<String?> = _message.asStateFlow()
+
     init {
         viewModelScope.launch {
             val loaded = withContext(Dispatchers.IO) { repo.load() }
             _board.value = loaded
-            withContext(Dispatchers.IO) {
-                loaded.tiles.mapNotNull { it.fileName }.forEach { name ->
-                    player.load(name, repo.soundFile(name))
-                }
-            }
+            withContext(Dispatchers.IO) { loadSounds(loaded) }
         }
     }
 
     fun play(tile: Tile) {
-        tile.fileName?.let { player.play(it) }
+        val name = tile.fileName ?: return
+        player.play(name, tile.volume)
     }
 
     fun setLabel(tileId: String, label: String) = updateTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(label = label) else it }
+    }
+
+    fun setVolume(tileId: String, volume: Float) = updateTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(volume = volume.coerceIn(0f, 1f)) else it }
+    }
+
+    fun setColor(tileId: String, colorArgb: Int?) = updateTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
     }
 
     fun assignSound(tileId: String, uri: Uri) {
@@ -59,6 +68,48 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
 
     fun resize(rows: Int, columns: Int) {
         commit(_board.value.resized(rows, columns))
+    }
+
+    /** Live-reorders tiles during a drag without touching disk; see [commitOrder]. */
+    fun previewMove(fromIndex: Int, toIndex: Int) {
+        _board.value = _board.value.moved(fromIndex, toIndex)
+    }
+
+    /** Persists whatever order a drag gesture has left the board in. */
+    fun commitOrder() {
+        commit(_board.value)
+    }
+
+    fun exportBoard(uri: Uri) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) { repo.exportTo(uri) }
+            _message.value = if (ok) "Exported backup" else "Export failed"
+        }
+    }
+
+    fun importBoard(uri: Uri) {
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) { repo.importFrom(uri) }
+            if (ok) {
+                player.clear()
+                val loaded = withContext(Dispatchers.IO) { repo.load() }
+                _board.value = loaded
+                withContext(Dispatchers.IO) { loadSounds(loaded) }
+                _message.value = "Imported backup"
+            } else {
+                _message.value = "Import failed"
+            }
+        }
+    }
+
+    fun clearMessage() {
+        _message.value = null
+    }
+
+    private fun loadSounds(board: Board) {
+        board.tiles.mapNotNull { it.fileName }.forEach { name ->
+            player.load(name, repo.soundFile(name))
+        }
     }
 
     private fun updateTiles(transform: (List<Tile>) -> List<Tile>) {

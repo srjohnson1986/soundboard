@@ -29,9 +29,13 @@ get revoked when the source app updates or the file moves, which would leave you
 with tiles that silently stop working. Copying also means no storage permission.
 
 **SoundPool, not MediaPlayer.** Clips decode into memory on load, so taps fire
-instantly and overlap cleanly. `maxStreams` is 8. `load()` is async, so a clip
-won't play until its load-complete callback has fired — normally imperceptible,
-but worth knowing if a tile seems dead for the first split second after import.
+instantly. `load()` is async, so a clip won't play until its load-complete
+callback has fired — normally imperceptible, but worth knowing if a tile seems
+dead for the first split second after import.
+
+**Playback is exclusive.** `SoundPlayer.play()` stops whatever stream was
+previously playing before starting the new one. Tapping a tile always cuts off
+the last one instead of layering sounds.
 
 **One write path.** Every mutation goes through `commit()`, which diffs the
 referenced file names, unloads anything orphaned, saves the JSON, and deletes
@@ -49,8 +53,6 @@ full `tiles` list.
 - **Long clips.** SoundPool holds everything in memory. If you want backing
   tracks, add a `MediaPlayer` path for files over a few hundred KB and pick
   between them in `SoundPlayer.play()`.
-- **Stop-all button.** Keep the stream IDs returned by `pool.play()` and call
-  `pool.stop()` on each.
 - **Drag to rearrange.** `LazyVerticalGrid` has no built-in reorder; the usual
   route is `Modifier.pointerInput` tracking drag offsets against item bounds.
 - **Backup.** `board.json` plus the sounds folder is the whole state — zip both

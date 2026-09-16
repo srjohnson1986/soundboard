@@ -7,7 +7,8 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Thin wrapper over SoundPool. Clips are decoded into memory on load, so taps
- * play with no startup delay and can overlap. Best for clips under ~5 seconds.
+ * play with no startup delay. Playback is exclusive: starting a clip stops
+ * whatever was playing. Best for clips under ~5 seconds.
  */
 class SoundPlayer(maxStreams: Int = 8) {
 
@@ -24,6 +25,9 @@ class SoundPlayer(maxStreams: Int = 8) {
     private val soundIds = ConcurrentHashMap<String, Int>()
     private val ready = ConcurrentHashMap.newKeySet<Int>()
 
+    /** Stream ID of the clip currently playing, if any. Only one plays at a time. */
+    private var activeStreamId: Int? = null
+
     init {
         // load() is asynchronous; a clip is only safe to play once this fires.
         pool.setOnLoadCompleteListener { _, sampleId, status ->
@@ -39,7 +43,8 @@ class SoundPlayer(maxStreams: Int = 8) {
     fun play(key: String) {
         val id = soundIds[key] ?: return
         if (!ready.contains(id)) return
-        pool.play(id, 1f, 1f, 1, 0, 1f)
+        activeStreamId?.let { pool.stop(it) }
+        activeStreamId = pool.play(id, 1f, 1f, 1, 0, 1f)
     }
 
     fun unload(key: String) {
@@ -53,5 +58,6 @@ class SoundPlayer(maxStreams: Int = 8) {
         pool.release()
         soundIds.clear()
         ready.clear()
+        activeStreamId = null
     }
 }

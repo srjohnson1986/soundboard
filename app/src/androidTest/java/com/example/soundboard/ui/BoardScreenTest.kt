@@ -1,11 +1,13 @@
 package com.example.soundboard.ui
 
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.soundboard.BoardViewModel
@@ -39,15 +41,17 @@ class BoardScreenTest {
 
     private lateinit var repo: BoardRepository
     private lateinit var player: FakePlayer
+    private lateinit var vm: BoardViewModel
 
     private fun launchWith(board: Board) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         repo = BoardRepository(context)
         repo.save(board)
         player = FakePlayer()
+        vm = BoardViewModel(repo, player)
 
         composeRule.setContent {
-            BoardScreen(vm = BoardViewModel(repo, player))
+            BoardScreen(vm = vm)
         }
     }
 
@@ -118,5 +122,40 @@ class BoardScreenTest {
         composeRule.onNodeWithText("Apply").performClick()
 
         composeRule.onNodeWithText("2 x 3").assertIsDisplayed()
+    }
+
+    @Test
+    fun longPressDragReordersTiles() {
+        // adb shell input's synthetic swipe interpolates movement from the very
+        // first frame, tripping touch-slop cancellation before the long-press
+        // timeout fires (see ARCHITECTURE.md). Driving raw pointer events through
+        // Compose's TouchInjectionScope avoids that: hold position until past the
+        // long-press timeout, then move, exactly like a real long-press-then-drag.
+        launchWith(
+            Board(
+                rows = 1,
+                columns = 3,
+                tiles = listOf(
+                    Tile(id = "a", label = "A", fileName = "a.mp3"),
+                    Tile(id = "b", label = "B", fileName = "b.mp3"),
+                    Tile(id = "c", label = "C", fileName = "c.mp3")
+                )
+            )
+        )
+
+        val aLeft = composeRule.onNodeWithText("A").fetchSemanticsNode().boundsInRoot.left
+        val bLeft = composeRule.onNodeWithText("B").fetchSemanticsNode().boundsInRoot.left
+        val cellStepPx = bLeft - aLeft
+
+        composeRule.onNodeWithText("A").performTouchInput {
+            down(center)
+            advanceEventTime(600) // past the platform's ~500ms long-press timeout
+            moveBy(Offset(x = cellStepPx * 1.2f, y = 0f))
+            up()
+        }
+
+        composeRule.waitForIdle()
+
+        assertEquals(listOf("B", "A", "C"), vm.board.value.tiles.map { it.label })
     }
 }

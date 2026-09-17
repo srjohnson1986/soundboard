@@ -243,6 +243,15 @@ the Compose layer against a connected device or emulator.
   drag-to-reorder, not the edit dialog (see the UI layer section above); use
   the pencil icon to open the edit dialog in a test, same as a real user
   would.
+- **Testing drag-to-reorder itself needs raw pointer events, not `adb shell
+  input`.** `adb`'s synthetic `swipe` interpolates movement from the very
+  first frame, tripping touch-slop cancellation before the long-press timeout
+  fires. `BoardScreenTest.longPressDragReordersTiles` instead drives
+  `performTouchInput { down(...); advanceEventTime(600); moveBy(...); up() }`
+  directly — holding position past the long-press timeout before moving,
+  same as a real long-press-then-drag — and measures the actual on-screen
+  cell width from tile semantics bounds rather than hardcoding a pixel
+  offset.
 - **`Tile`/`Board` default constructor args generate random UUIDs.** Two
   freshly-constructed default `Board`s are never equal; compare on labels/file
   names or pass explicit `id`s in fixtures.
@@ -257,10 +266,3 @@ the Compose layer against a connected device or emulator.
   currently reachable through normal use (the app is the only writer to that
   directory), but worth knowing if you build a "manage backups" feature that
   juggles multiple exports.
-- **Drag-to-reorder has not been exercised by automated/emulator testing** —
-  it needs a genuine long-press-then-drag touch sequence, which `adb shell
-  input` cannot reproduce (its `swipe` interpolates movement from the first
-  frame, tripping touch-slop cancellation before the long-press timeout
-  fires). It's had a careful code review and a crash smoke-test only. Give it
-  a real-device pass before trusting it fully, and if you change the gesture
-  code, retest by hand.

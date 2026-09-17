@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
  * gapless playback; bigger files stream through MediaPlayer instead. Playback
  * is exclusive on both paths: starting a clip stops whatever was playing.
  */
-class SoundPlayer(maxStreams: Int = 8, private val longClipThresholdBytes: Long = 300_000L) {
+class SoundPlayer(maxStreams: Int = 8, private val longClipThresholdBytes: Long = 300_000L) : Player {
 
     private val pool = SoundPool.Builder()
         .setMaxStreams(maxStreams)
@@ -39,7 +39,7 @@ class SoundPlayer(maxStreams: Int = 8, private val longClipThresholdBytes: Long 
         }
     }
 
-    fun load(key: String, file: File) {
+    override fun load(key: String, file: File) {
         if (soundIds.containsKey(key) || longClips.containsKey(key) || !file.exists()) return
         if (file.length() > longClipThresholdBytes) {
             longClips[key] = file
@@ -48,7 +48,7 @@ class SoundPlayer(maxStreams: Int = 8, private val longClipThresholdBytes: Long 
         }
     }
 
-    fun play(key: String, volume: Float = 1f) {
+    override fun play(key: String, volume: Float) {
         stopActive()
         val vol = volume.coerceIn(0f, 1f)
 
@@ -80,7 +80,7 @@ class SoundPlayer(maxStreams: Int = 8, private val longClipThresholdBytes: Long 
         activeStreamId = pool.play(id, vol, vol, 1, 0, 1f)
     }
 
-    fun unload(key: String) {
+    override fun unload(key: String) {
         soundIds.remove(key)?.let { id ->
             pool.unload(id)
             ready.remove(id)
@@ -89,7 +89,7 @@ class SoundPlayer(maxStreams: Int = 8, private val longClipThresholdBytes: Long 
     }
 
     /** Unloads every clip without releasing the underlying SoundPool, for re-import. */
-    fun clear() {
+    override fun clear() {
         stopActive()
         soundIds.values.forEach(pool::unload)
         soundIds.clear()
@@ -97,7 +97,7 @@ class SoundPlayer(maxStreams: Int = 8, private val longClipThresholdBytes: Long 
         longClips.clear()
     }
 
-    fun release() {
+    override fun release() {
         stopActive()
         pool.release()
         soundIds.clear()

@@ -9,8 +9,9 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 |---|---|
 | `model/Board.kt` | `Tile` and `Board` data classes; resize, visibility, and reorder logic. No Android dependencies. |
 | `data/BoardRepository.kt` | Reads/writes `board.json`, copies picked audio into app storage, zips/unzips backups. All file I/O. |
-| `audio/SoundPlayer.kt` | Owns the `SoundPool` and the current `MediaPlayer`; load/play/unload/release. No knowledge of `Board` or `Tile`. |
-| `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other three together, single write path. |
+| `audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
+| `audio/SoundPlayer.kt` | Real `Player` implementation: owns the `SoundPool` and the current `MediaPlayer`. No knowledge of `Board` or `Tile`. |
+| `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other three together, single write path. Takes `BoardRepository`/`Player`/dispatcher as constructor params (see below) rather than constructing them. |
 | `ui/BoardScreen.kt` | Compose UI: grid, drag-to-reorder, edit dialog, grid-size dialog, top bar. |
 | `MainActivity.kt` | Just sets content to `SoundboardTheme { BoardScreen() }`. |
 
@@ -106,6 +107,28 @@ underlying `SoundPool` object, so the player can keep being used —
 imported board, so stale keys from the previous state can't linger.
 `release()` is the real teardown, called once from `onCleared()`.
 
+## Dependency injection
+
+`BoardViewModel` takes its collaborators as constructor parameters instead of
+building them:
+
+```kotlin
+class BoardViewModel(
+    private val repo: BoardRepository,
+    private val player: Player,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+) : ViewModel()
+```
+
+`BoardViewModel.Factory(application)` builds the real `BoardRepository` and
+`SoundPlayer` and is what `BoardScreen` passes to `viewModel(factory = ...)`.
+Tests construct `BoardViewModel` directly instead, passing a real
+`BoardRepository` (against a Robolectric or instrumented context — file I/O
+is cheap enough not to fake) and a `FakePlayer` in place of `SoundPlayer`.
+`ioDispatcher` defaults to `Dispatchers.IO` in production; tests pass an
+`UnconfinedTestDispatcher` so the persistence coroutine in `commit()` (below)
+runs synchronously instead of racing a real background thread.
+
 ## The single write path
 
 Every mutation — rename, assign sound, clear, resize, reorder, volume,
@@ -119,7 +142,7 @@ private fun commit(board: Board) {
 
     (before - after).forEach { player.unload(it) }
 
-    viewModelScope.launch(Dispatchers.IO) {
+    viewModelScope.launch(ioDispatcher) {
         repo.save(board)
         repo.pruneUnused(after)
     }
@@ -128,7 +151,7 @@ private fun commit(board: Board) {
 
 It diffs referenced file names before/after, unloads anything that fell out
 of the referenced set, updates the in-memory state immediately (so the UI
-never waits on disk I/O), then persists on `Dispatchers.IO`. Adding a new
+never waits on disk I/O), then persists on `ioDispatcher`. Adding a new
 mutation means adding a function that builds the next `Board` and calls
 `commit()` — not inventing a new write path.
 
@@ -177,7 +200,8 @@ A few things worth knowing if you're touching it:
 ## Threading
 
 - File I/O (`repo.save`, `repo.pruneUnused`, `repo.load`, export/import) runs
-  on `Dispatchers.IO`, launched from `viewModelScope`.
+  on `ioDispatcher` (`Dispatchers.IO` in production), launched from
+  `viewModelScope`.
 - `SoundPlayer` calls (`load`, `play`, `unload`, `clear`) are cheap enough to
   call directly from the main thread — `pool.load()`/`pool.play()` are
   non-blocking native calls, and `MediaPlayer.prepareAsync()` is async by
@@ -188,6 +212,40 @@ A few things worth knowing if you're touching it:
   this codebase (ViewModel functions aren't marked `suspend` except where
   they explicitly `launch`), so there's no cross-thread mutation to guard
   against today.
+
+## Testing
+
+| Layer | File(s) | Runs on |
+|---|---|---|
+| `Board.resized()`/`.moved()` | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
+| `BoardRepository` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
+| `BoardViewModel` | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` |
+| `BoardScreen` | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
+
+`./gradlew test` runs the first three; `./gradlew connectedAndroidTest` runs
+the Compose layer against a connected device or emulator.
+
+- **`FakePlayer`** (a `Player`) exists twice — once under `test/`, once under
+  `androidTest/` — since those source sets don't share code by default. Keep
+  both in sync if `Player`'s contract changes.
+- **`MainDispatcherRule`** sets `Dispatchers.Main` to an
+  `UnconfinedTestDispatcher` for the duration of a test, since
+  `viewModelScope` has no `Main` dispatcher on a plain JVM. Every
+  `BoardViewModelTest` needs it (`@get:Rule`).
+- **Robolectric needs a version that supports the project's `targetSdk`.**
+  `testOptions.unitTests.isIncludeAndroidResources = true` is also required —
+  without it, Robolectric silently fails to find app resources.
+- **`BoardRepository.save()` swallows failures** (`runCatching`). A
+  persistence test that passes suspiciously easily is worth double-checking
+  by asserting the write actually happened, not just that no exception was
+  thrown.
+- **Long-press in `BoardScreenTest` opens nothing** — long-press drives
+  drag-to-reorder, not the edit dialog (see the UI layer section above); use
+  the pencil icon to open the edit dialog in a test, same as a real user
+  would.
+- **`Tile`/`Board` default constructor args generate random UUIDs.** Two
+  freshly-constructed default `Board`s are never equal; compare on labels/file
+  names or pass explicit `id`s in fixtures.
 
 ## Known limitations / things to check before extending
 

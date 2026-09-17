@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.soundboard.BoardViewModel
@@ -65,7 +66,11 @@ import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BoardScreen(vm: BoardViewModel = viewModel()) {
+fun BoardScreen(
+    vm: BoardViewModel = viewModel(
+        factory = BoardViewModel.Factory(LocalContext.current.applicationContext as android.app.Application)
+    )
+) {
     val board by vm.board.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     var editingTileId by remember { mutableStateOf<String?>(null) }

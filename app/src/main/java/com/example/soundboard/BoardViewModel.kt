@@ -2,12 +2,15 @@ package com.example.soundboard
 
 import android.app.Application
 import android.net.Uri
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.SoundPlayer
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Tile
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,10 +18,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class BoardViewModel(app: Application) : AndroidViewModel(app) {
-
-    private val repo = BoardRepository(app)
-    private val player = SoundPlayer()
+class BoardViewModel(
+    private val repo: BoardRepository,
+    private val player: Player,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+) : ViewModel() {
 
     private val _board = MutableStateFlow(Board())
     val board: StateFlow<Board> = _board.asStateFlow()
@@ -29,9 +33,9 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch {
-            val loaded = withContext(Dispatchers.IO) { repo.load() }
+            val loaded = withContext(ioDispatcher) { repo.load() }
             _board.value = loaded
-            withContext(Dispatchers.IO) { loadSounds(loaded) }
+            withContext(ioDispatcher) { loadSounds(loaded) }
         }
     }
 
@@ -54,8 +58,8 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
 
     fun assignSound(tileId: String, uri: Uri) {
         viewModelScope.launch {
-            val name = withContext(Dispatchers.IO) { repo.importSound(uri) } ?: return@launch
-            withContext(Dispatchers.IO) { player.load(name, repo.soundFile(name)) }
+            val name = withContext(ioDispatcher) { repo.importSound(uri) } ?: return@launch
+            withContext(ioDispatcher) { player.load(name, repo.soundFile(name)) }
             updateTiles { tiles ->
                 tiles.map { if (it.id == tileId) it.copy(fileName = name) else it }
             }
@@ -82,19 +86,19 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
 
     fun exportBoard(uri: Uri) {
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) { repo.exportTo(uri) }
+            val ok = withContext(ioDispatcher) { repo.exportTo(uri) }
             _message.value = if (ok) "Exported backup" else "Export failed"
         }
     }
 
     fun importBoard(uri: Uri) {
         viewModelScope.launch {
-            val ok = withContext(Dispatchers.IO) { repo.importFrom(uri) }
+            val ok = withContext(ioDispatcher) { repo.importFrom(uri) }
             if (ok) {
                 player.clear()
-                val loaded = withContext(Dispatchers.IO) { repo.load() }
+                val loaded = withContext(ioDispatcher) { repo.load() }
                 _board.value = loaded
-                withContext(Dispatchers.IO) { loadSounds(loaded) }
+                withContext(ioDispatcher) { loadSounds(loaded) }
                 _message.value = "Imported backup"
             } else {
                 _message.value = "Import failed"
@@ -124,7 +128,7 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
 
         (before - after).forEach { player.unload(it) }
 
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(ioDispatcher) {
             repo.save(board)
             repo.pruneUnused(after)
         }
@@ -133,5 +137,12 @@ class BoardViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         player.release()
         super.onCleared()
+    }
+
+    class Factory(private val app: Application) : ViewModelProvider.Factory {
+        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+            @Suppress("UNCHECKED_CAST")
+            return BoardViewModel(BoardRepository(app), SoundPlayer()) as T
+        }
     }
 }

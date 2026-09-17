@@ -33,6 +33,9 @@ class BoardViewModel(
 
     init {
         viewModelScope.launch {
+            withContext(ioDispatcher) {
+                if (!repo.hasSavedBoard()) repo.importFromAsset(TEST_PRESET_ASSET)
+            }
             val loaded = withContext(ioDispatcher) { repo.load() }
             _board.value = loaded
             withContext(ioDispatcher) { loadSounds(loaded) }
@@ -144,5 +147,10 @@ class BoardViewModel(
             @Suppress("UNCHECKED_CAST")
             return BoardViewModel(BoardRepository(app), SoundPlayer()) as T
         }
+    }
+
+    companion object {
+        /** Bundled only in debug builds (src/debug/assets/); see [BoardRepository.importFromAsset]. */
+        private const val TEST_PRESET_ASSET = "care-board.zip"
     }
 }

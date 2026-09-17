@@ -8,6 +8,7 @@ import com.example.soundboard.model.Board
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.InputStream
 import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
@@ -28,6 +29,9 @@ class BoardRepository(private val context: Context) {
     fun load(): Board =
         runCatching { json.decodeFromString<Board>(boardFile.readText()) }
             .getOrElse { Board() }
+
+    /** True once a board has ever been saved — false only on a fresh install. */
+    fun hasSavedBoard(): Boolean = boardFile.exists()
 
     fun save(board: Board) {
         runCatching { boardFile.writeText(json.encodeToString(board)) }
@@ -79,24 +83,36 @@ class BoardRepository(private val context: Context) {
     /** Restores board.json and sounds from a zip made by [exportTo], overwriting both. */
     fun importFrom(uri: Uri): Boolean = runCatching {
         val input = context.contentResolver.openInputStream(uri) ?: error("no input stream")
+        input.use(::importZip)
+    }.isSuccess
+
+    /**
+     * Same as [importFrom] but reads a preset bundled as an app asset, e.g. a
+     * debug-only test board shipped under `src/debug/assets/`. Silently no-ops
+     * (returns false) if [assetName] isn't present, so release builds — which
+     * ship no such asset — behave exactly as before.
+     */
+    fun importFromAsset(assetName: String): Boolean = runCatching {
+        context.assets.open(assetName).use(::importZip)
+    }.isSuccess
+
+    private fun importZip(stream: InputStream) {
         soundsDir.mkdirs()
-        input.use { stream ->
-            ZipInputStream(stream).use { zip ->
-                var entry = zip.nextEntry
-                while (entry != null) {
-                    when {
-                        entry.name == "board.json" -> boardFile.outputStream().use { zip.copyTo(it) }
-                        entry.name.startsWith("sounds/") && !entry.isDirectory -> {
-                            val target = File(soundsDir, entry.name.removePrefix("sounds/"))
-                            target.outputStream().use { zip.copyTo(it) }
-                        }
+        ZipInputStream(stream).use { zip ->
+            var entry = zip.nextEntry
+            while (entry != null) {
+                when {
+                    entry.name == "board.json" -> boardFile.outputStream().use { zip.copyTo(it) }
+                    entry.name.startsWith("sounds/") && !entry.isDirectory -> {
+                        val target = File(soundsDir, entry.name.removePrefix("sounds/"))
+                        target.outputStream().use { zip.copyTo(it) }
                     }
-                    zip.closeEntry()
-                    entry = zip.nextEntry
                 }
+                zip.closeEntry()
+                entry = zip.nextEntry
             }
         }
-    }.isSuccess
+    }
 
     private fun extensionFor(uri: Uri): String {
         context.contentResolver.getType(uri)

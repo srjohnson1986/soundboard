@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "com.example.soundboard"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.example.soundboard"

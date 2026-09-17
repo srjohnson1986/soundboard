@@ -7,7 +7,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,6 +32,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -58,6 +63,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -74,6 +80,7 @@ import com.example.soundboard.model.Tile
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Five minutes of no interaction before the board snaps back to its home page. */
 private const val IDLE_TIMEOUT_MS = 5 * 60 * 1000L
@@ -97,7 +104,8 @@ fun BoardScreen(
     var showGridDialog by remember { mutableStateOf(false) }
     var showSaveDialog by remember { mutableStateOf(false) }
     var showAddPageDialog by remember { mutableStateOf(false) }
-    var showRenamePageDialog by remember { mutableStateOf(false) }
+    var renamePageIndex by remember { mutableStateOf<Int?>(null) }
+    var pageOptionsIndex by remember { mutableStateOf<Int?>(null) }
     var showPageColorDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
@@ -183,27 +191,94 @@ fun BoardScreen(
                                 Text("☰")
                             }
                             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                                DropdownMenuItem(
-                                    text = { Text(if (editMode) "Edit mode ✓" else "Edit mode") },
-                                    onClick = {
-                                        showMenu = false
-                                        editMode = !editMode
+                                // Mode
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Edit mode")
+                                    Switch(
+                                        checked = editMode,
+                                        onCheckedChange = { editMode = it }
+                                    )
+                                }
+                                HorizontalDivider()
+                                // Page layout
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    TextButton(
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            showMenu = false
+                                            showGridDialog = true
+                                        }
+                                    ) {
+                                        Text("Grid size (${board.currentPage.rows}x${board.currentPage.columns})")
                                     }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Grid size (${board.currentPage.rows} x ${board.currentPage.columns})") },
-                                    onClick = {
-                                        showMenu = false
-                                        showGridDialog = true
+                                    TextButton(
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            showMenu = false
+                                            showPageColorDialog = true
+                                        }
+                                    ) {
+                                        Text("Page color")
                                     }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Page colour") },
-                                    onClick = {
-                                        showMenu = false
-                                        showPageColorDialog = true
+                                }
+                                HorizontalDivider()
+                                // Page management
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    TextButton(
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            showMenu = false
+                                            showAddPageDialog = true
+                                        }
+                                    ) {
+                                        Text("Add page")
                                     }
-                                )
+                                    TextButton(
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            showMenu = false
+                                            renamePageIndex = board.currentPageIndex
+                                        }
+                                    ) {
+                                        Text("Rename page")
+                                    }
+                                    if (board.pages.size > 1) {
+                                        TextButton(
+                                            modifier = Modifier.weight(1f),
+                                            onClick = {
+                                                showMenu = false
+                                                vm.deletePage(board.currentPageIndex)
+                                            }
+                                        ) {
+                                            Text("Delete page")
+                                        }
+                                    }
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("Home page")
+                                    Switch(
+                                        checked = board.homePageIndex == board.currentPageIndex,
+                                        onCheckedChange = { checked ->
+                                            if (checked) {
+                                                vm.setHomePage(board.currentPageIndex)
+                                            } else {
+                                                vm.clearHomePage()
+                                            }
+                                        }
+                                    )
+                                }
                                 if (board.pinnedTiles.isEmpty()) {
                                     DropdownMenuItem(
                                         text = { Text("Add pinned row") },
@@ -213,65 +288,37 @@ fun BoardScreen(
                                         }
                                     )
                                 }
-                                DropdownMenuItem(
-                                    text = { Text("Add page") },
-                                    onClick = {
-                                        showMenu = false
-                                        showAddPageDialog = true
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Rename page") },
-                                    onClick = {
-                                        showMenu = false
-                                        showRenamePageDialog = true
-                                    }
-                                )
-                                if (board.pages.size > 1) {
-                                    DropdownMenuItem(
-                                        text = { Text("Delete page") },
+                                HorizontalDivider()
+                                // File actions
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    TextButton(
+                                        modifier = Modifier.weight(1f),
                                         onClick = {
                                             showMenu = false
-                                            vm.deletePage(board.currentPageIndex)
+                                            showSaveDialog = true
                                         }
-                                    )
+                                    ) {
+                                        Text("Save")
+                                    }
+                                    TextButton(
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            showMenu = false
+                                            importLauncher.launch(arrayOf("application/zip"))
+                                        }
+                                    ) {
+                                        Text("Import")
+                                    }
+                                    TextButton(
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            showMenu = false
+                                            exportLauncher.launch("soundboard-backup.zip")
+                                        }
+                                    ) {
+                                        Text("Export")
+                                    }
                                 }
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            if (board.homePageIndex == board.currentPageIndex) {
-                                                "Home page ✓"
-                                            } else {
-                                                "Set as home page"
-                                            }
-                                        )
-                                    },
-                                    onClick = {
-                                        showMenu = false
-                                        vm.setHomePage(board.currentPageIndex)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Save") },
-                                    onClick = {
-                                        showMenu = false
-                                        showSaveDialog = true
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Import") },
-                                    onClick = {
-                                        showMenu = false
-                                        importLauncher.launch(arrayOf("application/zip"))
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Export") },
-                                    onClick = {
-                                        showMenu = false
-                                        exportLauncher.launch("soundboard-backup.zip")
-                                    }
-                                )
                             }
                         }
                     }
@@ -279,16 +326,37 @@ fun BoardScreen(
                 if (board.pages.size > 1) {
                     PrimaryScrollableTabRow(selectedTabIndex = board.currentPageIndex) {
                         board.pages.forEachIndexed { index, page ->
-                            Tab(
-                                selected = index == board.currentPageIndex,
-                                onClick = {
-                                    touch()
-                                    vm.switchPage(index)
-                                },
-                                text = { Text(page.name) },
-                                selectedContentColor = page.color?.let { Color(it) }
-                                    ?: MaterialTheme.colorScheme.primary
-                            )
+                            // Long-press detection must run on the Initial (outside-in) pointer
+                            // pass and win the race against Tab's own click before it can consume
+                            // the eventual up event on the Main pass — see the note above.
+                            Box(
+                                modifier = Modifier.pointerInput(page.id, editMode) {
+                                    if (!editMode) return@pointerInput
+                                    awaitEachGesture {
+                                        awaitFirstDown(pass = PointerEventPass.Initial)
+                                        val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                            waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                                        }
+                                        if (up == null) {
+                                            pageOptionsIndex = index
+                                            // Swallow the eventual release so Tab's own click,
+                                            // which runs on the later Main pass, never sees it.
+                                            waitForUpOrCancellation(pass = PointerEventPass.Initial)?.consume()
+                                        }
+                                    }
+                                }
+                            ) {
+                                Tab(
+                                    selected = index == board.currentPageIndex,
+                                    onClick = {
+                                        touch()
+                                        vm.switchPage(index)
+                                    },
+                                    text = { Text(page.name) },
+                                    selectedContentColor = page.color?.let { Color(it) }
+                                        ?: MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
                 }
@@ -421,17 +489,47 @@ fun BoardScreen(
         )
     }
 
-    if (showRenamePageDialog) {
-        TextInputDialog(
-            title = "Rename page",
-            label = "Page name",
-            initial = board.currentPage.name,
-            onConfirm = {
-                vm.renamePage(board.currentPageIndex, it.trim())
-                showRenamePageDialog = false
-            },
-            onDismiss = { showRenamePageDialog = false }
-        )
+    renamePageIndex?.let { index ->
+        board.pages.getOrNull(index)?.let { page ->
+            TextInputDialog(
+                title = "Rename page",
+                label = "Page name",
+                initial = page.name,
+                onConfirm = {
+                    vm.renamePage(index, it.trim())
+                    renamePageIndex = null
+                },
+                onDismiss = { renamePageIndex = null }
+            )
+        }
+    }
+
+    pageOptionsIndex?.let { index ->
+        board.pages.getOrNull(index)?.let { page ->
+            PageOptionsDialog(
+                pageName = page.name,
+                canMoveLeft = index > 0,
+                canMoveRight = index < board.pages.lastIndex,
+                canDelete = board.pages.size > 1,
+                onRename = {
+                    pageOptionsIndex = null
+                    renamePageIndex = index
+                },
+                onMoveLeft = {
+                    vm.movePage(index, index - 1)
+                    pageOptionsIndex = null
+                },
+                onMoveRight = {
+                    vm.movePage(index, index + 1)
+                    pageOptionsIndex = null
+                },
+                onDelete = {
+                    vm.deletePage(index)
+                    pageOptionsIndex = null
+                },
+                onDismiss = { pageOptionsIndex = null }
+            )
+        }
     }
 }
 
@@ -681,7 +779,7 @@ private fun EditTileDialog(
                 }
 
                 Column {
-                    Text("Colour", style = MaterialTheme.typography.labelMedium)
+                    Text("Color", style = MaterialTheme.typography.labelMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         presetColors.forEach { color ->
                             ColorSwatch(
@@ -783,7 +881,7 @@ private fun GridSizeDialog(
 private fun PageColorDialog(current: Int?, onSelect: (Int?) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Page colour") },
+        title = { Text("Page color") },
         text = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 presetColors.forEach { color ->
@@ -796,6 +894,50 @@ private fun PageColorDialog(current: Int?, onSelect: (Int?) -> Unit, onDismiss: 
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
+@Composable
+private fun PageOptionsDialog(
+    pageName: String,
+    canMoveLeft: Boolean,
+    canMoveRight: Boolean,
+    canDelete: Boolean,
+    onRename: () -> Unit,
+    onMoveLeft: () -> Unit,
+    onMoveRight: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(pageName) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onRename, modifier = Modifier.fillMaxWidth()) {
+                    Text("Rename")
+                }
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    TextButton(
+                        onClick = onMoveLeft,
+                        enabled = canMoveLeft,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Move left") }
+                    TextButton(
+                        onClick = onMoveRight,
+                        enabled = canMoveRight,
+                        modifier = Modifier.weight(1f)
+                    ) { Text("Move right") }
+                }
+                if (canDelete) {
+                    TextButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) {
+                        Text("Delete page")
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 

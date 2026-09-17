@@ -70,7 +70,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `save then load round-trips pinned tiles, home page, page colour and tile aspect ratio`() {
+    fun `save then load round-trips pinned tiles, home page, page color and tile aspect ratio`() {
         val board = Board(
             pages = listOf(
                 Page(name = "Trouble", color = 0xFFB74D, tileAspectRatio = 4f / 3f),
@@ -89,7 +89,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a board saved by today's schema still loads when it predates pinned tiles, home page and page colour`() {
+    fun `a board saved by today's schema still loads when it predates pinned tiles, home page and page color`() {
         // What repo.save() itself would have written before pinnedTiles/homePageIndex/
         // Page.color/Page.tileAspectRatio existed: "pages" is present (so no legacy-shape
         // migration kicks in), just missing the newer fields entirely.

@@ -138,6 +138,10 @@ class BoardViewModel(
         commit(_board.value.withHomePage(index))
     }
 
+    fun clearHomePage() {
+        commit(_board.value.clearingHomePage())
+    }
+
     fun addPage(name: String) {
         commit(_board.value.addPage(name.ifBlank { "Page ${_board.value.pages.size + 1}" }))
     }
@@ -148,6 +152,10 @@ class BoardViewModel(
 
     fun deletePage(index: Int) {
         commit(_board.value.removePage(index))
+    }
+
+    fun movePage(fromIndex: Int, toIndex: Int) {
+        commit(_board.value.movedPage(fromIndex, toIndex))
     }
 
     /** Switches the active page without touching disk — nothing about the board changed. */

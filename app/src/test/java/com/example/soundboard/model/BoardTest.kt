@@ -151,4 +151,58 @@ class BoardTest {
         assertEquals(emptyList<Tile>(), board.pinnedTiles)
         assertEquals(null, board.homePageIndex)
     }
+
+    @Test
+    fun `movedPage reorders pages`() {
+        val board = Board(pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")))
+
+        val result = board.movedPage(0, 2)
+
+        assertEquals(listOf("B", "C", "A"), result.pages.map { it.name })
+    }
+
+    @Test
+    fun `movedPage out of range is a no-op`() {
+        val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
+
+        val result = board.movedPage(0, 5)
+
+        assertEquals(board, result)
+    }
+
+    @Test
+    fun `movedPage keeps the current page selected as it shifts left`() {
+        val board = Board(
+            pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")),
+            currentPageIndex = 2
+        )
+
+        val result = board.movedPage(0, 2)
+
+        assertEquals("C", result.pages[result.currentPageIndex].name)
+    }
+
+    @Test
+    fun `movedPage keeps the current page selected as it shifts right`() {
+        val board = Board(
+            pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")),
+            currentPageIndex = 0
+        )
+
+        val result = board.movedPage(0, 2)
+
+        assertEquals("A", result.pages[result.currentPageIndex].name)
+    }
+
+    @Test
+    fun `movedPage follows the home page along with its page`() {
+        val board = Board(
+            pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")),
+            homePageIndex = 0
+        )
+
+        val result = board.movedPage(0, 2)
+
+        assertEquals("A", result.pages[result.homePageIndex!!].name)
+    }
 }

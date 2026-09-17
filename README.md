@@ -2,7 +2,7 @@
 
 A configurable grid of tiles. Tap a tile to play its sound, or to add one if
 it's empty. Toggle **Edit mode** from the menu to rename a tile, replace its
-sound, adjust its volume or colour, or clear it. Long-press and drag a tile
+sound, adjust its volume or color, or clear it. Long-press and drag a tile
 to reorder the grid. No runtime permissions required.
 
 ## Open it

@@ -12,7 +12,7 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 | `audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
 | `audio/SoundPlayer.kt` | Real `Player` implementation: owns the `SoundPool` and the current `MediaPlayer`. No knowledge of `Board` or `Tile`. |
 | `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other three together, single write path. Takes `BoardRepository`/`Player`/dispatcher as constructor params (see below) rather than constructing them. |
-| `ui/BoardScreen.kt` | Compose UI: pinned row, per-page swipeable grid (`HorizontalPager`), drag-to-reorder, edit dialog, grid-size/save/page/colour dialogs, top bar showing the active board's name, and a tab row for switching pages. |
+| `ui/BoardScreen.kt` | Compose UI: pinned row, per-page swipeable grid (`HorizontalPager`), drag-to-reorder, edit dialog, grid-size/save/page/color dialogs, top bar showing the active board's name, and a tab row for switching pages. |
 | `MainActivity.kt` | Just sets content to `SoundboardTheme { BoardScreen() }`. |
 
 Data flows one way: UI calls a `BoardViewModel` function → it updates
@@ -53,7 +53,7 @@ data class Board(
 A board is one or more `Page`s, each an independent grid, switched via tabs
 in the UI. `Board.name` identifies the whole board (shown in the title bar);
 each `Page.name` identifies just that tab; `Page.color` is that tab's own
-identity accent, distinct from `Tile.colorArgb` (a tile's own colour always
+identity accent, distinct from `Tile.colorArgb` (a tile's own color always
 wins). `name`, `currentPageIndex`, `pinnedTiles`, and `homePageIndex` are the
 board-level state that isn't grid geometry or page tiles —
 `BoardViewModel.renameBoard()`/`switchPage()`/pinned-tile mutators/`setHomePage()`
@@ -192,7 +192,7 @@ runs synchronously instead of racing a real background thread.
 ## The single write path
 
 Every mutation — rename, assign sound, clear, resize, reorder, volume,
-colour — ends up calling `BoardViewModel.commit(board)`:
+color — ends up calling `BoardViewModel.commit(board)`:
 
 ```kotlin
 private fun allTiles(board: Board): List<Tile> = board.pages.flatMap { it.tiles } + board.pinnedTiles
@@ -260,7 +260,7 @@ A few things worth knowing if you're touching it:
   (`vm.deletePage()`) and is hidden from the menu entirely when only one page
   remains, rather than confirming — `Board.removePage()` is a no-op on the
   last page anyway, so hiding it just avoids a dead menu entry. **Page
-  colour** opens `PageColorDialog` (the same swatch-picker `ColorSwatch` the
+  color** opens `PageColorDialog` (the same swatch-picker `ColorSwatch` the
   tile-edit dialog uses) against `vm.setPageColor()`. **Add pinned row** only
   appears while `board.pinnedTiles` is empty, since `vm.addPinnedRow()` is a
   no-op afterward anyway. **Set as home page**/**Home page ✓** toggles
@@ -307,7 +307,7 @@ A few things worth knowing if you're touching it:
   home page is set, calls `vm.switchPage(homeIndex)` — restarting the effect
   is what "resets the timer," since a new key value cancels the previous
   coroutine before it can fire.
-- **Tile shape and colour are page properties, not global constants.**
+- **Tile shape and color are page properties, not global constants.**
   `TileCard` takes `aspectRatio`/`pageColor` as parameters instead of a
   hardcoded `1f` and a hardcoded `primaryContainer`; `GridSizeDialog` has a
   Square/Wide toggle next to the rows/columns steppers (`vm.setTileAspectRatio()`,
@@ -331,8 +331,8 @@ A few things worth knowing if you're touching it:
   so the dragged tile keeps tracking the finger smoothly across multiple
   cell-crossings in one gesture. Non-dragged items get `Modifier.animateItem()`
   so they slide into their new slot instead of jump-cutting.
-- **Colour and contrast.** A custom `colorArgb`, or failing that a filled
-  tile's page colour, overrides the card's container color. Text/icon color
+- **Color and contrast.** A custom `colorArgb`, or failing that a filled
+  tile's page color, overrides the card's container color. Text/icon color
   for either comes from `textColorFor()`, a local helper that picks black or
   white from the color's own luminance — not Material3's `contentColorFor()`,
   which only resolves a real color when the background exactly matches a

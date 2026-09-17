@@ -36,13 +36,13 @@ With the edit dialog open:
   audio files. Whatever you pick is copied into the app's own storage, so
   moving or deleting the original file afterward won't break the tile.
 - **Volume** — per-tile playback volume, 0 to full.
-- **Colour** — seven swatches (including "none", which uses the default
-  theme colour). Tap one to apply it immediately — no need to hit Save.
+- **Color** — seven swatches (including "none", which uses the default
+  theme color). Tap one to apply it immediately — no need to hit Save.
 - **Clear tile** — removes the sound and label, turning it back into an
   empty **+** tile.
 
 Tap **Save** to keep name/sound changes, or **Cancel** to discard them.
-Volume and colour changes apply as soon as you pick them, regardless of
+Volume and color changes apply as soon as you pick them, regardless of
 Save/Cancel.
 
 ## Resizing the grid
@@ -62,7 +62,7 @@ cramped third line. This is a per-page setting, alongside rows/columns.
 ## Pages
 
 A board can hold more than one page — each its own grid of tiles, with its
-own name and colour, switched by swiping left/right or tapping the tabs that
+own name and color, switched by swiping left/right or tapping the tabs that
 appear under the top bar once there's more than one. Use pages to group
 sounds (e.g. "Requests", "Feelings", "People") instead of cramming everything
 onto one grid.
@@ -70,8 +70,8 @@ onto one grid.
 - **Add page** (in the **☰** menu) — prompts for a name and switches to the
   new, empty page.
 - **Rename page** — renames whichever page is currently showing.
-- **Page colour** — pick an accent for the page you're on; it tints that
-  page's tab and its filled tiles (a tile's own colour, if it has one, always
+- **Page color** — pick an accent for the page you're on; it tints that
+  page's tab and its filled tiles (a tile's own color, if it has one, always
   wins). One glance at the tab bar tells you which page you're on.
 - **Delete page** — removes whichever page is currently showing, sounds and
   all. Only appears in the menu when there's more than one page, since a
@@ -115,7 +115,7 @@ An empty name falls back to "New Board" rather than saving blank.
 ## Backup
 
 Use **Export** / **Import** in the **☰** menu to back up or restore your
-whole board — its name, every tile, label, colour, volume, and sound file —
+whole board — its name, every tile, label, color, volume, and sound file —
 as a single zip.
 
 - **Export** opens the system "save file" picker. Pick a location and name

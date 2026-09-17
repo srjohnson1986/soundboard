@@ -28,7 +28,7 @@ data class Page(
     val tiles: List<Tile> = List(16) { Tile() },
     /** Card width:height, e.g. 1f for square or 4f/3f for wider-than-tall. */
     val tileAspectRatio: Float = 1f,
-    /** Page-identity accent; null keeps today's neutral theme colour. Overridden per-tile by [Tile.colorArgb]. */
+    /** Page-identity accent; null keeps today's neutral theme color. Overridden per-tile by [Tile.colorArgb]. */
     val color: Int? = null
 ) {
     /** Tiles currently shown on the grid, in row-major order. */
@@ -117,4 +117,28 @@ data class Board(
     /** Marks [index] as the page auto-return snaps back to; a no-op if out of range. */
     fun withHomePage(index: Int): Board =
         if (index in pages.indices) copy(homePageIndex = index) else this
+
+    /** Clears the home page, disabling auto-return. */
+    fun clearingHomePage(): Board = copy(homePageIndex = null)
+
+    /** Reorders pages by moving [fromIndex] to [toIndex]; the current and home page follow their page. */
+    fun movedPage(fromIndex: Int, toIndex: Int): Board {
+        if (fromIndex !in pages.indices || toIndex !in pages.indices || fromIndex == toIndex) return this
+        val nextPages = pages.toMutableList()
+        val moving = nextPages.removeAt(fromIndex)
+        nextPages.add(toIndex, moving)
+
+        fun remap(index: Int): Int = when {
+            index == fromIndex -> toIndex
+            fromIndex < toIndex && index in (fromIndex + 1)..toIndex -> index - 1
+            fromIndex > toIndex && index in toIndex until fromIndex -> index + 1
+            else -> index
+        }
+
+        return copy(
+            pages = nextPages,
+            currentPageIndex = remap(currentPageIndex),
+            homePageIndex = homePageIndex?.let(::remap)
+        )
+    }
 }

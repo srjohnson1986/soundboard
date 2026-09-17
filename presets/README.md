@@ -10,7 +10,7 @@ Anything built to that shape can be loaded with the app's **Import** button.
 Four pages — **Trouble**, **Needs** (home), **Talking**, **Well Wishes** —
 plus a pinned row (Hey / Something's wrong / Call the doctor / 911, in red)
 fixed above every page's own 6-row x 4-column grid. Tiles are "Wide"
-(4:3) rather than square, and each page carries its own colour identity
+(4:3) rather than square, and each page carries its own color identity
 (Trouble amber, Needs blue, Talking neutral, Well Wishes green) so which
 page is active is visible at a glance. This is the layout described in the
 original board-layout planning doc.

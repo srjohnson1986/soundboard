@@ -9,14 +9,17 @@ Each tile is either empty (shows a **+**) or filled (shows its label, or
 - **Tap a filled tile** — plays its sound. Tapping any other tile while one
   is playing stops the first and starts the new one; only one clip plays at
   a time.
-- **Tap the pencil** (top-right corner of any tile) — opens the edit dialog
-  without playing or adding anything.
 - **Long-press and drag a tile** — reorders the grid. Drop it over another
   tile to swap positions; everything else slides out of the way as you drag.
 
 ## Editing a tile
 
-Tap the pencil to open the edit dialog:
+Turn on **Edit mode** from the **☰** menu in the top bar. While it's on,
+tapping any filled tile opens the edit dialog instead of playing its sound;
+turn it back off to return to normal play mode. Empty tiles always open the
+edit dialog on tap, edit mode or not.
+
+With the edit dialog open:
 
 - **Name** — the label shown on the tile. Blank is fine; filled tiles with
   no label show "Unnamed".

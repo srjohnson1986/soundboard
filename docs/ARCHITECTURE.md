@@ -180,10 +180,10 @@ A few things worth knowing if you're touching it:
 - **Tap vs. edit are different gestures on purpose.** A tile's `Card` uses
   `combinedClickable(onClick = onTap)` with no `onLongClick` — long-press is
   reserved entirely for drag-reorder (`detectDragGesturesAfterLongPress` in a
-  separate `pointerInput`). Editing a tile happens through the small pencil
-  affordance in its corner instead, which has its own nested `clickable`.
-  Nested clickables in Compose naturally win over their parent's within their
-  own bounds, so the pencil doesn't trigger `onTap` underneath it.
+  separate `pointerInput`). There's no per-tile edit affordance (it used to be
+  a corner pencil icon, but that crowded small tiles); instead `BoardScreen`
+  holds a top-level `editMode` boolean toggled from the `☰` menu, and `onTap`
+  checks `tile.isEmpty || editMode` to decide whether a tap edits or plays.
 - **Drag math.** `cellStepPx` (cell size + spacing, in pixels) is computed
   from the grid's measured width (`Modifier.onSizeChanged`) divided by column
   count. During a drag, the accumulated offset is converted to a row/column
@@ -240,9 +240,9 @@ the Compose layer against a connected device or emulator.
   by asserting the write actually happened, not just that no exception was
   thrown.
 - **Long-press in `BoardScreenTest` opens nothing** — long-press drives
-  drag-to-reorder, not the edit dialog (see the UI layer section above); use
-  the pencil icon to open the edit dialog in a test, same as a real user
-  would.
+  drag-to-reorder, not the edit dialog (see the UI layer section above); to
+  open the edit dialog on a filled tile in a test, toggle "Edit mode" from
+  the `☰` menu first, same as a real user would.
 - **Testing drag-to-reorder itself needs raw pointer events, not `adb shell
   input`.** `adb`'s synthetic `swipe` interpolates movement from the very
   first frame, tripping touch-slop cancellation before the long-press timeout

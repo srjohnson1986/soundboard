@@ -77,20 +77,23 @@ class BoardScreenTest {
     }
 
     @Test
-    fun tappingEditPencilOpensDialogWithNamePrefilled() {
-        // Long-press now drives drag-to-reorder (see commit 883a0b7); the edit
-        // dialog opens from the tile's corner pencil instead.
+    fun editModeTogglePutsFilledTileTapsIntoEditDialog() {
+        // Edit mode is a menu toggle (no more per-tile pencil, which crowded the
+        // tile); while it's on, tapping a filled tile edits it instead of playing.
         launchWith(
             Board(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Air horn", fileName = "a.mp3")))
         )
 
-        composeRule.onNodeWithText("✎").performClick()
+        composeRule.onNodeWithText("☰").performClick()
+        composeRule.onNodeWithText("Edit mode").performClick()
+        composeRule.onNodeWithText("Air horn").performClick()
 
         composeRule.onNodeWithText("Edit tile").assertIsDisplayed()
         // The name shows up twice: the (now-obscured) tile behind the dialog, and
         // the dialog's prefilled text field. Checking count avoids disambiguating
         // which node the dialog's overlay window leaves "displayed".
         assertEquals(2, composeRule.onAllNodesWithText("Air horn").fetchSemanticsNodes().size)
+        assertTrue(player.played.isEmpty())
     }
 
     @Test
@@ -116,12 +119,14 @@ class BoardScreenTest {
             )
         )
 
-        composeRule.onNodeWithText("2 x 2").performClick()
+        composeRule.onNodeWithText("☰").performClick()
+        composeRule.onNodeWithText("Grid size (2 x 2)").performClick()
         // Steppers render Rows then Columns; bump the columns stepper.
         composeRule.onAllNodesWithText("+")[1].performClick()
         composeRule.onNodeWithText("Apply").performClick()
 
-        composeRule.onNodeWithText("2 x 3").assertIsDisplayed()
+        composeRule.onNodeWithText("☰").performClick()
+        composeRule.onNodeWithText("Grid size (2 x 3)").assertIsDisplayed()
     }
 
     @Test

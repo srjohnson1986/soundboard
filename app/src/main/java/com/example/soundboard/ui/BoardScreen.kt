@@ -78,6 +78,7 @@ fun BoardScreen(
     var editingTileId by remember { mutableStateOf<String?>(null) }
     var showGridDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+    var editMode by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(message) {
@@ -106,6 +107,13 @@ fun BoardScreen(
                             Text("☰")
                         }
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text(if (editMode) "Edit mode ✓" else "Edit mode") },
+                                onClick = {
+                                    showMenu = false
+                                    editMode = !editMode
+                                }
+                            )
                             DropdownMenuItem(
                                 text = { Text("Grid size (${board.rows} x ${board.columns})") },
                                 onClick = {
@@ -204,9 +212,8 @@ fun BoardScreen(
                             )
                         },
                     onTap = {
-                        if (tile.isEmpty) editingTileId = tile.id else vm.play(tile)
-                    },
-                    onEdit = { editingTileId = tile.id }
+                        if (tile.isEmpty || editMode) editingTileId = tile.id else vm.play(tile)
+                    }
                 )
             }
         }
@@ -243,8 +250,7 @@ fun BoardScreen(
 private fun TileCard(
     tile: Tile,
     modifier: Modifier = Modifier,
-    onTap: () -> Unit,
-    onEdit: () -> Unit
+    onTap: () -> Unit
 ) {
     val filled = !tile.isEmpty
     val customColor = tile.colorArgb?.let { Color(it) }
@@ -282,15 +288,6 @@ private fun TileCard(
                 style = MaterialTheme.typography.labelLarge,
                 color = contentColor,
                 modifier = Modifier.align(Alignment.Center)
-            )
-            Text(
-                text = "✎",
-                style = MaterialTheme.typography.labelLarge,
-                color = contentColor,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .clickable(onClick = onEdit)
-                    .padding(2.dp)
             )
         }
     }

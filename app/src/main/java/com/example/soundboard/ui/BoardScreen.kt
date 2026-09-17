@@ -37,7 +37,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.contentColorFor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +50,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -261,7 +261,7 @@ private fun TileCard(
     } else {
         MaterialTheme.colorScheme.surfaceVariant
     }
-    val contentColor = customColor?.let { contentColorFor(it) } ?: if (filled) {
+    val contentColor = customColor?.let { textColorFor(it) } ?: if (filled) {
         MaterialTheme.colorScheme.onPrimaryContainer
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
@@ -305,6 +305,17 @@ private fun TileCard(
     }
 }
 
+/**
+ * Black or white, whichever contrasts with [background]. Material3's own
+ * `contentColorFor()` only resolves a real color when [background] exactly
+ * matches a theme role; for an arbitrary custom tile color it falls back to
+ * the ambient theme text color, which is light in dark mode — light text on
+ * a light custom background. Deciding from the color's own luminance instead
+ * keeps every custom color readable regardless of theme.
+ */
+private fun textColorFor(background: Color): Color =
+    if (background.luminance() > 0.5f) Color.Black else Color.White
+
 private val presetColors = listOf<Color?>(
     null,
     Color(0xFFE57373),
@@ -341,6 +352,7 @@ private fun EditTileDialog(
                     value = label,
                     onValueChange = { label = it },
                     label = { Text("Name") },
+                    placeholder = { Text("e.g. \"Call Mom\"") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

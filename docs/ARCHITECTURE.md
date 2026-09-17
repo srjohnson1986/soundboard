@@ -195,9 +195,13 @@ A few things worth knowing if you're touching it:
   cell-crossings in one gesture. Non-dragged items get `Modifier.animateItem()`
   so they slide into their new slot instead of jump-cutting.
 - **Colour and contrast.** A custom `colorArgb` overrides the card's
-  container color; `contentColorFor()` (Material3) picks a readable
-  text/icon color against it automatically, so custom colours never need a
-  matching text-color field.
+  container color. Text/icon color for it comes from `textColorFor()`, a
+  local helper that picks black or white from the custom color's own
+  luminance — not Material3's `contentColorFor()`, which only resolves a
+  real color when the background exactly matches a theme role and otherwise
+  silently falls back to the ambient theme text color (light in dark mode),
+  producing light text on a light custom tile. `textColorFor()` sidesteps
+  that by never depending on the current theme at all.
 
 ## Threading
 

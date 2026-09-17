@@ -20,6 +20,7 @@ data class Tile(
 
 @Serializable
 data class Board(
+    val name: String = "New Board",
     val rows: Int = 4,
     val columns: Int = 4,
     val tiles: List<Tile> = List(16) { Tile() }

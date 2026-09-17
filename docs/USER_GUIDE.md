@@ -1,5 +1,13 @@
 # User Guide
 
+## What board is loaded
+
+The top bar always shows which board is active: "Soundboard" in small text,
+with the board's own name underneath (e.g. "Steve Draft Care Board" for the
+bundled debug preset — see [presets/README.md](../presets/README.md)). A
+fresh board with no name of its own is called "New Board" until you rename
+it.
+
 ## The grid
 
 Each tile is either empty (shows a **+**) or filled (shows its label, or
@@ -39,18 +47,27 @@ Save/Cancel.
 
 ## Resizing the grid
 
-Tap the **N x M** button in the top bar, adjust rows/columns with the +/-
-steppers, and tap **Apply**.
+Open the **☰** menu, tap **Grid size (N x M)**, adjust rows/columns with the
++/- steppers, and tap **Apply**.
 
 Shrinking the grid doesn't delete anything — it just hides the tiles that no
 longer fit, starting from the end. Grow the grid back to the same size (or
 larger) and they reappear exactly as you left them, sounds included. The
 only way to actually lose a tile's sound is to clear it directly.
 
+## Naming a board
+
+Tile edits, grid size, and reordering all save automatically — there's
+nothing extra to do for those. **Save** in the **☰** menu is specifically
+for the board's *name*, the one shown in the top bar: tap it, edit the
+**Board name** field (prefilled with the current name), and tap **Save**.
+An empty name falls back to "New Board" rather than saving blank.
+
 ## Backup
 
-Use **Export** / **Import** in the top bar to back up or restore your whole
-board — every tile, label, colour, volume, and sound file — as a single zip.
+Use **Export** / **Import** in the **☰** menu to back up or restore your
+whole board — its name, every tile, label, colour, volume, and sound file —
+as a single zip.
 
 - **Export** opens the system "save file" picker. Pick a location and name
   (it defaults to `soundboard-backup.zip`) and confirm.

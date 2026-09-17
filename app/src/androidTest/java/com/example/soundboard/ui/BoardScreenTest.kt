@@ -2,11 +2,14 @@ package com.example.soundboard.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -95,6 +98,22 @@ class BoardScreenTest {
         // which node the dialog's overlay window leaves "displayed".
         assertEquals(2, composeRule.onAllNodesWithText("Air horn").fetchSemanticsNodes().size)
         assertTrue(player.played.isEmpty())
+    }
+
+    @Test
+    fun saveBoardRenamesBoardAndUpdatesTitle() {
+        launchWith(Board(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))
+
+        composeRule.onNodeWithText("☰").performClick()
+        composeRule.onNodeWithText("Save").performClick()
+        // "New Board" appears twice once the dialog is up (the title bar behind
+        // it, and the field's prefilled value) — hasSetTextAction() narrows to
+        // the actual editable field regardless of window traversal order.
+        composeRule.onNode(hasSetTextAction() and hasText("New Board")).performTextReplacement("Family Board")
+        composeRule.onNodeWithText("Save").performClick()
+
+        composeRule.onNodeWithText("Family Board").assertIsDisplayed()
+        assertEquals("Family Board", vm.board.value.name)
     }
 
     @Test

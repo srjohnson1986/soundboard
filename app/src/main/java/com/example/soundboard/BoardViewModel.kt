@@ -77,6 +77,10 @@ class BoardViewModel(
         commit(_board.value.resized(rows, columns))
     }
 
+    fun renameBoard(name: String) {
+        commit(_board.value.copy(name = name.ifBlank { "New Board" }))
+    }
+
     /** Live-reorders tiles during a drag without touching disk; see [commitOrder]. */
     fun previewMove(fromIndex: Int, toIndex: Int) {
         _board.value = _board.value.moved(fromIndex, toIndex)

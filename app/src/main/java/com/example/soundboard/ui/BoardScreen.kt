@@ -77,6 +77,7 @@ fun BoardScreen(
     val message by vm.message.collectAsStateWithLifecycle()
     var editingTileId by remember { mutableStateOf<String?>(null) }
     var showGridDialog by remember { mutableStateOf(false) }
+    var showSaveDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
@@ -100,7 +101,17 @@ fun BoardScreen(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Soundboard") },
+                title = {
+                    Column {
+                        Text("Soundboard", style = MaterialTheme.typography.labelSmall)
+                        Text(
+                            board.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                },
                 actions = {
                     Box {
                         TextButton(onClick = { showMenu = true }) {
@@ -119,6 +130,13 @@ fun BoardScreen(
                                 onClick = {
                                     showMenu = false
                                     showGridDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Save") },
+                                onClick = {
+                                    showMenu = false
+                                    showSaveDialog = true
                                 }
                             )
                             DropdownMenuItem(
@@ -242,6 +260,17 @@ fun BoardScreen(
                 showGridDialog = false
             },
             onDismiss = { showGridDialog = false }
+        )
+    }
+
+    if (showSaveDialog) {
+        SaveBoardDialog(
+            name = board.name,
+            onConfirm = {
+                vm.renameBoard(it.trim())
+                showSaveDialog = false
+            },
+            onDismiss = { showSaveDialog = false }
         )
     }
 }
@@ -455,6 +484,31 @@ private fun GridSizeDialog(
             }
         },
         confirmButton = { TextButton(onClick = { onConfirm(r, c) }) { Text("Apply") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+private fun SaveBoardDialog(
+    name: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var text by remember { mutableStateOf(name) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Save board") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Board name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(text) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }

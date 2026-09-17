@@ -12,7 +12,7 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 | `audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
 | `audio/SoundPlayer.kt` | Real `Player` implementation: owns the `SoundPool` and the current `MediaPlayer`. No knowledge of `Board` or `Tile`. |
 | `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other three together, single write path. Takes `BoardRepository`/`Player`/dispatcher as constructor params (see below) rather than constructing them. |
-| `ui/BoardScreen.kt` | Compose UI: grid, drag-to-reorder, edit dialog, grid-size dialog, top bar. |
+| `ui/BoardScreen.kt` | Compose UI: grid, drag-to-reorder, edit dialog, grid-size/save dialogs, top bar showing the active board's name. |
 | `MainActivity.kt` | Just sets content to `SoundboardTheme { BoardScreen() }`. |
 
 Data flows one way: UI calls a `BoardViewModel` function → it updates
@@ -32,11 +32,18 @@ data class Tile(
 )
 
 data class Board(
+    val name: String = "New Board",
     val rows: Int = 4,
     val columns: Int = 4,
     val tiles: List<Tile> = List(16) { Tile() }
 )
 ```
+
+`name` is the only piece of state that isn't per-tile or grid geometry — it
+exists purely so the top bar can show *which* board is active (see the UI
+layer section below). `BoardViewModel.renameBoard()` is its single write
+path, going through the normal `commit()`; there's no dedicated "rename"
+concept in `BoardRepository` since it's just another field in `board.json`.
 
 **Invariant: `tiles.size` is always `>= rows * columns`.** `Board.resized()`
 only ever grows the list; shrinking the grid just lowers `rows`/`columns`; the
@@ -174,9 +181,17 @@ gesture.
 ## The UI layer
 
 `BoardScreen` is one `@Composable` function plus private helpers
-(`TileCard`, `EditTileDialog`, `ColorSwatch`, `GridSizeDialog`, `Stepper`).
+(`TileCard`, `EditTileDialog`, `ColorSwatch`, `GridSizeDialog`,
+`SaveBoardDialog`, `Stepper`).
 A few things worth knowing if you're touching it:
 
+- **The active board's name lives in the title, not a separate label.**
+  `TopAppBar`'s `title` is a two-line `Column`: "Soundboard" (the app) in
+  `labelSmall`, then `board.name` in `titleLarge`. It's the only place the
+  active board is identified, so a board with no name of its own reads as
+  "New Board" rather than blank. The `☰` menu's **Save** item is unrelated
+  to the auto-save every other mutation already gets — it exists solely to
+  open `SaveBoardDialog` and change this name via `vm.renameBoard()`.
 - **Tap vs. edit are different gestures on purpose.** A tile's `Card` uses
   `combinedClickable(onClick = onTap)` with no `onLongClick` — long-press is
   reserved entirely for drag-reorder (`detectDragGesturesAfterLongPress` in a

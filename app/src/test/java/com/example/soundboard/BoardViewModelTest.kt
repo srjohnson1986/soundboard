@@ -174,4 +174,26 @@ class BoardViewModelTest {
         val second = newViewModel()
         assertEquals("new", second.board.value.tiles.first { it.id == "a" }.label)
     }
+
+    @Test
+    fun `renameBoard updates the board name and persists it`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        vm.renameBoard("Family Board")
+
+        assertEquals("Family Board", vm.board.value.name)
+        val second = newViewModel()
+        assertEquals("Family Board", second.board.value.name)
+    }
+
+    @Test
+    fun `renameBoard falls back to New Board when given a blank name`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        vm.renameBoard("   ")
+
+        assertEquals("New Board", vm.board.value.name)
+    }
 }

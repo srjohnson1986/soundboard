@@ -24,6 +24,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -75,6 +77,7 @@ fun BoardScreen(
     val message by vm.message.collectAsStateWithLifecycle()
     var editingTileId by remember { mutableStateOf<String?>(null) }
     var showGridDialog by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(message) {
@@ -98,14 +101,33 @@ fun BoardScreen(
             TopAppBar(
                 title = { Text("Soundboard") },
                 actions = {
-                    TextButton(onClick = { importLauncher.launch(arrayOf("application/zip")) }) {
-                        Text("Import")
-                    }
-                    TextButton(onClick = { exportLauncher.launch("soundboard-backup.zip") }) {
-                        Text("Export")
-                    }
-                    TextButton(onClick = { showGridDialog = true }) {
-                        Text("${board.rows} x ${board.columns}")
+                    Box {
+                        TextButton(onClick = { showMenu = true }) {
+                            Text("☰")
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Grid size (${board.rows} x ${board.columns})") },
+                                onClick = {
+                                    showMenu = false
+                                    showGridDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Import") },
+                                onClick = {
+                                    showMenu = false
+                                    importLauncher.launch(arrayOf("application/zip"))
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Export") },
+                                onClick = {
+                                    showMenu = false
+                                    exportLauncher.launch("soundboard-backup.zip")
+                                }
+                            )
+                        }
                     }
                 }
             )
@@ -425,6 +447,6 @@ private fun Stepper(label: String, value: Int, onChange: (Int) -> Unit) {
         Text(label, modifier = Modifier.weight(1f))
         TextButton(onClick = { if (value > 1) onChange(value - 1) }) { Text("-") }
         Text("$value", style = MaterialTheme.typography.titleMedium)
-        TextButton(onClick = { if (value < 8) onChange(value + 1) }) { Text("+") }
+        TextButton(onClick = { if (value < 50) onChange(value + 1) }) { Text("+") }
     }
 }

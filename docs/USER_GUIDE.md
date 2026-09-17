@@ -14,10 +14,11 @@ Each tile is either empty (shows a **+**) or filled (shows its label, or
 
 ## Editing a tile
 
-Turn on **Edit mode** from the **☰** menu in the top bar. While it's on,
-tapping any filled tile opens the edit dialog instead of playing its sound;
-turn it back off to return to normal play mode. Empty tiles always open the
-edit dialog on tap, edit mode or not.
+Turn on **Edit mode** from the **☰** menu in the top bar. While it's on, a
+small pencil appears on every tile as a reminder, and tapping any filled
+tile opens the edit dialog instead of playing its sound; turn it back off
+to return to normal play mode. Empty tiles always open the edit dialog on
+tap, edit mode or not.
 
 With the edit dialog open:
 

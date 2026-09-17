@@ -180,10 +180,12 @@ A few things worth knowing if you're touching it:
 - **Tap vs. edit are different gestures on purpose.** A tile's `Card` uses
   `combinedClickable(onClick = onTap)` with no `onLongClick` — long-press is
   reserved entirely for drag-reorder (`detectDragGesturesAfterLongPress` in a
-  separate `pointerInput`). There's no per-tile edit affordance (it used to be
-  a corner pencil icon, but that crowded small tiles); instead `BoardScreen`
-  holds a top-level `editMode` boolean toggled from the `☰` menu, and `onTap`
-  checks `tile.isEmpty || editMode` to decide whether a tap edits or plays.
+  separate `pointerInput`). The corner pencil isn't a separate tap target
+  anymore (a permanent nested `clickable` there used to crowd small tiles);
+  `BoardScreen` holds a top-level `editMode` boolean toggled from the `☰`
+  menu, `TileCard` renders the pencil purely as a visual indicator whenever
+  `editMode` is true, and `onTap` checks `tile.isEmpty || editMode` to decide
+  whether a tap on the whole card edits or plays.
 - **Drag math.** `cellStepPx` (cell size + spacing, in pixels) is computed
   from the grid's measured width (`Modifier.onSizeChanged`) divided by column
   count. During a drag, the accumulated offset is converted to a row/column

@@ -166,6 +166,7 @@ fun BoardScreen(
                 val isDragged = index == draggedIndex
                 TileCard(
                     tile = tile,
+                    editMode = editMode,
                     modifier = Modifier
                         .then(if (isDragged) Modifier else Modifier.animateItem())
                         .graphicsLayer {
@@ -249,6 +250,7 @@ fun BoardScreen(
 @Composable
 private fun TileCard(
     tile: Tile,
+    editMode: Boolean,
     modifier: Modifier = Modifier,
     onTap: () -> Unit
 ) {
@@ -289,6 +291,16 @@ private fun TileCard(
                 color = contentColor,
                 modifier = Modifier.align(Alignment.Center)
             )
+            if (editMode) {
+                Text(
+                    text = "✎",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = contentColor,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(2.dp)
+                )
+            }
         }
     }
 }

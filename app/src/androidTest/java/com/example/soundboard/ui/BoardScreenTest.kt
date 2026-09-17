@@ -78,8 +78,9 @@ class BoardScreenTest {
 
     @Test
     fun editModeTogglePutsFilledTileTapsIntoEditDialog() {
-        // Edit mode is a menu toggle (no more per-tile pencil, which crowded the
-        // tile); while it's on, tapping a filled tile edits it instead of playing.
+        // Edit mode is toggled from the menu rather than always-on per tile (a
+        // permanent pencil crowded small tiles); once on, a pencil reappears on
+        // every tile and tapping a filled one edits it instead of playing.
         launchWith(
             Board(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Air horn", fileName = "a.mp3")))
         )

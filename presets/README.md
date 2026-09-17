@@ -9,8 +9,8 @@ Anything built to that shape can be loaded with the app's **Import** button.
 
 A 5-column x 10-row (50 tile) board built from a batch of recorded clips,
 grouped into rows by category (top to bottom): urgent/medical, everyday
-needs, yes/no/basic answers, social, two "get \_\_\_" contact tiles, and a
-single chime.
+needs, yes/no/basic answers, social, "Get Mom" / "Get Dad" contact tiles,
+and a single chime.
 
 To load it:
 
@@ -19,8 +19,3 @@ To load it:
 
 **Heads up:** Import fully replaces the current board — export first if you
 want to keep what's there.
-
-**Known placeholder:** `Get —` and `Get — 2` (originally `get_NAME.wav` /
-`get_NAME2.wav`) are stand-ins — the recordings say a placeholder rather
-than an actual name. Re-record those two before relying on this board for
-real use.

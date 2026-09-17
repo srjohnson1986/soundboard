@@ -73,17 +73,91 @@ class BoardViewModel(
         tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null) else it }
     }
 
+    // Pinned tiles live outside any page (Board.pinnedTiles), so they need their
+    // own mutators mirroring the page-tile ones above instead of routing through
+    // updatingCurrentPage.
+
+    fun setPinnedLabel(tileId: String, label: String) = updatePinnedTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(label = label) else it }
+    }
+
+    fun setPinnedVolume(tileId: String, volume: Float) = updatePinnedTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(volume = volume.coerceIn(0f, 1f)) else it }
+    }
+
+    fun setPinnedColor(tileId: String, colorArgb: Int?) = updatePinnedTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
+    }
+
+    fun assignPinnedSound(tileId: String, uri: Uri) {
+        viewModelScope.launch {
+            val name = withContext(ioDispatcher) { repo.importSound(uri) } ?: return@launch
+            withContext(ioDispatcher) { player.load(name, repo.soundFile(name)) }
+            updatePinnedTiles { tiles ->
+                tiles.map { if (it.id == tileId) it.copy(fileName = name) else it }
+            }
+        }
+    }
+
+    fun clearPinnedTile(tileId: String) = updatePinnedTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null) else it }
+    }
+
+    /** Materializes an empty pinned row sized to the current page's width; a no-op once one exists. */
+    fun addPinnedRow() {
+        if (_board.value.pinnedTiles.isNotEmpty()) return
+        commit(_board.value.copy(pinnedTiles = List(_board.value.currentPage.columns) { Tile() }))
+    }
+
     fun resize(rows: Int, columns: Int) {
-        commit(_board.value.resized(rows, columns))
+        val resized = _board.value.updatingCurrentPage { it.resized(rows, columns) }
+        // The pinned row always spans the page's column count; grow it to match
+        // (never shrink — same never-drop-a-tile rule as Page.resized()).
+        val pinned = resized.pinnedTiles
+        val nextPinned = if (pinned.isNotEmpty() && pinned.size < columns) {
+            pinned + List(columns - pinned.size) { Tile() }
+        } else {
+            pinned
+        }
+        commit(resized.copy(pinnedTiles = nextPinned))
+    }
+
+    fun setTileAspectRatio(ratio: Float) {
+        commit(_board.value.updatingCurrentPage { it.copy(tileAspectRatio = ratio) })
+    }
+
+    fun setPageColor(colorArgb: Int?) {
+        commit(_board.value.updatingCurrentPage { it.copy(color = colorArgb) })
     }
 
     fun renameBoard(name: String) {
         commit(_board.value.copy(name = name.ifBlank { "New Board" }))
     }
 
+    fun setHomePage(index: Int) {
+        commit(_board.value.withHomePage(index))
+    }
+
+    fun addPage(name: String) {
+        commit(_board.value.addPage(name.ifBlank { "Page ${_board.value.pages.size + 1}" }))
+    }
+
+    fun renamePage(index: Int, name: String) {
+        commit(_board.value.renamePage(index, name))
+    }
+
+    fun deletePage(index: Int) {
+        commit(_board.value.removePage(index))
+    }
+
+    /** Switches the active page without touching disk — nothing about the board changed. */
+    fun switchPage(index: Int) {
+        _board.value = _board.value.switchTo(index)
+    }
+
     /** Live-reorders tiles during a drag without touching disk; see [commitOrder]. */
     fun previewMove(fromIndex: Int, toIndex: Int) {
-        _board.value = _board.value.moved(fromIndex, toIndex)
+        _board.value = _board.value.updatingCurrentPage { it.moved(fromIndex, toIndex) }
     }
 
     /** Persists whatever order a drag gesture has left the board in. */
@@ -118,19 +192,26 @@ class BoardViewModel(
     }
 
     private fun loadSounds(board: Board) {
-        board.tiles.mapNotNull { it.fileName }.forEach { name ->
+        allTiles(board).mapNotNull { it.fileName }.forEach { name ->
             player.load(name, repo.soundFile(name))
         }
     }
 
     private fun updateTiles(transform: (List<Tile>) -> List<Tile>) {
-        commit(_board.value.copy(tiles = transform(_board.value.tiles)))
+        commit(_board.value.updatingCurrentPage { it.copy(tiles = transform(it.tiles)) })
     }
+
+    private fun updatePinnedTiles(transform: (List<Tile>) -> List<Tile>) {
+        commit(_board.value.copy(pinnedTiles = transform(_board.value.pinnedTiles)))
+    }
+
+    /** Every tile a sound file can be referenced from: every page, plus the pinned row. */
+    private fun allTiles(board: Board): List<Tile> = board.pages.flatMap { it.tiles } + board.pinnedTiles
 
     /** Single write path: update state, drop orphaned audio, persist. */
     private fun commit(board: Board) {
-        val before = _board.value.tiles.mapNotNull { it.fileName }.toSet()
-        val after = board.tiles.mapNotNull { it.fileName }.toSet()
+        val before = allTiles(_board.value).mapNotNull { it.fileName }.toSet()
+        val after = allTiles(board).mapNotNull { it.fileName }.toSet()
         _board.value = board
 
         (before - after).forEach { player.unload(it) }

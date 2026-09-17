@@ -7,12 +7,12 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 
 | File | Responsibility |
 |---|---|
-| `model/Board.kt` | `Tile` and `Board` data classes; resize, visibility, and reorder logic. No Android dependencies. |
+| `model/Board.kt` | `Tile`, `Page`, and `Board` data classes; resize, visibility, reorder, and page-management logic. No Android dependencies. |
 | `data/BoardRepository.kt` | Reads/writes `board.json`, copies picked audio into app storage, zips/unzips backups. All file I/O. |
 | `audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
 | `audio/SoundPlayer.kt` | Real `Player` implementation: owns the `SoundPool` and the current `MediaPlayer`. No knowledge of `Board` or `Tile`. |
 | `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other three together, single write path. Takes `BoardRepository`/`Player`/dispatcher as constructor params (see below) rather than constructing them. |
-| `ui/BoardScreen.kt` | Compose UI: grid, drag-to-reorder, edit dialog, grid-size/save dialogs, top bar showing the active board's name. |
+| `ui/BoardScreen.kt` | Compose UI: pinned row, per-page swipeable grid (`HorizontalPager`), drag-to-reorder, edit dialog, grid-size/save/page/colour dialogs, top bar showing the active board's name, and a tab row for switching pages. |
 | `MainActivity.kt` | Just sets content to `SoundboardTheme { BoardScreen() }`. |
 
 Data flows one way: UI calls a `BoardViewModel` function → it updates
@@ -31,34 +31,69 @@ data class Tile(
     val colorArgb: Int? = null      // null = use the theme default
 )
 
-data class Board(
-    val name: String = "New Board",
+data class Page(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String = "Page 1",
     val rows: Int = 4,
     val columns: Int = 4,
-    val tiles: List<Tile> = List(16) { Tile() }
+    val tiles: List<Tile> = List(16) { Tile() },
+    val tileAspectRatio: Float = 1f,  // width:height; e.g. 4f/3f for wider-than-tall
+    val color: Int? = null            // page-identity accent; null = theme default
+)
+
+data class Board(
+    val name: String = "New Board",
+    val pages: List<Page> = listOf(Page()),
+    val currentPageIndex: Int = 0,
+    val pinnedTiles: List<Tile> = emptyList(),  // shown above every page, identical everywhere
+    val homePageIndex: Int? = null              // auto-return target; null disables it
 )
 ```
 
-`name` is the only piece of state that isn't per-tile or grid geometry — it
-exists purely so the top bar can show *which* board is active (see the UI
-layer section below). `BoardViewModel.renameBoard()` is its single write
-path, going through the normal `commit()`; there's no dedicated "rename"
-concept in `BoardRepository` since it's just another field in `board.json`.
+A board is one or more `Page`s, each an independent grid, switched via tabs
+in the UI. `Board.name` identifies the whole board (shown in the title bar);
+each `Page.name` identifies just that tab; `Page.color` is that tab's own
+identity accent, distinct from `Tile.colorArgb` (a tile's own colour always
+wins). `name`, `currentPageIndex`, `pinnedTiles`, and `homePageIndex` are the
+board-level state that isn't grid geometry or page tiles —
+`BoardViewModel.renameBoard()`/`switchPage()`/pinned-tile mutators/`setHomePage()`
+are their write paths, and none of them need a dedicated persistence concept
+since they're just more fields in `board.json`. `Board.currentPage` resolves
+the active `Page` (clamping `currentPageIndex` defensively);
+`Board.updatingCurrentPage { transform }` is how every tile/grid mutation
+reaches it without the caller handling the page list itself. `addPage()`,
+`removePage()` (a no-op on the last remaining page; also clears or shifts
+`homePageIndex` if it pointed at or past the removed page), `renamePage()`,
+and `switchTo()` round out page management, all returning a new `Board` like
+every other mutator here.
 
-**Invariant: `tiles.size` is always `>= rows * columns`.** `Board.resized()`
-only ever grows the list; shrinking the grid just lowers `rows`/`columns`; the
-now-hidden tiles stay in `tiles`, unreachable except through `visibleTiles =
-tiles.take(rows * columns)`. Growing back reveals them again. This is why
-`BoardScreen` renders `board.visibleTiles`, not `board.tiles` — rendering the
-full list would show hidden tiles that shrinking was supposed to tuck away.
+**`pinnedTiles` is deliberately on `Board`, not `Page`.** The whole point is
+a row identical on every page — putting it on `Page` would mean N independent
+copies to keep in sync by hand. `BoardViewModel` mirrors the five page-tile
+mutators (`setLabel`/`setVolume`/`setColor`/`assignSound`/`clearTile`) as
+pinned-scoped equivalents (`setPinnedLabel`, etc.) operating on
+`Board.pinnedTiles` directly instead of `updatingCurrentPage`.
+`BoardViewModel.resize()` grows `pinnedTiles` to match a page's new column
+count whenever it's resized wider (never shrinks it — same
+never-drop-a-tile rule as `Page.resized()`); `addPinnedRow()` is the one-time
+action that materializes the row in the first place (a no-op once it exists).
 
-`Board.moved(fromIndex, toIndex)` is the same idea applied to drag-reorder:
-it only ever touches the first `rows * columns` entries, leaving hidden tiles
-in place at the end of the list.
+**Invariant: `tiles.size` is always `>= rows * columns`, per page.**
+`Page.resized()` only ever grows the list; shrinking the grid just lowers
+`rows`/`columns`; the now-hidden tiles stay in `tiles`, unreachable except
+through `visibleTiles = tiles.take(rows * columns)`. Growing back reveals
+them again. This is why `BoardScreen` renders `board.currentPage.visibleTiles`,
+not `.tiles` — rendering the full list would show hidden tiles that shrinking
+was supposed to tuck away.
+
+`Page.moved(fromIndex, toIndex)` is the same idea applied to drag-reorder: it
+only ever touches the first `rows * columns` entries, leaving hidden tiles in
+place at the end of the list.
 
 Both `resized()` and `moved()` return `this` unchanged on invalid input
 (out-of-range indices, no-op moves) rather than throwing — callers don't need
-to pre-validate.
+to pre-validate. `Board`'s own mutators (`addPage`, `removePage`, `renamePage`,
+`switchTo`) follow the same rule for out-of-range indices.
 
 ## Persistence
 
@@ -67,8 +102,26 @@ to pre-validate.
 - `filesDir/board.json` — the serialized `Board`, via `kotlinx.serialization`
   with `ignoreUnknownKeys = true`. That flag is what lets old boards (saved
   before `volume`/`colorArgb` existed) keep loading after a schema change —
-  new fields just take their default. Anytime you add a field to `Tile` or
-  `Board`, give it a default for the same reason.
+  new fields just take their default. Anytime you add a field to `Tile`,
+  `Page`, or `Board`, give it a default for the same reason.
+  **This only covers additive changes.** Introducing `pages` required an
+  actual structural migration — boards saved before pages existed are a flat
+  `name`/`rows`/`columns`/`tiles` object with no `pages` key, and decoding
+  that straight as the new `Board` would silently succeed with an *empty
+  default* board (`pages` has a default too) instead of failing loudly.
+  `BoardRepository.load()` guards against this by parsing to a `JsonObject`
+  first and checking for a `"pages"` key: present, decode normally; absent,
+  decode the legacy shape (`LegacyBoard`, private to `BoardRepository.kt`) and
+  wrap it into a single `Page`. This is why `care-board.zip` (the debug-only
+  bundled preset, itself old-format) never needed regenerating — the
+  migration runs on every `load()`, so it applies the moment the asset is
+  imported. By contrast, `pinnedTiles`, `homePageIndex`, `Page.color`, and
+  `Page.tileAspectRatio` needed **no** new branching logic in `load()` at
+  all — they're additive fields onto an already-`pages`-shaped `Board`, so
+  the ordinary `ignoreUnknownKeys` + defaults path handles them exactly like
+  `volume`/`colorArgb` did originally. The structural-migration branch above
+  only exists for the one field (`pages` itself) that changed the JSON's
+  *shape* rather than just adding to it.
 - `filesDir/sounds/<uuid>.<ext>` — every picked audio file, copied in by
   `importSound()`. The UUID is generated at import time and has no relation
   to the tile's own `id`. Copying (instead of holding onto the picked
@@ -142,9 +195,11 @@ Every mutation — rename, assign sound, clear, resize, reorder, volume,
 colour — ends up calling `BoardViewModel.commit(board)`:
 
 ```kotlin
+private fun allTiles(board: Board): List<Tile> = board.pages.flatMap { it.tiles } + board.pinnedTiles
+
 private fun commit(board: Board) {
-    val before = _board.value.tiles.mapNotNull { it.fileName }.toSet()
-    val after = board.tiles.mapNotNull { it.fileName }.toSet()
+    val before = allTiles(_board.value).mapNotNull { it.fileName }.toSet()
+    val after = allTiles(board).mapNotNull { it.fileName }.toSet()
     _board.value = board
 
     (before - after).forEach { player.unload(it) }
@@ -156,11 +211,19 @@ private fun commit(board: Board) {
 }
 ```
 
-It diffs referenced file names before/after, unloads anything that fell out
-of the referenced set, updates the in-memory state immediately (so the UI
-never waits on disk I/O), then persists on `ioDispatcher`. Adding a new
-mutation means adding a function that builds the next `Board` and calls
-`commit()` — not inventing a new write path.
+It diffs referenced file names before/after **across every page plus the
+pinned row, not just the current page** — a sound assigned on a page you're
+not viewing (or on a pinned tile) must still survive pruning — unloads
+anything that fell out of the referenced set, updates the in-memory state
+immediately (so the UI never waits on disk I/O), then persists on
+`ioDispatcher`. `loadSounds()` (called on initial load and after import) uses
+the same `allTiles()` helper to preload everything for the same reason:
+`SoundPool` needs a clip decoded before it can play regardless of which page
+is visible when the app starts. Adding a new mutation to a single page means
+building the next `Board` via `_board.value.updatingCurrentPage { ... }` and
+calling `commit()`; a pinned-tile mutation does the same against
+`_board.value.copy(pinnedTiles = ...)` — either way, not inventing a new
+write path.
 
 **Drag-reorder is the one deliberate exception.** Calling `commit()` on every
 pointer-move frame during a drag would mean dozens of disk writes per
@@ -181,8 +244,8 @@ gesture.
 ## The UI layer
 
 `BoardScreen` is one `@Composable` function plus private helpers
-(`TileCard`, `EditTileDialog`, `ColorSwatch`, `GridSizeDialog`,
-`SaveBoardDialog`, `Stepper`).
+(`PinnedRow`, `PageGrid`, `TileCard`, `EditTileDialog`, `ColorSwatch`,
+`GridSizeDialog`, `PageColorDialog`, `TextInputDialog`, `Stepper`).
 A few things worth knowing if you're touching it:
 
 - **The active board's name lives in the title, not a separate label.**
@@ -191,7 +254,66 @@ A few things worth knowing if you're touching it:
   active board is identified, so a board with no name of its own reads as
   "New Board" rather than blank. The `☰` menu's **Save** item is unrelated
   to the auto-save every other mutation already gets — it exists solely to
-  open `SaveBoardDialog` and change this name via `vm.renameBoard()`.
+  open a `TextInputDialog` and change this name via `vm.renameBoard()`.
+  **Add page**/**Rename page** open the same `TextInputDialog` composable
+  against `vm.addPage()`/`vm.renamePage()`; **Delete page** acts immediately
+  (`vm.deletePage()`) and is hidden from the menu entirely when only one page
+  remains, rather than confirming — `Board.removePage()` is a no-op on the
+  last page anyway, so hiding it just avoids a dead menu entry. **Page
+  colour** opens `PageColorDialog` (the same swatch-picker `ColorSwatch` the
+  tile-edit dialog uses) against `vm.setPageColor()`. **Add pinned row** only
+  appears while `board.pinnedTiles` is empty, since `vm.addPinnedRow()` is a
+  no-op afterward anyway. **Set as home page**/**Home page ✓** toggles
+  `vm.setHomePage(board.currentPageIndex)`.
+- **Pages are a `PrimaryScrollableTabRow` under the `TopAppBar`, shown only
+  when there's more than one, plus a `HorizontalPager` driving the actual
+  grid.** Both the app bar and tab row live inside one `Column` passed to
+  `Scaffold`'s `topBar` slot; the pager fills the content area below the
+  (optional) pinned row. Three navigation paths all have to agree on
+  `board.currentPageIndex`: tapping a `Tab` calls `vm.switchPage(index)`
+  directly; swiping the pager is picked up by a
+  `LaunchedEffect(pagerState) { snapshotFlow { pagerState.currentPage }.collect { vm.switchPage(it) } }`;
+  and a separate `LaunchedEffect(board.currentPageIndex) { pagerState.animateScrollToPage(...) }`
+  runs the sync the other direction, so a tab tap or the idle-timeout
+  auto-return (below) animates the pager to match. `vm.switchPage()` —
+  unlike every other `BoardViewModel` mutator — updates `_board.value`
+  directly without going through `commit()`, since switching pages changes
+  nothing that needs to reach disk. Each pager page renders its own
+  `PageGrid(page, ..., isActive = pageIndex == board.currentPageIndex)`;
+  drag-to-reorder's `pointerInput` is skipped entirely (`if (!isActive)
+  return@pointerInput`) on any page that isn't the settled, on-screen one, so
+  a gesture during a swipe transition can't mutate the wrong page.
+- **The pinned row lives above the pager, rendered once — not once per
+  page.** Since `Board.pinnedTiles` is the same list regardless of which page
+  is showing, there is exactly one `PinnedRow` composable instance; it never
+  needs to re-render on a page switch, only when the tiles themselves change.
+  It's shown at `pinnedTiles.take(board.currentPage.columns)` width, the same
+  "trailing entries hidden, not lost" idea `Page.visibleTiles` already uses.
+- **`editingTarget: EditTarget?`** (a `PageTile(id)` or `PinnedTile(id)`
+  sealed type) replaces a plain tile-id string precisely so the edit dialog
+  knows which list to look the tile up in and which mutator group
+  (`vm.setLabel`/... vs. `vm.setPinnedLabel`/...) to call. It's plain Compose
+  state, not part of `Board`. A `LaunchedEffect(board.currentPageIndex)`
+  resets it to `null` on every page switch, but **only when it's a
+  `PageTile`** — a `PinnedTile` dialog left open survives a page switch
+  cleanly, since pinned tiles don't belong to any one page in the first
+  place.
+- **Auto-return to home page.** `lastInteractionAt` is bumped by a local
+  `touch()` call from every meaningful interaction (tile tap, tab tap, a
+  settled swipe) rather than from a low-level raw-pointer listener,  so only
+  real interactions with the board reset the countdown. A
+  `LaunchedEffect(lastInteractionAt, board.homePageIndex)` `delay()`s
+  `IDLE_TIMEOUT_MS` (5 minutes) and, if nothing has restarted it since and a
+  home page is set, calls `vm.switchPage(homeIndex)` — restarting the effect
+  is what "resets the timer," since a new key value cancels the previous
+  coroutine before it can fire.
+- **Tile shape and colour are page properties, not global constants.**
+  `TileCard` takes `aspectRatio`/`pageColor` as parameters instead of a
+  hardcoded `1f` and a hardcoded `primaryContainer`; `GridSizeDialog` has a
+  Square/Wide toggle next to the rows/columns steppers (`vm.setTileAspectRatio()`,
+  4f/3f for "Wide"). A `Tile`'s own `colorArgb` always overrides `pageColor`,
+  and `pageColor` only applies to **filled** tiles — an empty tile keeps the
+  neutral "add a sound here" look regardless of the page's accent.
 - **Tap vs. edit are different gestures on purpose.** A tile's `Card` uses
   `combinedClickable(onClick = onTap)` with no `onLongClick` — long-press is
   reserved entirely for drag-reorder (`detectDragGesturesAfterLongPress` in a
@@ -209,14 +331,15 @@ A few things worth knowing if you're touching it:
   so the dragged tile keeps tracking the finger smoothly across multiple
   cell-crossings in one gesture. Non-dragged items get `Modifier.animateItem()`
   so they slide into their new slot instead of jump-cutting.
-- **Colour and contrast.** A custom `colorArgb` overrides the card's
-  container color. Text/icon color for it comes from `textColorFor()`, a
-  local helper that picks black or white from the custom color's own
-  luminance — not Material3's `contentColorFor()`, which only resolves a
-  real color when the background exactly matches a theme role and otherwise
-  silently falls back to the ambient theme text color (light in dark mode),
-  producing light text on a light custom tile. `textColorFor()` sidesteps
-  that by never depending on the current theme at all.
+- **Colour and contrast.** A custom `colorArgb`, or failing that a filled
+  tile's page colour, overrides the card's container color. Text/icon color
+  for either comes from `textColorFor()`, a local helper that picks black or
+  white from the color's own luminance — not Material3's `contentColorFor()`,
+  which only resolves a real color when the background exactly matches a
+  theme role and otherwise silently falls back to the ambient theme text
+  color (light in dark mode), producing light text on a light custom tile.
+  `textColorFor()` sidesteps that by never depending on the current theme at
+  all.
 
 ## Threading
 
@@ -238,10 +361,11 @@ A few things worth knowing if you're touching it:
 
 | Layer | File(s) | Runs on |
 |---|---|---|
-| `Board.resized()`/`.moved()` | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
-| `BoardRepository` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
-| `BoardViewModel` | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` |
-| `BoardScreen` | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
+| `Page.resized()`/`.moved()` | `test/.../model/PageTest.kt` | plain JVM (JUnit) |
+| `Board` page management (`addPage`/`removePage`/`renamePage`/`switchTo`/`withHomePage`) | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
+| `BoardRepository`, incl. the legacy-schema migration and additive-field defaults in `load()` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
+| `BoardViewModel`, incl. pinned-tile mutators and cross-page/pinned orphan pruning | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` |
+| `BoardScreen`, incl. the pinned row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 
 `./gradlew test` runs the first three; `./gradlew connectedAndroidTest` runs
 the Compose layer against a connected device or emulator.
@@ -287,3 +411,16 @@ the Compose layer against a connected device or emulator.
   currently reachable through normal use (the app is the only writer to that
   directory), but worth knowing if you build a "manage backups" feature that
   juggles multiple exports.
+- **Pager swipe vs. long-press drag-to-reorder is untested on a real device.**
+  Both gestures live in the same on-screen area (`HorizontalPager` wrapping
+  `PageGrid`, whose tiles have their own `detectDragGesturesAfterLongPress`).
+  The expectation is that a long-press-then-drag is recognized as a tile
+  drag before the pager's own pan detection claims the gesture (Compose lets
+  a child's gesture detector consume pointer input before an ancestor's), the
+  same way tile drag-reorder already coexists with the grid's own vertical
+  scroll — but this hasn't been verified against the pager specifically.
+  Check it manually before shipping a board that relies on both.
+- **Page reordering isn't supported** — `addPage()` always appends, so pages
+  land in creation order with no way to move one later without deleting and
+  re-adding it. Fine as long as pages are created in the order you want them
+  to stay in.

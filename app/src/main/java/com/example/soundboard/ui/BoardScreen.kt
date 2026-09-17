@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -30,10 +32,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -41,9 +45,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,8 +69,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.soundboard.BoardViewModel
+import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+
+/** Five minutes of no interaction before the board snaps back to its home page. */
+private const val IDLE_TIMEOUT_MS = 5 * 60 * 1000L
+
+/** Which tile an open [EditTileDialog] is showing — a page tile or one from the shared pinned row. */
+private sealed interface EditTarget {
+    data class PageTile(val id: String) : EditTarget
+    data class PinnedTile(val id: String) : EditTarget
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,17 +93,63 @@ fun BoardScreen(
 ) {
     val board by vm.board.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
-    var editingTileId by remember { mutableStateOf<String?>(null) }
+    var editingTarget by remember { mutableStateOf<EditTarget?>(null) }
     var showGridDialog by remember { mutableStateOf(false) }
     var showSaveDialog by remember { mutableStateOf(false) }
+    var showAddPageDialog by remember { mutableStateOf(false) }
+    var showRenamePageDialog by remember { mutableStateOf(false) }
+    var showPageColorDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
+    var lastInteractionAt by remember { mutableLongStateOf(0L) }
     val snackbarHostState = remember { SnackbarHostState() }
+
+    fun touch() {
+        lastInteractionAt = System.currentTimeMillis()
+    }
 
     LaunchedEffect(message) {
         message?.let {
             snackbarHostState.showSnackbar(it)
             vm.clearMessage()
+        }
+    }
+
+    // A page-tile dialog left open while switching pages would otherwise resolve
+    // against a tile id that belongs to the page the user just left. A pinned-tile
+    // dialog is unaffected — pinned tiles are the same regardless of page.
+    LaunchedEffect(board.currentPageIndex) {
+        if (editingTarget is EditTarget.PageTile) {
+            editingTarget = null
+        }
+    }
+
+    // Auto-return to the home page after a few idle minutes. Restarts on every
+    // interaction (lastInteractionAt changing cancels the previous delay).
+    LaunchedEffect(lastInteractionAt, board.homePageIndex) {
+        val home = board.homePageIndex ?: return@LaunchedEffect
+        delay(IDLE_TIMEOUT_MS)
+        if (home != board.currentPageIndex) {
+            vm.switchPage(home)
+        }
+    }
+
+    val pagerState = rememberPagerState(initialPage = board.currentPageIndex) { board.pages.size }
+
+    // Swipe -> ViewModel: a settled swipe becomes the active page.
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            if (page != board.currentPageIndex) {
+                touch()
+                vm.switchPage(page)
+            }
+        }
+    }
+
+    // ViewModel -> pager: a tab tap or the idle timer scrolls the pager to match.
+    LaunchedEffect(board.currentPageIndex) {
+        if (pagerState.currentPage != board.currentPageIndex) {
+            pagerState.animateScrollToPage(board.currentPageIndex)
         }
     }
 
@@ -100,178 +164,390 @@ fun BoardScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("Soundboard", style = MaterialTheme.typography.labelSmall)
-                        Text(
-                            board.name,
-                            style = MaterialTheme.typography.titleLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                },
-                actions = {
-                    Box {
-                        TextButton(onClick = { showMenu = true }) {
-                            Text("☰")
+            Column {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text("Soundboard", style = MaterialTheme.typography.labelSmall)
+                            Text(
+                                board.name,
+                                style = MaterialTheme.typography.titleLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
-                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text(if (editMode) "Edit mode ✓" else "Edit mode") },
-                                onClick = {
-                                    showMenu = false
-                                    editMode = !editMode
+                    },
+                    actions = {
+                        Box {
+                            TextButton(onClick = { showMenu = true }) {
+                                Text("☰")
+                            }
+                            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                                DropdownMenuItem(
+                                    text = { Text(if (editMode) "Edit mode ✓" else "Edit mode") },
+                                    onClick = {
+                                        showMenu = false
+                                        editMode = !editMode
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Grid size (${board.currentPage.rows} x ${board.currentPage.columns})") },
+                                    onClick = {
+                                        showMenu = false
+                                        showGridDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Page colour") },
+                                    onClick = {
+                                        showMenu = false
+                                        showPageColorDialog = true
+                                    }
+                                )
+                                if (board.pinnedTiles.isEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text("Add pinned row") },
+                                        onClick = {
+                                            showMenu = false
+                                            vm.addPinnedRow()
+                                        }
+                                    )
                                 }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Grid size (${board.rows} x ${board.columns})") },
-                                onClick = {
-                                    showMenu = false
-                                    showGridDialog = true
+                                DropdownMenuItem(
+                                    text = { Text("Add page") },
+                                    onClick = {
+                                        showMenu = false
+                                        showAddPageDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Rename page") },
+                                    onClick = {
+                                        showMenu = false
+                                        showRenamePageDialog = true
+                                    }
+                                )
+                                if (board.pages.size > 1) {
+                                    DropdownMenuItem(
+                                        text = { Text("Delete page") },
+                                        onClick = {
+                                            showMenu = false
+                                            vm.deletePage(board.currentPageIndex)
+                                        }
+                                    )
                                 }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Save") },
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            if (board.homePageIndex == board.currentPageIndex) {
+                                                "Home page ✓"
+                                            } else {
+                                                "Set as home page"
+                                            }
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        vm.setHomePage(board.currentPageIndex)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Save") },
+                                    onClick = {
+                                        showMenu = false
+                                        showSaveDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Import") },
+                                    onClick = {
+                                        showMenu = false
+                                        importLauncher.launch(arrayOf("application/zip"))
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Export") },
+                                    onClick = {
+                                        showMenu = false
+                                        exportLauncher.launch("soundboard-backup.zip")
+                                    }
+                                )
+                            }
+                        }
+                    }
+                )
+                if (board.pages.size > 1) {
+                    PrimaryScrollableTabRow(selectedTabIndex = board.currentPageIndex) {
+                        board.pages.forEachIndexed { index, page ->
+                            Tab(
+                                selected = index == board.currentPageIndex,
                                 onClick = {
-                                    showMenu = false
-                                    showSaveDialog = true
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Import") },
-                                onClick = {
-                                    showMenu = false
-                                    importLauncher.launch(arrayOf("application/zip"))
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Export") },
-                                onClick = {
-                                    showMenu = false
-                                    exportLauncher.launch("soundboard-backup.zip")
-                                }
+                                    touch()
+                                    vm.switchPage(index)
+                                },
+                                text = { Text(page.name) },
+                                selectedContentColor = page.color?.let { Color(it) }
+                                    ?: MaterialTheme.colorScheme.primary
                             )
                         }
                     }
                 }
-            )
+            }
         }
     ) { insets ->
-        val density = LocalDensity.current
-        var gridWidthPx by remember { mutableIntStateOf(0) }
-        var draggedIndex by remember { mutableStateOf<Int?>(null) }
-        var dragOffset by remember { mutableStateOf(Offset.Zero) }
-
-        val columns = board.columns
-        val spacingPx = with(density) { 8.dp.toPx() }
-        val cellStepPx = if (columns > 0 && gridWidthPx > 0) {
-            (gridWidthPx - spacingPx * (columns - 1)) / columns + spacingPx
-        } else 0f
-
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(columns),
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(insets)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .onSizeChanged { gridWidthPx = it.width },
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            itemsIndexed(board.visibleTiles, key = { _, tile -> tile.id }) { index, tile ->
-                val isDragged = index == draggedIndex
-                TileCard(
-                    tile = tile,
+            if (board.pinnedTiles.isNotEmpty()) {
+                PinnedRow(
+                    tiles = board.pinnedTiles.take(board.currentPage.columns),
                     editMode = editMode,
-                    modifier = Modifier
-                        .then(if (isDragged) Modifier else Modifier.animateItem())
-                        .graphicsLayer {
-                            if (isDragged) {
-                                translationX = dragOffset.x
-                                translationY = dragOffset.y
-                                shadowElevation = 8f
-                                scaleX = 1.05f
-                                scaleY = 1.05f
-                            }
+                    aspectRatio = board.currentPage.tileAspectRatio,
+                    onTap = { tile ->
+                        touch()
+                        if (tile.isEmpty || editMode) {
+                            editingTarget = EditTarget.PinnedTile(tile.id)
+                        } else {
+                            vm.play(tile)
                         }
-                        .zIndex(if (isDragged) 1f else 0f)
-                        .pointerInput(tile.id, columns) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = {
-                                    draggedIndex = index
-                                    dragOffset = Offset.Zero
-                                },
-                                onDragEnd = {
-                                    draggedIndex = null
-                                    dragOffset = Offset.Zero
-                                    vm.commitOrder()
-                                },
-                                onDragCancel = {
-                                    draggedIndex = null
-                                    dragOffset = Offset.Zero
-                                },
-                                onDrag = { change, amount ->
-                                    change.consume()
-                                    dragOffset += amount
-                                    val current = draggedIndex ?: return@detectDragGesturesAfterLongPress
-                                    if (cellStepPx <= 0f) return@detectDragGesturesAfterLongPress
-                                    val colDelta = (dragOffset.x / cellStepPx).roundToInt()
-                                    val rowDelta = (dragOffset.y / cellStepPx).roundToInt()
-                                    if (colDelta == 0 && rowDelta == 0) return@detectDragGesturesAfterLongPress
-                                    val target = (current + rowDelta * columns + colDelta)
-                                        .coerceIn(0, board.visibleTiles.lastIndex)
-                                    if (target != current) {
-                                        vm.previewMove(current, target)
-                                        draggedIndex = target
-                                        dragOffset -= Offset(colDelta * cellStepPx, rowDelta * cellStepPx)
-                                    }
-                                }
-                            )
-                        },
-                    onTap = {
-                        if (tile.isEmpty || editMode) editingTileId = tile.id else vm.play(tile)
                     }
                 )
+            }
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.weight(1f)
+            ) { pageIndex ->
+                val page = board.pages.getOrNull(pageIndex)
+                if (page != null) {
+                    PageGrid(
+                        page = page,
+                        editMode = editMode,
+                        isActive = pageIndex == board.currentPageIndex,
+                        onTap = { tile ->
+                            touch()
+                            if (tile.isEmpty || editMode) {
+                                editingTarget = EditTarget.PageTile(tile.id)
+                            } else {
+                                vm.play(tile)
+                            }
+                        },
+                        onPreviewMove = vm::previewMove,
+                        onCommitOrder = vm::commitOrder
+                    )
+                }
             }
         }
     }
 
-    val editing = board.tiles.firstOrNull { it.id == editingTileId }
-    if (editing != null) {
-        EditTileDialog(
-            tile = editing,
-            onLabelChange = { vm.setLabel(editing.id, it) },
-            onSoundPicked = { vm.assignSound(editing.id, it) },
-            onClear = { vm.clearTile(editing.id) },
-            onVolumeChange = { vm.setVolume(editing.id, it) },
-            onColorChange = { vm.setColor(editing.id, it) },
-            onDismiss = { editingTileId = null }
-        )
+    when (val target = editingTarget) {
+        is EditTarget.PageTile -> {
+            val editing = board.currentPage.tiles.firstOrNull { it.id == target.id }
+            if (editing != null) {
+                EditTileDialog(
+                    tile = editing,
+                    onLabelChange = { vm.setLabel(editing.id, it) },
+                    onSoundPicked = { vm.assignSound(editing.id, it) },
+                    onClear = { vm.clearTile(editing.id) },
+                    onVolumeChange = { vm.setVolume(editing.id, it) },
+                    onColorChange = { vm.setColor(editing.id, it) },
+                    onDismiss = { editingTarget = null }
+                )
+            }
+        }
+        is EditTarget.PinnedTile -> {
+            val editing = board.pinnedTiles.firstOrNull { it.id == target.id }
+            if (editing != null) {
+                EditTileDialog(
+                    tile = editing,
+                    onLabelChange = { vm.setPinnedLabel(editing.id, it) },
+                    onSoundPicked = { vm.assignPinnedSound(editing.id, it) },
+                    onClear = { vm.clearPinnedTile(editing.id) },
+                    onVolumeChange = { vm.setPinnedVolume(editing.id, it) },
+                    onColorChange = { vm.setPinnedColor(editing.id, it) },
+                    onDismiss = { editingTarget = null }
+                )
+            }
+        }
+        null -> Unit
     }
 
     if (showGridDialog) {
         GridSizeDialog(
-            rows = board.rows,
-            columns = board.columns,
-            onConfirm = { r, c ->
+            rows = board.currentPage.rows,
+            columns = board.currentPage.columns,
+            aspectRatio = board.currentPage.tileAspectRatio,
+            onConfirm = { r, c, ratio ->
                 vm.resize(r, c)
+                vm.setTileAspectRatio(ratio)
                 showGridDialog = false
             },
             onDismiss = { showGridDialog = false }
         )
     }
 
+    if (showPageColorDialog) {
+        PageColorDialog(
+            current = board.currentPage.color,
+            onSelect = { vm.setPageColor(it) },
+            onDismiss = { showPageColorDialog = false }
+        )
+    }
+
     if (showSaveDialog) {
-        SaveBoardDialog(
-            name = board.name,
+        TextInputDialog(
+            title = "Save board",
+            label = "Board name",
+            initial = board.name,
             onConfirm = {
                 vm.renameBoard(it.trim())
                 showSaveDialog = false
             },
             onDismiss = { showSaveDialog = false }
         )
+    }
+
+    if (showAddPageDialog) {
+        TextInputDialog(
+            title = "Add page",
+            label = "Page name",
+            initial = "Page ${board.pages.size + 1}",
+            onConfirm = {
+                vm.addPage(it.trim())
+                showAddPageDialog = false
+            },
+            onDismiss = { showAddPageDialog = false }
+        )
+    }
+
+    if (showRenamePageDialog) {
+        TextInputDialog(
+            title = "Rename page",
+            label = "Page name",
+            initial = board.currentPage.name,
+            onConfirm = {
+                vm.renamePage(board.currentPageIndex, it.trim())
+                showRenamePageDialog = false
+            },
+            onDismiss = { showRenamePageDialog = false }
+        )
+    }
+}
+
+/** The fixed row shown above every page's grid, identical regardless of which page is active. */
+@Composable
+private fun PinnedRow(
+    tiles: List<Tile>,
+    editMode: Boolean,
+    aspectRatio: Float,
+    onTap: (Tile) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        tiles.forEach { tile ->
+            TileCard(
+                tile = tile,
+                editMode = editMode,
+                aspectRatio = aspectRatio,
+                pageColor = null,
+                modifier = Modifier.weight(1f),
+                onTap = { onTap(tile) }
+            )
+        }
+    }
+}
+
+/** One page's scrollable grid. Drag-to-reorder only attaches when [isActive] — the page actually on screen. */
+@Composable
+private fun PageGrid(
+    page: Page,
+    editMode: Boolean,
+    isActive: Boolean,
+    onTap: (Tile) -> Unit,
+    onPreviewMove: (Int, Int) -> Unit,
+    onCommitOrder: () -> Unit
+) {
+    val density = LocalDensity.current
+    var gridWidthPx by remember { mutableIntStateOf(0) }
+    var draggedIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+
+    val columns = page.columns
+    val spacingPx = with(density) { 8.dp.toPx() }
+    val cellStepPx = if (columns > 0 && gridWidthPx > 0) {
+        (gridWidthPx - spacingPx * (columns - 1)) / columns + spacingPx
+    } else 0f
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(columns),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .onSizeChanged { gridWidthPx = it.width },
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        itemsIndexed(page.visibleTiles, key = { _, tile -> tile.id }) { index, tile ->
+            val isDragged = index == draggedIndex
+            TileCard(
+                tile = tile,
+                editMode = editMode,
+                aspectRatio = page.tileAspectRatio,
+                pageColor = page.color?.let { Color(it) },
+                modifier = Modifier
+                    .then(if (isDragged) Modifier else Modifier.animateItem())
+                    .graphicsLayer {
+                        if (isDragged) {
+                            translationX = dragOffset.x
+                            translationY = dragOffset.y
+                            shadowElevation = 8f
+                            scaleX = 1.05f
+                            scaleY = 1.05f
+                        }
+                    }
+                    .zIndex(if (isDragged) 1f else 0f)
+                    .pointerInput(tile.id, columns, isActive) {
+                        if (!isActive) return@pointerInput
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                draggedIndex = index
+                                dragOffset = Offset.Zero
+                            },
+                            onDragEnd = {
+                                draggedIndex = null
+                                dragOffset = Offset.Zero
+                                onCommitOrder()
+                            },
+                            onDragCancel = {
+                                draggedIndex = null
+                                dragOffset = Offset.Zero
+                            },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                dragOffset += amount
+                                val current = draggedIndex ?: return@detectDragGesturesAfterLongPress
+                                if (cellStepPx <= 0f) return@detectDragGesturesAfterLongPress
+                                val colDelta = (dragOffset.x / cellStepPx).roundToInt()
+                                val rowDelta = (dragOffset.y / cellStepPx).roundToInt()
+                                if (colDelta == 0 && rowDelta == 0) return@detectDragGesturesAfterLongPress
+                                val target = (current + rowDelta * columns + colDelta)
+                                    .coerceIn(0, page.visibleTiles.lastIndex)
+                                if (target != current) {
+                                    onPreviewMove(current, target)
+                                    draggedIndex = target
+                                    dragOffset -= Offset(colDelta * cellStepPx, rowDelta * cellStepPx)
+                                }
+                            }
+                        )
+                    },
+                onTap = { onTap(tile) }
+            )
+        }
     }
 }
 
@@ -280,17 +556,20 @@ fun BoardScreen(
 private fun TileCard(
     tile: Tile,
     editMode: Boolean,
+    aspectRatio: Float,
+    pageColor: Color?,
     modifier: Modifier = Modifier,
     onTap: () -> Unit
 ) {
     val filled = !tile.isEmpty
     val customColor = tile.colorArgb?.let { Color(it) }
-    val containerColor = customColor ?: if (filled) {
+    val defaultColor = pageColor.takeIf { filled }
+    val containerColor = customColor ?: defaultColor ?: if (filled) {
         MaterialTheme.colorScheme.primaryContainer
     } else {
         MaterialTheme.colorScheme.surfaceVariant
     }
-    val contentColor = customColor?.let { textColorFor(it) } ?: if (filled) {
+    val contentColor = (customColor ?: defaultColor)?.let { textColorFor(it) } ?: if (filled) {
         MaterialTheme.colorScheme.onPrimaryContainer
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
@@ -298,7 +577,7 @@ private fun TileCard(
 
     Card(
         modifier = modifier
-            .aspectRatio(1f)
+            .aspectRatio(aspectRatio)
             .combinedClickable(onClick = onTap),
         colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
@@ -459,11 +738,13 @@ private fun ColorSwatch(color: Color?, selected: Boolean, onClick: () -> Unit) {
 private fun GridSizeDialog(
     rows: Int,
     columns: Int,
-    onConfirm: (Int, Int) -> Unit,
+    aspectRatio: Float,
+    onConfirm: (Int, Int, Float) -> Unit,
     onDismiss: () -> Unit
 ) {
     var r by remember { mutableIntStateOf(rows) }
     var c by remember { mutableIntStateOf(columns) }
+    var wide by remember { mutableStateOf(aspectRatio != 1f) }
     val shrinking = r * c < rows * columns
 
     AlertDialog(
@@ -473,6 +754,14 @@ private fun GridSizeDialog(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Stepper("Rows", r) { r = it }
                 Stepper("Columns", c) { c = it }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Tile shape", modifier = Modifier.weight(1f))
+                    TextButton(onClick = { wide = false }) { Text(if (!wide) "Square ✓" else "Square") }
+                    TextButton(onClick = { wide = true }) { Text(if (wide) "Wide ✓" else "Wide") }
+                }
                 if (shrinking) {
                     Text(
                         "Shrinking just hides the last tiles — their sounds " +
@@ -483,27 +772,51 @@ private fun GridSizeDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(r, c) }) { Text("Apply") } },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(r, c, if (wide) 4f / 3f else 1f) }) { Text("Apply") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 
 @Composable
-private fun SaveBoardDialog(
-    name: String,
+private fun PageColorDialog(current: Int?, onSelect: (Int?) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Page colour") },
+        text = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                presetColors.forEach { color ->
+                    ColorSwatch(
+                        color = color,
+                        selected = color?.toArgb() == current,
+                        onClick = { onSelect(color?.toArgb()) }
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
+@Composable
+private fun TextInputDialog(
+    title: String,
+    label: String,
+    initial: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var text by remember { mutableStateOf(name) }
+    var text by remember { mutableStateOf(initial) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Save board") },
+        title = { Text(title) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
-                label = { Text("Board name") },
+                label = { Text(label) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )

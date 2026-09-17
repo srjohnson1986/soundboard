@@ -5,8 +5,13 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import com.example.soundboard.model.Board
+import com.example.soundboard.model.Page
+import com.example.soundboard.model.Tile
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.jsonObject
 import java.io.File
 import java.io.InputStream
 import java.util.UUID
@@ -26,9 +31,26 @@ class BoardRepository(private val context: Context) {
     private val boardFile = File(context.filesDir, "board.json")
     private val soundsDir = File(context.filesDir, "sounds")
 
-    fun load(): Board =
-        runCatching { json.decodeFromString<Board>(boardFile.readText()) }
-            .getOrElse { Board() }
+    /**
+     * Boards saved before pages existed are a flat name/rows/columns/tiles
+     * object with no "pages" key. `ignoreUnknownKeys` can't help here — decoding
+     * that JSON straight as [Board] would silently succeed with an empty
+     * default board instead of failing, since `pages` has a default too. So an
+     * old board must be detected explicitly and migrated into a single page.
+     */
+    fun load(): Board = runCatching {
+        val text = boardFile.readText()
+        val root = json.parseToJsonElement(text).jsonObject
+        if ("pages" in root) {
+            json.decodeFromString<Board>(text)
+        } else {
+            val legacy = json.decodeFromJsonElement<LegacyBoard>(root)
+            Board(
+                name = legacy.name,
+                pages = listOf(Page(rows = legacy.rows, columns = legacy.columns, tiles = legacy.tiles))
+            )
+        }
+    }.getOrElse { Board() }
 
     /** True once a board has ever been saved — false only on a fresh install. */
     fun hasSavedBoard(): Boolean = boardFile.exists()
@@ -126,3 +148,12 @@ class BoardRepository(private val context: Context) {
         return displayName?.substringAfterLast('.', "").orEmpty()
     }
 }
+
+/** Shape of board.json before pages existed; only used to migrate on [BoardRepository.load]. */
+@Serializable
+private data class LegacyBoard(
+    val name: String = "New Board",
+    val rows: Int = 4,
+    val columns: Int = 4,
+    val tiles: List<Tile> = emptyList()
+)

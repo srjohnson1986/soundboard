@@ -18,12 +18,18 @@ data class Tile(
     val isEmpty: Boolean get() = fileName == null
 }
 
+/** One grid of tiles within a [Board]; a board can have several, switched via tabs. */
 @Serializable
-data class Board(
-    val name: String = "New Board",
+data class Page(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String = "Page 1",
     val rows: Int = 4,
     val columns: Int = 4,
-    val tiles: List<Tile> = List(16) { Tile() }
+    val tiles: List<Tile> = List(16) { Tile() },
+    /** Card width:height, e.g. 1f for square or 4f/3f for wider-than-tall. */
+    val tileAspectRatio: Float = 1f,
+    /** Page-identity accent; null keeps today's neutral theme colour. Overridden per-tile by [Tile.colorArgb]. */
+    val color: Int? = null
 ) {
     /** Tiles currently shown on the grid, in row-major order. */
     val visibleTiles: List<Tile> get() = tiles.take(rows * columns)
@@ -31,10 +37,10 @@ data class Board(
     /**
      * Changes the visible grid size without ever dropping a tile. Shrinking just
      * hides the trailing tiles — their sound stays assigned — and growing reveals
-     * them again, only appending fresh empty tiles if the board has never been
+     * them again, only appending fresh empty tiles if the page has never been
      * this large. The only way to lose a tile's sound is clearing it directly.
      */
-    fun resized(newRows: Int, newColumns: Int): Board {
+    fun resized(newRows: Int, newColumns: Int): Page {
         val target = newRows * newColumns
         val next = if (tiles.size < target) {
             tiles + List(target - tiles.size) { Tile() }
@@ -45,7 +51,7 @@ data class Board(
     }
 
     /** Reorders the visible tiles by moving [fromIndex] to [toIndex]; hidden tiles are untouched. */
-    fun moved(fromIndex: Int, toIndex: Int): Board {
+    fun moved(fromIndex: Int, toIndex: Int): Page {
         val visibleCount = rows * columns
         if (fromIndex !in 0 until visibleCount || toIndex !in 0 until visibleCount || fromIndex == toIndex) {
             return this
@@ -55,4 +61,60 @@ data class Board(
         visible.add(toIndex, tile)
         return copy(tiles = visible + tiles.drop(visibleCount))
     }
+}
+
+@Serializable
+data class Board(
+    val name: String = "New Board",
+    val pages: List<Page> = listOf(Page()),
+    val currentPageIndex: Int = 0,
+    /** Shown fixed above every page's scrollable grid, identical everywhere — not per-page data. */
+    val pinnedTiles: List<Tile> = emptyList(),
+    /** Page auto-returned to after inactivity; null disables auto-return. */
+    val homePageIndex: Int? = null
+) {
+    val currentPage: Page get() = pages[currentPageIndex.coerceIn(pages.indices)]
+
+    /** Applies [transform] to the current page only, leaving the rest of the board untouched. */
+    fun updatingCurrentPage(transform: (Page) -> Page): Board {
+        val index = currentPageIndex.coerceIn(pages.indices)
+        return copy(pages = pages.mapIndexed { i, page -> if (i == index) transform(page) else page })
+    }
+
+    /** Appends a new empty page and switches to it. */
+    fun addPage(name: String = "Page ${pages.size + 1}"): Board =
+        copy(pages = pages + Page(name = name), currentPageIndex = pages.size)
+
+    /** Removes the page at [index]; a no-op if it's the only page left. */
+    fun removePage(index: Int): Board {
+        if (pages.size <= 1 || index !in pages.indices) return this
+        val nextPages = pages.filterIndexed { i, _ -> i != index }
+        val nextHome = homePageIndex?.let { home ->
+            when {
+                home == index -> null
+                home > index -> home - 1
+                else -> home
+            }
+        }
+        return copy(
+            pages = nextPages,
+            currentPageIndex = currentPageIndex.coerceIn(nextPages.indices),
+            homePageIndex = nextHome
+        )
+    }
+
+    fun renamePage(index: Int, name: String): Board {
+        if (index !in pages.indices) return this
+        val page = pages[index]
+        val nextName = name.ifBlank { page.name }
+        return copy(pages = pages.mapIndexed { i, p -> if (i == index) p.copy(name = nextName) else p })
+    }
+
+    /** Switches the active page; a no-op if [index] is out of range. */
+    fun switchTo(index: Int): Board =
+        if (index in pages.indices) copy(currentPageIndex = index) else this
+
+    /** Marks [index] as the page auto-return snaps back to; a no-op if out of range. */
+    fun withHomePage(index: Int): Board =
+        if (index in pages.indices) copy(homePageIndex = index) else this
 }

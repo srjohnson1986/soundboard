@@ -3,6 +3,7 @@ package com.example.soundboard.data
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.example.soundboard.model.Board
+import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -35,13 +36,17 @@ class BoardRepositoryTest {
     @Test
     fun `save then load round-trips including tile ids`() {
         val board = Board(
-            rows = 2,
-            columns = 2,
-            tiles = listOf(
-                Tile(id = "a", label = "Air horn", fileName = "a.mp3", volume = 0.5f, colorArgb = 0xFF0000),
-                Tile(id = "b", label = "", fileName = null),
-                Tile(id = "c", label = "Boo", fileName = "c.wav"),
-                Tile(id = "d")
+            pages = listOf(
+                Page(
+                    rows = 2,
+                    columns = 2,
+                    tiles = listOf(
+                        Tile(id = "a", label = "Air horn", fileName = "a.mp3", volume = 0.5f, colorArgb = 0xFF0000),
+                        Tile(id = "b", label = "", fileName = null),
+                        Tile(id = "c", label = "Boo", fileName = "c.wav"),
+                        Tile(id = "d")
+                    )
+                )
             )
         )
 
@@ -52,14 +57,72 @@ class BoardRepositoryTest {
     }
 
     @Test
+    fun `save then load round-trips multiple pages and the current page index`() {
+        val board = Board(
+            pages = listOf(Page(name = "Requests"), Page(name = "Feelings")),
+            currentPageIndex = 1
+        )
+
+        repo.save(board)
+        val loaded = repo.load()
+
+        assertEquals(board, loaded)
+    }
+
+    @Test
+    fun `save then load round-trips pinned tiles, home page, page colour and tile aspect ratio`() {
+        val board = Board(
+            pages = listOf(
+                Page(name = "Trouble", color = 0xFFB74D, tileAspectRatio = 4f / 3f),
+                Page(name = "Needs")
+            ),
+            homePageIndex = 1,
+            pinnedTiles = listOf(
+                Tile(id = "hey", label = "Hey", fileName = "hey.mp3", colorArgb = 0xE57373)
+            )
+        )
+
+        repo.save(board)
+        val loaded = repo.load()
+
+        assertEquals(board, loaded)
+    }
+
+    @Test
+    fun `a board saved by today's schema still loads when it predates pinned tiles, home page and page colour`() {
+        // What repo.save() itself would have written before pinnedTiles/homePageIndex/
+        // Page.color/Page.tileAspectRatio existed: "pages" is present (so no legacy-shape
+        // migration kicks in), just missing the newer fields entirely.
+        boardFile.parentFile?.mkdirs()
+        boardFile.writeText(
+            """
+            {
+              "name": "New Board",
+              "pages": [
+                {"id": "p1", "name": "Page 1", "rows": 4, "columns": 4, "tiles": []}
+              ],
+              "currentPageIndex": 0
+            }
+            """.trimIndent()
+        )
+
+        val loaded = repo.load()
+
+        assertEquals(emptyList<Tile>(), loaded.pinnedTiles)
+        assertEquals(null, loaded.homePageIndex)
+        assertEquals(null, loaded.pages[0].color)
+        assertEquals(1f, loaded.pages[0].tileAspectRatio)
+    }
+
+    @Test
     fun `loading with no board json present returns the default board`() {
         assertFalse(boardFile.exists())
 
         val loaded = repo.load()
 
-        assertEquals(4, loaded.rows)
-        assertEquals(4, loaded.columns)
-        assertEquals(16, loaded.tiles.size)
+        assertEquals(4, loaded.currentPage.rows)
+        assertEquals(4, loaded.currentPage.columns)
+        assertEquals(16, loaded.currentPage.tiles.size)
     }
 
     @Test
@@ -69,9 +132,9 @@ class BoardRepositoryTest {
 
         val loaded = repo.load()
 
-        assertEquals(4, loaded.rows)
-        assertEquals(4, loaded.columns)
-        assertEquals(16, loaded.tiles.size)
+        assertEquals(4, loaded.currentPage.rows)
+        assertEquals(4, loaded.currentPage.columns)
+        assertEquals(16, loaded.currentPage.tiles.size)
     }
 
     @Test
@@ -81,16 +144,17 @@ class BoardRepositoryTest {
 
         val loaded = repo.load()
 
-        assertEquals(4, loaded.rows)
-        assertEquals(4, loaded.columns)
-        assertEquals(16, loaded.tiles.size)
+        assertEquals(4, loaded.currentPage.rows)
+        assertEquals(4, loaded.currentPage.columns)
+        assertEquals(16, loaded.currentPage.tiles.size)
     }
 
     @Test
     fun `a board saved by an older schema still loads`() {
         boardFile.parentFile?.mkdirs()
         // Extra unknown field at board level ("theme"), extra unknown field on a tile
-        // ("isFavorite"), and a tile missing the newer "colorArgb" field entirely.
+        // ("isFavorite"), a tile missing the newer "colorArgb" field, and no "pages"
+        // key at all — the flat shape used before pages existed.
         boardFile.writeText(
             """
             {
@@ -107,10 +171,12 @@ class BoardRepositoryTest {
 
         val loaded = repo.load()
 
-        assertEquals(1, loaded.rows)
-        assertEquals(2, loaded.columns)
-        assertEquals(listOf("x", "y"), loaded.tiles.map { it.id })
-        assertNull(loaded.tiles[1].colorArgb)
+        assertEquals(1, loaded.pages.size)
+        assertEquals(0, loaded.currentPageIndex)
+        assertEquals(1, loaded.currentPage.rows)
+        assertEquals(2, loaded.currentPage.columns)
+        assertEquals(listOf("x", "y"), loaded.currentPage.tiles.map { it.id })
+        assertNull(loaded.currentPage.tiles[1].colorArgb)
     }
 
     @Test
@@ -146,5 +212,30 @@ class BoardRepositoryTest {
         val name = repo.importSound(uri)
 
         assertNull(name)
+    }
+
+    @Test
+    fun `the bundled care-board preset imports and loads as a valid four-page board`() {
+        // Regression coverage for the actual shipped preset (presets/care-board.zip,
+        // mirrored at app/src/debug/assets/care-board.zip) — guards against the zip
+        // and the app's Board schema drifting apart silently.
+        val imported = repo.importFromAsset("care-board.zip")
+
+        assertTrue(imported)
+        val board = repo.load()
+
+        assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
+        assertEquals(1, board.homePageIndex)
+        assertEquals(4, board.pinnedTiles.size)
+        board.pages.forEach { page ->
+            assertEquals(24, page.tiles.size)
+            assertEquals(6, page.rows)
+            assertEquals(4, page.columns)
+        }
+        // Every referenced sound file actually landed in app storage.
+        val allTiles = board.pages.flatMap { it.tiles } + board.pinnedTiles
+        allTiles.mapNotNull { it.fileName }.forEach { name ->
+            assertTrue("missing sound file $name", repo.soundFile(name).exists())
+        }
     }
 }

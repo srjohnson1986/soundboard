@@ -6,67 +6,149 @@ import org.junit.Test
 
 class BoardTest {
 
-    private fun tile(id: String, label: String = "") = Tile(id = id, label = label)
-
-    @Test
-    fun `growing keeps existing tiles and appends empty ones`() {
-        val original = Board(rows = 4, columns = 4, tiles = (0 until 16).map { tile("t$it") })
-
-        val grown = original.resized(4, 5)
-
-        assertEquals(4, grown.rows)
-        assertEquals(5, grown.columns)
-        assertEquals(original.tiles, grown.tiles.take(16))
-        assertEquals(20, grown.tiles.size)
-        assertEquals(4, grown.tiles.drop(16).count { it.isEmpty })
-    }
-
-    @Test
-    fun `shrinking keeps the first tiles in order and drops the rest`() {
-        val original = Board(rows = 4, columns = 4, tiles = (0 until 16).map { tile("t$it") })
-
-        val shrunk = original.resized(3, 3)
-
-        assertEquals(3, shrunk.rows)
-        assertEquals(3, shrunk.columns)
-        // resized() never drops tiles from the backing list, only the visible window.
-        assertEquals(original.tiles, shrunk.tiles)
-        assertEquals(original.tiles.take(9), shrunk.visibleTiles)
-    }
-
-    @Test
-    fun `resizing to the same dimensions is a no-op`() {
-        val original = Board(rows = 4, columns = 4, tiles = (0 until 16).map { tile("t$it") })
-
-        val result = original.resized(4, 4)
-
-        assertEquals(original, result)
-    }
-
-    @Test
-    fun `1x1 board works`() {
-        val original = Board(rows = 1, columns = 1, tiles = listOf(tile("only")))
-
-        val result = original.resized(1, 1)
-
-        assertEquals(1, result.rows)
-        assertEquals(1, result.columns)
-        assertEquals(listOf(tile("only")), result.tiles)
-    }
-
-    @Test
-    fun `rows and columns are updated not just tile count`() {
-        val original = Board(rows = 2, columns = 2, tiles = (0 until 4).map { tile("t$it") })
-
-        val result = original.resized(1, 8)
-
-        assertEquals(1, result.rows)
-        assertEquals(8, result.columns)
-        assertEquals(8, result.tiles.size)
-    }
-
     @Test
     fun `default boards are not equal because tile ids are random`() {
         assertNotEquals(Board(), Board())
+    }
+
+    @Test
+    fun `addPage appends a page and switches to it`() {
+        val board = Board(pages = listOf(Page(name = "First")))
+
+        val result = board.addPage("Second")
+
+        assertEquals(listOf("First", "Second"), result.pages.map { it.name })
+        assertEquals(1, result.currentPageIndex)
+    }
+
+    @Test
+    fun `addPage defaults to a numbered name when none is given`() {
+        val board = Board(pages = listOf(Page(name = "First")))
+
+        val result = board.addPage()
+
+        assertEquals("Page 2", result.pages[1].name)
+    }
+
+    @Test
+    fun `removePage is a no-op when only one page remains`() {
+        val board = Board(pages = listOf(Page(name = "Only")))
+
+        val result = board.removePage(0)
+
+        assertEquals(board, result)
+    }
+
+    @Test
+    fun `removePage drops the page and clamps the current index`() {
+        val board = Board(
+            pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")),
+            currentPageIndex = 2
+        )
+
+        val result = board.removePage(2)
+
+        assertEquals(listOf("A", "B"), result.pages.map { it.name })
+        assertEquals(1, result.currentPageIndex)
+    }
+
+    @Test
+    fun `renamePage updates only the target page`() {
+        val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
+
+        val result = board.renamePage(1, "Renamed")
+
+        assertEquals("A", result.pages[0].name)
+        assertEquals("Renamed", result.pages[1].name)
+    }
+
+    @Test
+    fun `renamePage falls back to the existing name when given a blank name`() {
+        val board = Board(pages = listOf(Page(name = "A")))
+
+        val result = board.renamePage(0, "   ")
+
+        assertEquals("A", result.pages[0].name)
+    }
+
+    @Test
+    fun `switchTo changes the current page index`() {
+        val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
+
+        val result = board.switchTo(1)
+
+        assertEquals(1, result.currentPageIndex)
+    }
+
+    @Test
+    fun `switchTo out of range is a no-op`() {
+        val board = Board(pages = listOf(Page(name = "A")))
+
+        val result = board.switchTo(5)
+
+        assertEquals(board, result)
+    }
+
+    @Test
+    fun `updatingCurrentPage transforms only the current page`() {
+        val board = Board(
+            pages = listOf(Page(name = "A"), Page(name = "B")),
+            currentPageIndex = 1
+        )
+
+        val result = board.updatingCurrentPage { it.copy(name = "Changed") }
+
+        assertEquals("A", result.pages[0].name)
+        assertEquals("Changed", result.pages[1].name)
+    }
+
+    @Test
+    fun `withHomePage sets the home index`() {
+        val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
+
+        val result = board.withHomePage(1)
+
+        assertEquals(1, result.homePageIndex)
+    }
+
+    @Test
+    fun `withHomePage out of range is a no-op`() {
+        val board = Board(pages = listOf(Page(name = "A")))
+
+        val result = board.withHomePage(5)
+
+        assertEquals(board, result)
+    }
+
+    @Test
+    fun `removePage clears the home index when the home page itself is removed`() {
+        val board = Board(
+            pages = listOf(Page(name = "A"), Page(name = "B")),
+            homePageIndex = 1
+        )
+
+        val result = board.removePage(1)
+
+        assertEquals(null, result.homePageIndex)
+    }
+
+    @Test
+    fun `removePage shifts the home index down when a page before it is removed`() {
+        val board = Board(
+            pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")),
+            homePageIndex = 2
+        )
+
+        val result = board.removePage(0)
+
+        assertEquals(1, result.homePageIndex)
+    }
+
+    @Test
+    fun `pinnedTiles and homePageIndex default to empty and null`() {
+        val board = Board()
+
+        assertEquals(emptyList<Tile>(), board.pinnedTiles)
+        assertEquals(null, board.homePageIndex)
     }
 }

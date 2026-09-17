@@ -34,7 +34,7 @@ class BoardViewModel(
     init {
         viewModelScope.launch {
             withContext(ioDispatcher) {
-                if (!repo.hasSavedBoard()) repo.importFromAsset(TEST_PRESET_ASSET)
+                if (!repo.hasSavedBoard()) repo.importFromAsset(FALLBACK_PRESET_ASSET)
             }
             val loaded = withContext(ioDispatcher) { repo.load() }
             _board.value = loaded
@@ -243,7 +243,7 @@ class BoardViewModel(
     }
 
     companion object {
-        /** Bundled only in debug builds (src/debug/assets/); see [BoardRepository.importFromAsset]. */
-        private const val TEST_PRESET_ASSET = "care-board.zip"
+        /** Bundled in every build (src/main/assets/); see [BoardRepository.importFromAsset]. */
+        private const val FALLBACK_PRESET_ASSET = "steve-care-board.zip"
     }
 }

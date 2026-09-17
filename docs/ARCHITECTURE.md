@@ -112,10 +112,11 @@ to pre-validate. `Board`'s own mutators (`addPage`, `removePage`, `renamePage`,
   `BoardRepository.load()` guards against this by parsing to a `JsonObject`
   first and checking for a `"pages"` key: present, decode normally; absent,
   decode the legacy shape (`LegacyBoard`, private to `BoardRepository.kt`) and
-  wrap it into a single `Page`. This is why `care-board.zip` (the debug-only
-  bundled preset, itself old-format) never needed regenerating — the
-  migration runs on every `load()`, so it applies the moment the asset is
-  imported. By contrast, `pinnedTiles`, `homePageIndex`, `Page.color`, and
+  wrap it into a single `Page`. This is why `steve-care-board.zip` (the
+  bundled fallback preset, itself old-format when this migration was added)
+  never needed regenerating — the migration runs on every `load()`, so it
+  applies the moment the asset is imported. By contrast, `pinnedTiles`,
+  `homePageIndex`, `Page.color`, and
   `Page.tileAspectRatio` needed **no** new branching logic in `load()` at
   all — they're additive fields onto an already-`pages`-shaped `Board`, so
   the ordinary `ignoreUnknownKeys` + defaults path handles them exactly like

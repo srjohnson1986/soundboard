@@ -4,7 +4,7 @@
 
 The top bar always shows which board is active: "Soundboard" in small text,
 with the board's own name underneath (e.g. "Steve Draft Care Board" for the
-bundled debug preset — see [presets/README.md](../presets/README.md)). A
+bundled fallback preset — see [presets/README.md](../presets/README.md)). A
 fresh board with no name of its own is called "New Board" until you rename
 it.
 

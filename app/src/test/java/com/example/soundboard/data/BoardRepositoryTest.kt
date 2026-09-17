@@ -215,11 +215,11 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `the bundled care-board preset imports and loads as a valid four-page board`() {
-        // Regression coverage for the actual shipped preset (presets/care-board.zip,
-        // mirrored at app/src/debug/assets/care-board.zip) — guards against the zip
+    fun `the bundled steve-care-board preset imports and loads as a valid four-page board`() {
+        // Regression coverage for the actual shipped preset (presets/steve-care-board.zip,
+        // mirrored at app/src/main/assets/steve-care-board.zip) — guards against the zip
         // and the app's Board schema drifting apart silently.
-        val imported = repo.importFromAsset("care-board.zip")
+        val imported = repo.importFromAsset("steve-care-board.zip")
 
         assertTrue(imported)
         val board = repo.load()

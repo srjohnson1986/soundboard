@@ -109,10 +109,9 @@ class BoardRepository(private val context: Context) {
     }.isSuccess
 
     /**
-     * Same as [importFrom] but reads a preset bundled as an app asset, e.g. a
-     * debug-only test board shipped under `src/debug/assets/`. Silently no-ops
-     * (returns false) if [assetName] isn't present, so release builds — which
-     * ship no such asset — behave exactly as before.
+     * Same as [importFrom] but reads a preset bundled as an app asset, e.g. the
+     * fallback board shipped under `src/main/assets/`. Silently no-ops (returns
+     * false) if [assetName] isn't present, so callers don't need to guard it.
      */
     fun importFromAsset(assetName: String): Boolean = runCatching {
         context.assets.open(assetName).use(::importZip)

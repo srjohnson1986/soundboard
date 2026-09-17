@@ -5,7 +5,7 @@ zip in the format `BoardRepository.exportTo()`/`importFrom()` produces:
 `board.json` at the zip root plus every referenced sound under `sounds/`.
 Anything built to that shape can be loaded with the app's **Import** button.
 
-## `care-board.zip` — "Steve Draft Care Board"
+## `steve-care-board.zip` — "Steve Draft Care Board"
 
 Four pages — **Trouble**, **Needs** (home), **Talking**, **Well Wishes** —
 plus a pinned row (Hey / Something's wrong / Call the doctor / 911, in red)
@@ -54,20 +54,20 @@ a finished or generic board — wherever the app shows the active board's
 name (currently the top bar's title; see
 [docs/USER_GUIDE.md](../docs/USER_GUIDE.md#what-board-is-loaded)).
 
-**It auto-loads in debug builds.** A copy lives at
-`app/src/debug/assets/care-board.zip` (keep it in sync with this one — both
-the zip's bytes and its `board.json`'s `name` field), and `BoardViewModel`
-imports it on a fresh install — whenever `board.json` doesn't exist yet,
-i.e. before the app has ever saved anything. Release builds carry no such
-asset, so `repo.importFromAsset()` silently no-ops there and the app starts
-with the normal empty, unnamed 4x4 board. Once *any* board gets saved —
-including this auto-import — it's never triggered again; uninstall (or
-clear app data) to see it re-trigger.
+**It's the fallback board on every fresh install, debug or release.** A
+copy lives at `app/src/main/assets/steve-care-board.zip` (keep it in sync
+with this one — both the zip's bytes and its `board.json`'s `name` field),
+and `BoardViewModel` imports it whenever `board.json` doesn't exist yet,
+i.e. before the app has ever saved anything — release builds get this too
+now, not just debug, since it's meant to be the board Steve actually uses,
+not a test fixture. Once *any* board gets saved — including this
+auto-import — it's never triggered again; uninstall (or clear app data) to
+see it re-trigger.
 
 To load it by hand instead (e.g. onto a build that already has a saved
 board):
 
-1. Get the zip onto the device/emulator, e.g. `adb push presets/care-board.zip /sdcard/Download/`.
+1. Get the zip onto the device/emulator, e.g. `adb push presets/steve-care-board.zip /sdcard/Download/`.
 2. In the app, tap **Import** in the top bar and pick the file.
 
 **Heads up:** Import fully replaces the current board — export first if you

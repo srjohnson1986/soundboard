@@ -5,11 +5,14 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.soundboard.audio.AudioRecorder
 import com.example.soundboard.audio.Player
+import com.example.soundboard.audio.Recorder
 import com.example.soundboard.audio.SoundPlayer
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Tile
+import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +24,7 @@ import kotlinx.coroutines.withContext
 class BoardViewModel(
     private val repo: BoardRepository,
     private val player: Player,
+    private val recorder: Recorder,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -30,6 +34,12 @@ class BoardViewModel(
     /** One-off status text for the UI to show (e.g. in a Snackbar), then clear. */
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
+
+    /** The file the active recording is writing to; only meaningful while [isRecording] is true. */
+    private var pendingRecordingFile: File? = null
 
     init {
         viewModelScope.launch {
@@ -73,6 +83,56 @@ class BoardViewModel(
         tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null) else it }
     }
 
+    /** Starts recording into a fresh file; call [stopRecording] or [cancelRecording] to end it. */
+    fun startRecording() {
+        if (_isRecording.value) return
+        viewModelScope.launch {
+            val file = withContext(ioDispatcher) { repo.newRecordingFile() }
+            val started = withContext(ioDispatcher) { recorder.start(file) }
+            if (started) {
+                pendingRecordingFile = file
+                _isRecording.value = true
+            } else {
+                _message.value = "Couldn't start recording"
+            }
+        }
+    }
+
+    /** Stops the active recording and points [tileId] at the result. */
+    fun stopRecording(tileId: String) {
+        viewModelScope.launch {
+            val name = finishRecording() ?: return@launch
+            updateTiles { tiles -> tiles.map { if (it.id == tileId) it.copy(fileName = name) else it } }
+        }
+    }
+
+    /** Abandons the active recording without assigning it to any tile. */
+    fun cancelRecording() {
+        if (!_isRecording.value) return
+        viewModelScope.launch {
+            withContext(ioDispatcher) { recorder.cancel() }
+            _isRecording.value = false
+            pendingRecordingFile?.delete()
+            pendingRecordingFile = null
+        }
+    }
+
+    /** Stops the recorder, loads the clip into the player, and returns its file name — or null on failure. */
+    private suspend fun finishRecording(): String? {
+        if (!_isRecording.value) return null
+        val ok = withContext(ioDispatcher) { recorder.stop() }
+        _isRecording.value = false
+        val file = pendingRecordingFile
+        pendingRecordingFile = null
+        if (!ok || file == null) {
+            file?.delete()
+            _message.value = "Recording failed"
+            return null
+        }
+        withContext(ioDispatcher) { player.load(file.name, file) }
+        return file.name
+    }
+
     // Pinned tiles live outside any page (Board.pinnedTiles), so they need their
     // own mutators mirroring the page-tile ones above instead of routing through
     // updatingCurrentPage.
@@ -101,6 +161,14 @@ class BoardViewModel(
 
     fun clearPinnedTile(tileId: String) = updatePinnedTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null) else it }
+    }
+
+    /** Same as [stopRecording], for a pinned tile. */
+    fun stopPinnedRecording(tileId: String) {
+        viewModelScope.launch {
+            val name = finishRecording() ?: return@launch
+            updatePinnedTiles { tiles -> tiles.map { if (it.id == tileId) it.copy(fileName = name) else it } }
+        }
     }
 
     /** Materializes an empty pinned row sized to the current page's width; a no-op once one exists. */
@@ -243,6 +311,8 @@ class BoardViewModel(
     }
 
     override fun onCleared() {
+        recorder.cancel()
+        pendingRecordingFile?.delete()
         player.release()
         super.onCleared()
     }
@@ -250,7 +320,7 @@ class BoardViewModel(
     class Factory(private val app: Application) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             @Suppress("UNCHECKED_CAST")
-            return BoardViewModel(BoardRepository(app), SoundPlayer()) as T
+            return BoardViewModel(BoardRepository(app), SoundPlayer(), AudioRecorder(app)) as T
         }
     }
 

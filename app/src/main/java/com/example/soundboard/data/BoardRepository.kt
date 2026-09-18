@@ -62,6 +62,16 @@ class BoardRepository(private val context: Context) {
     fun soundFile(name: String): File = File(soundsDir, name)
 
     /**
+     * Allocates a fresh, not-yet-written file for a new recording, in the same
+     * directory imported sounds live in. The recorder writes straight into it —
+     * no separate copy step, unlike [importSound]'s content-resolver read.
+     */
+    fun newRecordingFile(): File {
+        soundsDir.mkdirs()
+        return File(soundsDir, "${UUID.randomUUID()}.m4a")
+    }
+
+    /**
      * Copies the picked audio into app storage and returns its local file name.
      * Copying is what lets us skip storage permissions and survive the source
      * file being moved, renamed, or deleted later.

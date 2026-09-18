@@ -103,6 +103,7 @@ fun BoardScreen(
 ) {
     val board by vm.board.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
+    val isRecording by vm.isRecording.collectAsStateWithLifecycle()
     var editingTarget by remember { mutableStateOf<EditTarget?>(null) }
     var showGridDialog by remember { mutableStateOf(false) }
     var showSaveDialog by remember { mutableStateOf(false) }
@@ -141,10 +142,12 @@ fun BoardScreen(
 
     // A page-tile dialog left open while switching pages would otherwise resolve
     // against a tile id that belongs to the page the user just left. A pinned-tile
-    // dialog is unaffected — pinned tiles are the same regardless of page.
+    // dialog is unaffected — pinned tiles are the same regardless of page. Auto-return
+    // (below) can trigger this while a recording is in progress, so cancel it too.
     LaunchedEffect(board.currentPageIndex) {
         if (editingTarget is EditTarget.PageTile) {
             editingTarget = null
+            vm.cancelRecording()
         }
     }
 
@@ -445,12 +448,19 @@ fun BoardScreen(
             if (editing != null) {
                 EditTileDialog(
                     tile = editing,
+                    isRecording = isRecording,
                     onLabelChange = { vm.setLabel(editing.id, it) },
                     onSoundPicked = { vm.assignSound(editing.id, it) },
                     onClear = { vm.clearTile(editing.id) },
                     onVolumeChange = { vm.setVolume(editing.id, it) },
                     onColorChange = { vm.setColor(editing.id, it) },
-                    onDismiss = { editingTarget = null }
+                    onPlay = { vm.play(editing) },
+                    onStartRecording = vm::startRecording,
+                    onStopRecording = { vm.stopRecording(editing.id) },
+                    onDismiss = {
+                        vm.cancelRecording()
+                        editingTarget = null
+                    }
                 )
             }
         }
@@ -459,12 +469,19 @@ fun BoardScreen(
             if (editing != null) {
                 EditTileDialog(
                     tile = editing,
+                    isRecording = isRecording,
                     onLabelChange = { vm.setPinnedLabel(editing.id, it) },
                     onSoundPicked = { vm.assignPinnedSound(editing.id, it) },
                     onClear = { vm.clearPinnedTile(editing.id) },
                     onVolumeChange = { vm.setPinnedVolume(editing.id, it) },
                     onColorChange = { vm.setPinnedColor(editing.id, it) },
-                    onDismiss = { editingTarget = null }
+                    onPlay = { vm.play(editing) },
+                    onStartRecording = vm::startRecording,
+                    onStopRecording = { vm.stopPinnedRecording(editing.id) },
+                    onDismiss = {
+                        vm.cancelRecording()
+                        editingTarget = null
+                    }
                 )
             }
         }
@@ -796,19 +813,46 @@ private val presetColors = listOf<Color?>(
 @Composable
 private fun EditTileDialog(
     tile: Tile,
+    isRecording: Boolean,
     onLabelChange: (String) -> Unit,
     onSoundPicked: (android.net.Uri) -> Unit,
     onClear: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onColorChange: (Int?) -> Unit,
+    onPlay: () -> Unit,
+    onStartRecording: () -> Unit,
+    onStopRecording: () -> Unit,
     onDismiss: () -> Unit
 ) {
     var label by remember(tile.id) { mutableStateOf(tile.label) }
     var volume by remember(tile.id) { mutableStateOf(tile.volume) }
+    var micPermissionDenied by remember(tile.id) { mutableStateOf(false) }
+    var recordingSeconds by remember(tile.id) { mutableIntStateOf(0) }
+    val context = LocalContext.current
 
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let(onSoundPicked) }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        micPermissionDenied = !granted
+        if (granted) onStartRecording()
+    }
+
+    // Ticks the button label while recording; restarts (and resets to 0) each
+    // time recording starts, and simply stops running — no cleanup needed —
+    // the moment isRecording flips back to false.
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            recordingSeconds = 0
+            while (true) {
+                delay(1000)
+                recordingSeconds++
+            }
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -825,9 +869,50 @@ private fun EditTileDialog(
                 )
                 OutlinedButton(
                     onClick = { picker.launch(arrayOf("audio/*")) },
+                    enabled = !isRecording,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (tile.isEmpty) "Choose sound" else "Replace sound")
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedButton(
+                        onClick = onPlay,
+                        enabled = !tile.isEmpty && !isRecording,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Play clip")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            if (isRecording) {
+                                onStopRecording()
+                            } else {
+                                micPermissionDenied = false
+                                val granted = androidx.core.content.ContextCompat.checkSelfPermission(
+                                    context,
+                                    android.Manifest.permission.RECORD_AUDIO
+                                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                                if (granted) {
+                                    onStartRecording()
+                                } else {
+                                    micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (isRecording) "Stop (${recordingSeconds}s)" else "Record")
+                    }
+                }
+                if (micPermissionDenied) {
+                    Text(
+                        "Microphone permission is needed to record.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
 
                 Column {

@@ -91,7 +91,13 @@ private const val IDLE_TIMEOUT_MS = 5 * 60 * 1000L
 
 /** Placeholder until the first tagged release exists — update alongside each real release. */
 private const val APP_VERSION = "vX.X.X"
-private const val RELEASE_URL = "https://github.com/srjohnson1986/soundboard/releases/tag/$APP_VERSION"
+
+/**
+ * Points at the releases list rather than a specific tag until [APP_VERSION] is a real
+ * version — switch this to "$RELEASES_BASE_URL/tag/$APP_VERSION" once it is.
+ */
+private const val RELEASES_BASE_URL = "https://github.com/srjohnson1986/soundboard/releases"
+private const val RELEASE_URL = RELEASES_BASE_URL
 
 /** Which tile an open [EditTileDialog] is showing — a page tile or one from the shared pinned row. */
 private sealed interface EditTarget {

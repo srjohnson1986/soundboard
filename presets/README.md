@@ -72,3 +72,39 @@ board):
 
 **Heads up:** Import fully replaces the current board — export first if you
 want to keep what's there.
+
+## `jeremy-care-board.zip` — "Jeremy Draft Care Board"
+
+Same layout and tile-for-tile mapping as `steve-care-board.zip` above (same
+four pages, same pinned row, same colors, same "Wide" tiles, Needs as home)
+built from a separate recording batch in Jeremy's own voice — same 92-clip
+script as Steve's, filename-for-filename identical except for two extras
+(see below). It doesn't auto-load on install like Steve's does — only one
+board can be the fallback — but it's still bundled for convenience: a copy
+lives at `app/src/debug/assets/jeremy-care-board.zip` (debug builds only,
+unlike Steve's which is in every build), and the `☰` menu's **Load Jeremy
+test preset** item (also debug-only, gated on `BuildConfig.DEBUG`) imports
+it directly via `BoardViewModel.importJeremyTestPreset()` — no `adb push`
+or file picker needed when testing in an emulator. It's still a normal
+preset otherwise: pushing the zip and using **Import** works too, e.g. on
+a real device.
+
+Trouble, Needs, and the pinned row are fully recorded; Talking is missing
+only "Not that", same gap as Steve's board. The same clips are deferred for
+the same reasons (see the list above) — this batch is otherwise identical.
+
+Three things differ from Steve's board:
+
+- **No named contacts yet.** Steve's board reused real "Get Mom"/"Get Dad"
+  recordings inherited from an earlier draft; Jeremy's batch only has the
+  generic `get_NAME.wav`/`get_NAME2.wav` templates, so both "Get ___" tiles
+  on Trouble use those as-is (literally placeholder audio) until real names
+  get recorded.
+- **`personal_message_jeremy.wav`** doesn't correspond to anything in the
+  board-layout doc's tile list. It's placed on Well Wishes as a third tile
+  labeled "For you", next to the still-empty "Mom"/"Dad" placeholders — a
+  guess at the right home for it; relabel or move it if that's not what it
+  actually is.
+- **`pain_worse_ALT_retake.wav`** is an alternate take of "Pain worse."
+  The plain `pain_worse.wav` is what's on the tile; the alt take is left
+  unused/spare, same treatment as Steve's ambiguous multi-take clips.

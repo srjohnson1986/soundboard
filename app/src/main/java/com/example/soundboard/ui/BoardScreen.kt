@@ -75,6 +75,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.soundboard.BoardViewModel
+import com.example.soundboard.BuildConfig
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
 import kotlin.math.roundToInt
@@ -318,6 +319,16 @@ fun BoardScreen(
                                     ) {
                                         Text("Export")
                                     }
+                                }
+                                if (BuildConfig.DEBUG) {
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text("Load Jeremy test preset") },
+                                        onClick = {
+                                            showMenu = false
+                                            vm.importJeremyTestPreset()
+                                        }
+                                    )
                                 }
                             }
                         }

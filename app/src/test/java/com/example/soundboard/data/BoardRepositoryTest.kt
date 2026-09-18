@@ -238,4 +238,35 @@ class BoardRepositoryTest {
             assertTrue("missing sound file $name", repo.soundFile(name).exists())
         }
     }
+
+    @Test
+    fun `the jeremy-care-board preset imports and loads as a valid four-page board`() {
+        // presets/jeremy-care-board.zip isn't a bundled asset (it's loaded via the
+        // app's Import button, not auto-loaded like steve-care-board.zip), so this
+        // exercises the same import path a user tapping Import would, via a fake
+        // content:// uri pointed at the checked-in zip.
+        val zip = File("../presets/jeremy-care-board.zip")
+        assertTrue("expected ${zip.absolutePath} to exist", zip.exists())
+        val uri = Uri.parse("content://fake/jeremy-care-board.zip")
+        shadowOf(context.contentResolver).registerInputStream(uri, zip.inputStream())
+
+        val imported = repo.importFrom(uri)
+
+        assertTrue(imported)
+        val board = repo.load()
+
+        assertEquals("Jeremy Draft Care Board", board.name)
+        assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
+        assertEquals(1, board.homePageIndex)
+        assertEquals(4, board.pinnedTiles.size)
+        board.pages.forEach { page ->
+            assertEquals(24, page.tiles.size)
+            assertEquals(6, page.rows)
+            assertEquals(4, page.columns)
+        }
+        val allTiles = board.pages.flatMap { it.tiles } + board.pinnedTiles
+        allTiles.mapNotNull { it.fileName }.forEach { name ->
+            assertTrue("missing sound file $name", repo.soundFile(name).exists())
+        }
+    }
 }

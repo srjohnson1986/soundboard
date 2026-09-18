@@ -265,7 +265,13 @@ A few things worth knowing if you're touching it:
   tile-edit dialog uses) against `vm.setPageColor()`. **Add pinned row** only
   appears while `board.pinnedTiles` is empty, since `vm.addPinnedRow()` is a
   no-op afterward anyway. **Set as home page**/**Home page ✓** toggles
-  `vm.setHomePage(board.currentPageIndex)`.
+  `vm.setHomePage(board.currentPageIndex)`. **Load Jeremy test preset** is
+  gated on `BuildConfig.DEBUG` (requires `buildFeatures.buildConfig = true`
+  in `app/build.gradle.kts`) and calls `vm.importJeremyTestPreset()`, which
+  imports `app/src/debug/assets/jeremy-care-board.zip` the same way the
+  fallback board imports on a fresh install — it exists purely so testing
+  in an emulator doesn't need `adb push` plus the file picker every time;
+  it never appears, and the asset isn't even packaged, in a release build.
 - **Pages are a `PrimaryScrollableTabRow` under the `TopAppBar`, shown only
   when there's more than one, plus a `HorizontalPager` driving the actual
   grid.** Both the app bar and tab row live inside one `Column` passed to

@@ -183,15 +183,27 @@ class BoardViewModel(
     fun importBoard(uri: Uri) {
         viewModelScope.launch {
             val ok = withContext(ioDispatcher) { repo.importFrom(uri) }
-            if (ok) {
-                player.clear()
-                val loaded = withContext(ioDispatcher) { repo.load() }
-                _board.value = loaded
-                withContext(ioDispatcher) { loadSounds(loaded) }
-                _message.value = "Imported backup"
-            } else {
-                _message.value = "Import failed"
-            }
+            replaceBoardAfterImport(ok, "Imported backup", "Import failed")
+        }
+    }
+
+    /** Debug-menu shortcut for loading the Jeremy test preset without hunting for the zip each time. */
+    fun importJeremyTestPreset() {
+        viewModelScope.launch {
+            val ok = withContext(ioDispatcher) { repo.importFromAsset(JEREMY_TEST_PRESET_ASSET) }
+            replaceBoardAfterImport(ok, "Loaded Jeremy test preset", "Jeremy test preset not found")
+        }
+    }
+
+    private suspend fun replaceBoardAfterImport(imported: Boolean, successMessage: String, failureMessage: String) {
+        if (imported) {
+            player.clear()
+            val loaded = withContext(ioDispatcher) { repo.load() }
+            _board.value = loaded
+            withContext(ioDispatcher) { loadSounds(loaded) }
+            _message.value = successMessage
+        } else {
+            _message.value = failureMessage
         }
     }
 
@@ -245,5 +257,8 @@ class BoardViewModel(
     companion object {
         /** Bundled in every build (src/main/assets/); see [BoardRepository.importFromAsset]. */
         private const val FALLBACK_PRESET_ASSET = "steve-care-board.zip"
+
+        /** Debug-only (src/debug/assets/); loaded on demand via the debug-only menu item, never auto-imported. */
+        private const val JEREMY_TEST_PRESET_ASSET = "jeremy-care-board.zip"
     }
 }

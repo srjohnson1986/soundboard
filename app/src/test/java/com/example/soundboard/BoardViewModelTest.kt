@@ -363,4 +363,15 @@ class BoardViewModelTest {
 
         assertTrue(repo.soundFile("hey.mp3").exists())
     }
+
+    @Test
+    fun `importJeremyTestPreset loads the debug-only preset asset`() {
+        val vm = newViewModel()
+
+        vm.importJeremyTestPreset()
+
+        assertEquals("Jeremy Draft Care Board", vm.board.value.name)
+        assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), vm.board.value.pages.map { it.name })
+        assertEquals("Loaded Jeremy test preset", vm.message.value)
+    }
 }

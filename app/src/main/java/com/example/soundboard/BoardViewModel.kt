@@ -1,6 +1,7 @@
 package com.example.soundboard
 
 import android.app.Application
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -10,6 +11,8 @@ import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.Recorder
 import com.example.soundboard.audio.SoundPlayer
 import com.example.soundboard.data.BoardRepository
+import com.example.soundboard.data.PresetRepository
+import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Tile
 import java.io.File
@@ -25,6 +28,7 @@ class BoardViewModel(
     private val repo: BoardRepository,
     private val player: Player,
     private val recorder: Recorder,
+    private val presetRepo: PresetRepository,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -34,6 +38,9 @@ class BoardViewModel(
     /** One-off status text for the UI to show (e.g. in a Snackbar), then clear. */
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+
+    private val _presets = MutableStateFlow<List<SavedPreset>>(emptyList())
+    val presets: StateFlow<List<SavedPreset>> = _presets.asStateFlow()
 
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
@@ -255,11 +262,57 @@ class BoardViewModel(
         }
     }
 
-    /** Debug-menu shortcut for loading the Jeremy test preset without hunting for the zip each time. */
-    fun importJeremyTestPreset() {
+    /** Refreshes [presets] from disk; call before showing a preset picker. */
+    fun refreshPresets() {
         viewModelScope.launch {
-            val ok = withContext(ioDispatcher) { repo.importFromAsset(JEREMY_TEST_PRESET_ASSET) }
-            replaceBoardAfterImport(ok, "Loaded Jeremy test preset", "Jeremy test preset not found")
+            _presets.value = withContext(ioDispatcher) { presetRepo.list() }
+        }
+    }
+
+    /**
+     * Snapshots the current board as a brand-new saved preset and renames the
+     * live board to match — same-device version history, not a portable
+     * backup (see [PresetRepository]). [exportBoard] is still what carries a
+     * board's audio off-device.
+     */
+    fun saveAsPreset(name: String) {
+        val renamed = _board.value.copy(name = name.ifBlank { _board.value.name })
+        viewModelScope.launch {
+            withContext(ioDispatcher) { presetRepo.save(renamed) }
+            commit(renamed)
+            refreshPresets()
+            _message.value = "Saved preset \"${renamed.name}\""
+        }
+    }
+
+    /** Replaces the live board with [ref]'s content. Caller is responsible for confirming this is wanted first. */
+    fun applyPreset(ref: PresetRef) {
+        viewModelScope.launch {
+            when (ref) {
+                is PresetRef.Saved -> {
+                    val loaded = withContext(ioDispatcher) { presetRepo.load(ref.id) }
+                    if (loaded == null) {
+                        _message.value = "Couldn't load preset"
+                        return@launch
+                    }
+                    player.clear()
+                    commit(loaded)
+                    withContext(ioDispatcher) { loadSounds(loaded) }
+                    _message.value = "Loaded \"${loaded.name}\""
+                }
+                is PresetRef.Factory -> {
+                    val ok = withContext(ioDispatcher) { repo.importFromAsset(ref.assetName) }
+                    replaceBoardAfterImport(ok, "Loaded \"${ref.label}\"", "Couldn't load preset")
+                }
+            }
+        }
+    }
+
+    /** Factory presets bundled with this build — Steve's ships in every build; Jeremy's only where its asset is actually packaged (debug builds). */
+    fun factoryPresets(context: Context): List<PresetRef.Factory> = buildList {
+        add(PresetRef.Factory(FALLBACK_PRESET_ASSET, "Steve Draft Care Board"))
+        if (runCatching { context.assets.open(JEREMY_PRESET_ASSET).close() }.isSuccess) {
+            add(PresetRef.Factory(JEREMY_PRESET_ASSET, "Jeremy Draft Care Board"))
         }
     }
 
@@ -306,7 +359,10 @@ class BoardViewModel(
 
         viewModelScope.launch(ioDispatcher) {
             repo.save(board)
-            repo.pruneUnused(after)
+            // A saved preset references sound files by name without copying them (see
+            // PresetRepository) — protect those from pruning too, or clearing/replacing a
+            // live tile could delete audio a saved preset still points at.
+            repo.pruneUnused(after + presetRepo.allReferencedFileNames())
         }
     }
 
@@ -320,7 +376,7 @@ class BoardViewModel(
     class Factory(private val app: Application) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             @Suppress("UNCHECKED_CAST")
-            return BoardViewModel(BoardRepository(app), SoundPlayer(), AudioRecorder(app)) as T
+            return BoardViewModel(BoardRepository(app), SoundPlayer(), AudioRecorder(app), PresetRepository(app)) as T
         }
     }
 
@@ -328,7 +384,13 @@ class BoardViewModel(
         /** Bundled in every build (src/main/assets/); see [BoardRepository.importFromAsset]. */
         private const val FALLBACK_PRESET_ASSET = "steve-care-board.zip"
 
-        /** Debug-only (src/debug/assets/); loaded on demand via the debug-only menu item, never auto-imported. */
-        private const val JEREMY_TEST_PRESET_ASSET = "jeremy-care-board.zip"
+        /** Debug-only (src/debug/assets/) — only actually available where that asset is packaged. */
+        private const val JEREMY_PRESET_ASSET = "jeremy-care-board.zip"
     }
+}
+
+/** A preset the "Load preset" picker can apply — either bundled with the app or saved on-device. */
+sealed interface PresetRef {
+    data class Saved(val id: String) : PresetRef
+    data class Factory(val assetName: String, val label: String) : PresetRef
 }

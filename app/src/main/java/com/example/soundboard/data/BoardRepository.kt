@@ -10,7 +10,10 @@ import com.example.soundboard.model.Tile
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import java.io.File
 import java.io.InputStream
@@ -41,7 +44,7 @@ class BoardRepository(private val context: Context) {
     fun load(): Board = runCatching {
         val text = boardFile.readText()
         val root = json.parseToJsonElement(text).jsonObject
-        if ("pages" in root) {
+        val board = if ("pages" in root) {
             json.decodeFromString<Board>(text)
         } else {
             val legacy = json.decodeFromJsonElement<LegacyBoard>(root)
@@ -50,7 +53,21 @@ class BoardRepository(private val context: Context) {
                 pages = listOf(Page(rows = legacy.rows, columns = legacy.columns, tiles = legacy.tiles))
             )
         }
+        migrateHomePageIndex(board, root)
     }.getOrElse { Board() }
+
+    /**
+     * `Page.isHome` replaced a single board-level `homePageIndex: Int?`.
+     * `ignoreUnknownKeys` only covers fields that were added, not one that
+     * moved — a board saved before this change would silently lose its home
+     * page on load without this: read the old top-level key straight from the
+     * raw JSON and translate it onto the matching page.
+     */
+    private fun migrateHomePageIndex(board: Board, root: JsonObject): Board {
+        if (board.pages.any { it.isHome }) return board
+        val index = (root["homePageIndex"] as? JsonPrimitive)?.intOrNull ?: return board
+        return board.withHomePage(index)
+    }
 
     /** True once a board has ever been saved — false only on a fresh install. */
     fun hasSavedBoard(): Boolean = boardFile.exists()

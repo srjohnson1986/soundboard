@@ -3,6 +3,7 @@ package com.example.soundboard
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.example.soundboard.audio.FakePlayer
+import com.example.soundboard.audio.FakeRecorder
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
@@ -31,15 +32,17 @@ class BoardViewModelTest {
     private lateinit var context: android.content.Context
     private lateinit var repo: BoardRepository
     private lateinit var player: FakePlayer
+    private lateinit var recorder: FakeRecorder
 
     private fun newViewModel() =
-        BoardViewModel(repo, player, ioDispatcher = UnconfinedTestDispatcher())
+        BoardViewModel(repo, player, recorder, ioDispatcher = UnconfinedTestDispatcher())
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         repo = BoardRepository(context)
         player = FakePlayer()
+        recorder = FakeRecorder()
     }
 
     private fun boardWith(vararg tiles: Tile) = Board(
@@ -90,6 +93,71 @@ class BoardViewModelTest {
         val tile = vm.board.value.currentPage.tiles.first { it.id == "a" }
         assertTrue(tile.fileName != null)
         assertTrue(player.loaded.contains(tile.fileName))
+    }
+
+    @Test
+    fun `recording start-stop points the tile at the recorded file and loads it`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        vm.startRecording()
+        assertTrue(vm.isRecording.value)
+        val recordedFile = recorder.startedFile
+        assertTrue(recordedFile != null)
+
+        vm.stopRecording("a")
+
+        assertFalse(vm.isRecording.value)
+        val tile = vm.board.value.currentPage.tiles.first { it.id == "a" }
+        assertEquals(recordedFile!!.name, tile.fileName)
+        assertTrue(player.loaded.contains(tile.fileName))
+    }
+
+    @Test
+    fun `a failed stop leaves the tile untouched deletes the partial file and reports a message`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+        recorder.stopSucceeds = false
+
+        vm.startRecording()
+        val recordedFile = recorder.startedFile!!.apply { parentFile?.mkdirs(); writeText("partial") }
+
+        vm.stopRecording("a")
+
+        assertFalse(vm.isRecording.value)
+        assertNull(vm.board.value.currentPage.tiles.first { it.id == "a" }.fileName)
+        assertFalse(recordedFile.exists())
+        assertEquals("Recording failed", vm.message.value)
+    }
+
+    @Test
+    fun `cancelRecording discards the in-progress file without touching the tile`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        vm.startRecording()
+        val recordedFile = recorder.startedFile!!.apply { parentFile?.mkdirs(); writeText("abandoned") }
+
+        vm.cancelRecording()
+
+        assertFalse(vm.isRecording.value)
+        assertTrue(recorder.cancelled)
+        assertFalse(recordedFile.exists())
+        assertNull(vm.board.value.currentPage.tiles.first { it.id == "a" }.fileName)
+    }
+
+    @Test
+    fun `stopPinnedRecording points a pinned tile at the recorded file`() {
+        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", label = "Hey"))))
+        val vm = newViewModel()
+
+        vm.startRecording()
+        val recordedFile = recorder.startedFile!!
+
+        vm.stopPinnedRecording("hey")
+
+        val tile = vm.board.value.pinnedTiles.first { it.id == "hey" }
+        assertEquals(recordedFile.name, tile.fileName)
     }
 
     @Test

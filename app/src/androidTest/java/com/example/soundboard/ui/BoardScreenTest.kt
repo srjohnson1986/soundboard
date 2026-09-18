@@ -16,6 +16,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.soundboard.BoardViewModel
 import com.example.soundboard.audio.Player
+import com.example.soundboard.audio.Recorder
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
@@ -38,6 +39,12 @@ private class FakePlayer : Player {
     override fun release() {}
 }
 
+private class FakeRecorder : Recorder {
+    override fun start(file: File) = true
+    override fun stop() = true
+    override fun cancel() {}
+}
+
 @RunWith(AndroidJUnit4::class)
 class BoardScreenTest {
 
@@ -53,7 +60,7 @@ class BoardScreenTest {
         repo = BoardRepository(context)
         repo.save(board)
         player = FakePlayer()
-        vm = BoardViewModel(repo, player)
+        vm = BoardViewModel(repo, player, FakeRecorder())
 
         composeRule.setContent {
             BoardScreen(vm = vm)

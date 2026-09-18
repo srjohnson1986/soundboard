@@ -11,7 +11,9 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 | `data/BoardRepository.kt` | Reads/writes `board.json`, copies picked audio into app storage, zips/unzips backups. All file I/O. |
 | `audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
 | `audio/SoundPlayer.kt` | Real `Player` implementation: owns the `SoundPool` and the current `MediaPlayer`. No knowledge of `Board` or `Tile`. |
-| `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other three together, single write path. Takes `BoardRepository`/`Player`/dispatcher as constructor params (see below) rather than constructing them. |
+| `audio/Recorder.kt` | Interface (`start`/`stop`/`cancel`) that `BoardViewModel` depends on for recording — same fake-in-tests seam as `Player`. |
+| `audio/AudioRecorder.kt` | Real `Recorder` implementation: owns a `MediaRecorder`, encoding straight to a file `BoardRepository` hands it. |
+| `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other four together, single write path. Takes `BoardRepository`/`Player`/`Recorder`/dispatcher as constructor params (see below) rather than constructing them. |
 | `ui/BoardScreen.kt` | Compose UI: pinned row, per-page swipeable grid (`HorizontalPager`), drag-to-reorder, edit dialog, grid-size/save/page/color dialogs, top bar showing the active board's name, and a tab row for switching pages. |
 | `MainActivity.kt` | Just sets content to `SoundboardTheme { BoardScreen() }`. |
 
@@ -168,6 +170,44 @@ underlying `SoundPool` object, so the player can keep being used —
 imported board, so stale keys from the previous state can't linger.
 `release()` is the real teardown, called once from `onCleared()`.
 
+## Audio recording
+
+`AudioRecorder` wraps `MediaRecorder`, encoding to AAC in an MPEG-4 (`.m4a`)
+container — `SoundPlayer` branches on file size, not extension, so a
+recorded clip plays back through the exact same `SoundPool`/`MediaPlayer`
+path as an imported one, no conversion needed.
+
+The flow, split between `EditTileDialog` (permission + button state) and
+`BoardViewModel` (the actual recording):
+
+1. Tapping **Record** checks `RECORD_AUDIO` via `ContextCompat.checkSelfPermission`
+   first; if it's not granted, a `rememberLauncherForActivityResult(RequestPermission())`
+   asks for it and only starts recording once granted, showing an inline
+   error otherwise. This lives in the UI layer because permission requests
+   need an `Activity` context a `ViewModel` shouldn't hold.
+2. `vm.startRecording()` calls `repo.newRecordingFile()` for a fresh
+   UUID-named `.m4a` path in `soundsDir` — the same directory `importSound()`
+   writes into — then `recorder.start(file)`. The file is tracked as
+   `pendingRecordingFile` and `_isRecording` flips true, which is what turns
+   the dialog's button into `Stop (Ns)`.
+3. Tapping **Stop** calls `vm.stopRecording(tileId)` (or `stopPinnedRecording`
+   for the pinned row), which stops the recorder, `player.load()`s the
+   resulting file, and writes `fileName` onto the tile through the normal
+   `updateTiles`/`commit()` path — recording is assigned exactly as
+   immediately as picking a file is, not gated behind the dialog's Save
+   button.
+4. A failed `MediaRecorder.stop()` (thrown when too little audio was
+   captured to finalize the file — e.g. tapping Stop instantly after Record)
+   is treated as failure: the partial file is deleted and the tile is left
+   untouched, with a "Recording failed" message.
+5. **Nothing commits a recording that isn't explicitly stopped.**
+   `vm.cancelRecording()` — called from the dialog's `onDismiss` and from the
+   page-switch effect that closes a `PageTile` dialog (auto-return can fire
+   mid-recording) — stops the recorder without touching the tile and deletes
+   the abandoned file. It's a no-op when nothing is recording, so it's safe
+   to call unconditionally on every dialog exit path (Save, Cancel, or
+   dismiss).
+
 ## Dependency injection
 
 `BoardViewModel` takes its collaborators as constructor parameters instead of
@@ -177,15 +217,17 @@ building them:
 class BoardViewModel(
     private val repo: BoardRepository,
     private val player: Player,
+    private val recorder: Recorder,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel()
 ```
 
-`BoardViewModel.Factory(application)` builds the real `BoardRepository` and
-`SoundPlayer` and is what `BoardScreen` passes to `viewModel(factory = ...)`.
-Tests construct `BoardViewModel` directly instead, passing a real
-`BoardRepository` (against a Robolectric or instrumented context — file I/O
-is cheap enough not to fake) and a `FakePlayer` in place of `SoundPlayer`.
+`BoardViewModel.Factory(application)` builds the real `BoardRepository`,
+`SoundPlayer`, and `AudioRecorder` and is what `BoardScreen` passes to
+`viewModel(factory = ...)`. Tests construct `BoardViewModel` directly
+instead, passing a real `BoardRepository` (against a Robolectric or
+instrumented context — file I/O is cheap enough not to fake), a `FakePlayer`
+in place of `SoundPlayer`, and a `FakeRecorder` in place of `AudioRecorder`.
 `ioDispatcher` defaults to `Dispatchers.IO` in production; tests pass an
 `UnconfinedTestDispatcher` so the persistence coroutine in `commit()` (below)
 runs synchronously instead of racing a real background thread.
@@ -380,7 +422,7 @@ A few things worth knowing if you're touching it:
 | `Page.resized()`/`.moved()` | `test/.../model/PageTest.kt` | plain JVM (JUnit) |
 | `Board` page management (`addPage`/`removePage`/`renamePage`/`switchTo`/`withHomePage`) | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
 | `BoardRepository`, incl. the legacy-schema migration and additive-field defaults in `load()` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
-| `BoardViewModel`, incl. pinned-tile mutators and cross-page/pinned orphan pruning | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` |
+| `BoardViewModel`, incl. pinned-tile mutators, cross-page/pinned orphan pruning, and record/stop/cancel | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
 | `BoardScreen`, incl. the pinned row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 
 `./gradlew test` runs the first three; `./gradlew connectedAndroidTest` runs
@@ -388,7 +430,10 @@ the Compose layer against a connected device or emulator.
 
 - **`FakePlayer`** (a `Player`) exists twice — once under `test/`, once under
   `androidTest/` — since those source sets don't share code by default. Keep
-  both in sync if `Player`'s contract changes.
+  both in sync if `Player`'s contract changes. **`FakeRecorder`** (a
+  `Recorder`) follows the same split, though the `androidTest/` copy is a
+  bare stub (`BoardScreenTest` doesn't exercise recording — see the known
+  limitations below) rather than a full call-recording fake.
 - **`MainDispatcherRule`** sets `Dispatchers.Main` to an
   `UnconfinedTestDispatcher` for the duration of a test, since
   `viewModelScope` has no `Main` dispatcher on a plain JVM. Every
@@ -439,3 +484,14 @@ the Compose layer against a connected device or emulator.
   land in creation order with no way to move one later without deleting and
   re-adding it. Fine as long as pages are created in the order you want them
   to stay in.
+- **Recording is untested against a real microphone.** `BoardViewModelTest`
+  covers the start/stop/cancel state machine against `FakeRecorder`, but
+  nothing exercises `AudioRecorder` against actual `MediaRecorder` I/O —
+  emulators' virtual mic is often silent by default, so even a passing
+  instrumented test wouldn't confirm real voice quality or latency. Verify
+  on a physical device before relying on this for an actual care board.
+- **A permanently denied `RECORD_AUDIO` permission has no recovery path.**
+  `EditTileDialog` shows an inline "permission is needed" message and lets
+  the user try again, but Android stops showing its own permission dialog
+  after a second denial — there's no "open Settings" deep link, so a user
+  who denies twice can't record without leaving the app manually.

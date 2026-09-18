@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- No permissions needed: picked files are copied into app-private storage. -->
+    <!-- Picked files need no permission (copied via the content resolver), but
+         recording a tile's sound directly needs the microphone. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:allowBackup="true"

@@ -40,15 +40,27 @@ With the edit dialog open:
 - **Choose sound / Replace sound** — opens the system file picker filtered to
   audio files. Whatever you pick is copied into the app's own storage, so
   moving or deleting the original file afterward won't break the tile.
+- **Play clip** — plays whatever sound is currently on the tile, so you can
+  check it without leaving the edit dialog. Disabled on an empty tile, and
+  while a recording is in progress.
+- **Record** — records straight from the microphone instead of picking a
+  file. The first tap asks for microphone permission if the app doesn't
+  have it yet; after that, tapping **Record** starts capturing and the
+  button turns into **Stop (Ns)**, counting up while it listens. Tapping
+  **Stop** finishes the clip and assigns it to the tile immediately, the
+  same as picking a file — use **Play clip** afterward to check it, and
+  **Record** again to redo it if it's not right. Closing the dialog (Save,
+  Cancel, or dismissing it) while still recording discards that in-progress
+  clip rather than keeping a half-finished one.
 - **Volume** — per-tile playback volume, 0 to full.
 - **Color** — seven swatches (including "none", which uses the default
   theme color). Tap one to apply it immediately — no need to hit Save.
 - **Clear tile** — removes the sound and label, turning it back into an
   empty **+** tile.
 
-Tap **Save** to keep name/sound changes, or **Cancel** to discard them.
-Volume and color changes apply as soon as you pick them, regardless of
-Save/Cancel.
+Tap **Save** to keep the name, or **Cancel** to discard it. Sound (whether
+picked or recorded), volume, and color changes all apply immediately,
+regardless of Save/Cancel — only the name is staged until you tap Save.
 
 ## Resizing the grid
 

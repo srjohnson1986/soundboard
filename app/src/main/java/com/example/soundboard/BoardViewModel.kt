@@ -13,6 +13,7 @@ import com.example.soundboard.audio.SoundPlayer
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.data.SavedPreset
+import com.example.soundboard.data.SettingsRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Tile
 import java.io.File
@@ -29,11 +30,15 @@ class BoardViewModel(
     private val player: Player,
     private val recorder: Recorder,
     private val presetRepo: PresetRepository,
+    private val settingsRepo: SettingsRepository,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     private val _board = MutableStateFlow(Board())
     val board: StateFlow<Board> = _board.asStateFlow()
+
+    private val _openOnHomePage = MutableStateFlow(settingsRepo.openOnHomePage)
+    val openOnHomePage: StateFlow<Boolean> = _openOnHomePage.asStateFlow()
 
     /** One-off status text for the UI to show (e.g. in a Snackbar), then clear. */
     private val _message = MutableStateFlow<String?>(null)
@@ -54,8 +59,15 @@ class BoardViewModel(
                 if (!repo.hasSavedBoard()) repo.importFromAsset(FALLBACK_PRESET_ASSET)
             }
             val loaded = withContext(ioDispatcher) { repo.load() }
-            _board.value = loaded
-            withContext(ioDispatcher) { loadSounds(loaded) }
+            // Only overrides where the pager starts, not what's saved to disk — a plain
+            // switchTo(), same as any other in-session page switch, see BoardViewModel.switchPage.
+            val initial = if (settingsRepo.openOnHomePage) {
+                loaded.homePageIndex?.let { loaded.switchTo(it) } ?: loaded
+            } else {
+                loaded
+            }
+            _board.value = initial
+            withContext(ioDispatcher) { loadSounds(initial) }
         }
     }
 
@@ -189,16 +201,22 @@ class BoardViewModel(
         commit(_board.value.copy(pinnedTiles = List(PINNED_ROW_SIZE) { Tile() }))
     }
 
-    fun resize(rows: Int, columns: Int) {
-        commit(_board.value.updatingCurrentPage { it.resized(rows, columns) })
+    fun resize(index: Int, rows: Int, columns: Int) {
+        commit(_board.value.updatingPage(index) { it.resized(rows, columns) })
     }
 
-    fun setTileAspectRatio(ratio: Float) {
-        commit(_board.value.updatingCurrentPage { it.copy(tileAspectRatio = ratio) })
+    fun setTileAspectRatio(index: Int, ratio: Float) {
+        commit(_board.value.updatingPage(index) { it.copy(tileAspectRatio = ratio) })
     }
 
-    fun setPageColor(colorArgb: Int?) {
-        commit(_board.value.updatingCurrentPage { it.copy(color = colorArgb) })
+    fun setPageColor(index: Int, colorArgb: Int?) {
+        commit(_board.value.updatingPage(index) { it.copy(color = colorArgb) })
+    }
+
+    /** Whether a fresh launch jumps to the home page instead of resuming the last-viewed one. */
+    fun setOpenOnHomePage(value: Boolean) {
+        settingsRepo.openOnHomePage = value
+        _openOnHomePage.value = value
     }
 
     fun renameBoard(name: String) {
@@ -372,7 +390,13 @@ class BoardViewModel(
     class Factory(private val app: Application) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             @Suppress("UNCHECKED_CAST")
-            return BoardViewModel(BoardRepository(app), SoundPlayer(), AudioRecorder(app), PresetRepository(app)) as T
+            return BoardViewModel(
+                BoardRepository(app),
+                SoundPlayer(),
+                AudioRecorder(app),
+                PresetRepository(app),
+                SettingsRepository(app)
+            ) as T
         }
     }
 

@@ -20,6 +20,7 @@ import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.Recorder
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.PresetRepository
+import com.example.soundboard.data.SettingsRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
@@ -62,7 +63,7 @@ class BoardScreenTest {
         repo = BoardRepository(context)
         repo.save(board)
         player = FakePlayer()
-        vm = BoardViewModel(repo, player, FakeRecorder(), PresetRepository(context))
+        vm = BoardViewModel(repo, player, FakeRecorder(), PresetRepository(context), SettingsRepository(context))
 
         composeRule.setContent {
             BoardScreen(vm = vm)
@@ -152,13 +153,27 @@ class BoardScreenTest {
             )
         )
 
-        composeRule.onNodeWithContentDescription("Menu").performClick()
-        composeRule.onNodeWithText("Grid size (2 x 2)").performClick()
+        // Grid size now lives in the page-options dialog, opened by long-pressing the
+        // page's own tab — hold past the long-press timeout via the test clock, the same
+        // way idleTimeoutReturnsToTheHomePageAfterInactivity drives a real delay()-based wait.
+        longPressPageTab("Page 1")
+        composeRule.onNodeWithText("Grid size (2x2)").performClick()
         composeRule.onNodeWithContentDescription("Increase Columns").performClick()
         composeRule.onNodeWithText("Apply").performClick()
+        composeRule.onNodeWithText("Page 1").performTouchInput { up() }
 
-        composeRule.onNodeWithContentDescription("Menu").performClick()
-        composeRule.onNodeWithText("Grid size (2 x 3)").assertIsDisplayed()
+        longPressPageTab("Page 1")
+        composeRule.onNodeWithText("Grid size (2x3)").assertIsDisplayed()
+        composeRule.onNodeWithText("Page 1").performTouchInput { up() }
+    }
+
+    /** Holds a page tab down past the long-press timeout to open its PageOptionsDialog, without releasing it. */
+    private fun longPressPageTab(pageName: String) {
+        composeRule.onNodeWithText(pageName).performTouchInput { down(center) }
+        composeRule.mainClock.autoAdvance = false
+        composeRule.mainClock.advanceTimeBy(600)
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitForIdle()
     }
 
     @Test
@@ -222,8 +237,7 @@ class BoardScreenTest {
     fun addPageCreatesANewNamedPageAndSwitchesToIt() {
         launchWith(Board(pages = listOf(Page(name = "First", rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))))
 
-        composeRule.onNodeWithContentDescription("Menu").performClick()
-        composeRule.onNodeWithText("Add page").performClick()
+        composeRule.onNodeWithContentDescription("Add page").performClick()
         composeRule.onNode(hasSetTextAction()).performTextReplacement("Feelings")
         composeRule.onNodeWithText("Save").performClick()
 

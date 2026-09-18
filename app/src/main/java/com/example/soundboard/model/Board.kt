@@ -83,8 +83,12 @@ data class Board(
         pages.any { page -> page.tiles.any { !it.isEmpty } } || pinnedTiles.any { !it.isEmpty }
 
     /** Applies [transform] to the current page only, leaving the rest of the board untouched. */
-    fun updatingCurrentPage(transform: (Page) -> Page): Board {
-        val index = currentPageIndex.coerceIn(pages.indices)
+    fun updatingCurrentPage(transform: (Page) -> Page): Board =
+        updatingPage(currentPageIndex.coerceIn(pages.indices), transform)
+
+    /** Applies [transform] to the page at [index] only; a no-op if out of range. */
+    fun updatingPage(index: Int, transform: (Page) -> Page): Board {
+        if (index !in pages.indices) return this
         return copy(pages = pages.mapIndexed { i, page -> if (i == index) transform(page) else page })
     }
 

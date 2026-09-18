@@ -6,6 +6,7 @@ import com.example.soundboard.audio.FakePlayer
 import com.example.soundboard.audio.FakeRecorder
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.PresetRepository
+import com.example.soundboard.data.SettingsRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
@@ -35,9 +36,10 @@ class BoardViewModelTest {
     private lateinit var player: FakePlayer
     private lateinit var recorder: FakeRecorder
     private lateinit var presetRepo: PresetRepository
+    private lateinit var settingsRepo: SettingsRepository
 
     private fun newViewModel() =
-        BoardViewModel(repo, player, recorder, presetRepo, ioDispatcher = UnconfinedTestDispatcher())
+        BoardViewModel(repo, player, recorder, presetRepo, settingsRepo, ioDispatcher = UnconfinedTestDispatcher())
 
     @Before
     fun setUp() {
@@ -46,6 +48,7 @@ class BoardViewModelTest {
         player = FakePlayer()
         recorder = FakeRecorder()
         presetRepo = PresetRepository(context)
+        settingsRepo = SettingsRepository(context)
     }
 
     private fun boardWith(vararg tiles: Tile) = Board(
@@ -229,7 +232,7 @@ class BoardViewModelTest {
         repo.soundFile("b.mp3").apply { parentFile?.mkdirs() }.writeText("b")
         val vm = newViewModel()
 
-        vm.resize(1, 1)
+        vm.resize(0, 1, 1)
 
         assertTrue(repo.soundFile("a.mp3").exists())
         assertTrue(repo.soundFile("b.mp3").exists())
@@ -352,6 +355,49 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `a fresh view model resumes the last-viewed page by default`() {
+        repo.save(Board(pages = listOf(Page(name = "A", isHome = true), Page(name = "B")), currentPageIndex = 1))
+
+        val vm = newViewModel()
+
+        assertEquals(1, vm.board.value.currentPageIndex)
+    }
+
+    @Test
+    fun `openOnHomePage jumps a fresh view model to the home page without touching disk`() {
+        repo.save(Board(pages = listOf(Page(name = "A", isHome = true), Page(name = "B")), currentPageIndex = 1))
+        settingsRepo.openOnHomePage = true
+
+        val vm = newViewModel()
+
+        assertEquals(0, vm.board.value.currentPageIndex)
+        // Only the in-memory pager start changed — the saved page (from switchPage's own
+        // page-switch semantics) is untouched, same as any other in-session page switch.
+        assertEquals(1, repo.load().currentPageIndex)
+    }
+
+    @Test
+    fun `openOnHomePage is a no-op when no page is marked home`() {
+        repo.save(Board(pages = listOf(Page(name = "A"), Page(name = "B")), currentPageIndex = 1))
+        settingsRepo.openOnHomePage = true
+
+        val vm = newViewModel()
+
+        assertEquals(1, vm.board.value.currentPageIndex)
+    }
+
+    @Test
+    fun `setOpenOnHomePage persists across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setOpenOnHomePage(true)
+
+        assertTrue(vm.openOnHomePage.value)
+        val second = newViewModel()
+        assertTrue(second.openOnHomePage.value)
+    }
+
+    @Test
     fun `addPinnedRow materializes a fixed-width empty row regardless of the current page and persists`() {
         // Fixed at 4 regardless of the page's own column count (3 here) — the
         // pinned row is deliberately decoupled from page grid width (#15).
@@ -386,9 +432,33 @@ class BoardViewModelTest {
         )
         val vm = newViewModel()
 
-        vm.resize(1, 4)
+        vm.resize(0, 1, 4)
 
         assertEquals(listOf("hey", "sos"), vm.board.value.pinnedTiles.map { it.id })
+    }
+
+    @Test
+    fun `resize, setTileAspectRatio and setPageColor target the given page, not the current one`() {
+        // PageOptionsDialog opens for whichever page was long-pressed, which may not be
+        // the page currently on screen — these must not silently fall back to currentPage.
+        repo.save(Board(pages = listOf(Page(name = "A"), Page(rows = 1, columns = 2, name = "B")), currentPageIndex = 0))
+        val vm = newViewModel()
+
+        vm.resize(1, 3, 3)
+        vm.setTileAspectRatio(1, 4f / 3f)
+        vm.setPageColor(1, 0xFF00FF00.toInt())
+
+        val untouched = vm.board.value.pages[0]
+        assertEquals(4, untouched.rows)
+        assertEquals(4, untouched.columns)
+        assertEquals(1f, untouched.tileAspectRatio)
+        assertEquals(null, untouched.color)
+
+        val targeted = vm.board.value.pages[1]
+        assertEquals(3, targeted.rows)
+        assertEquals(3, targeted.columns)
+        assertEquals(4f / 3f, targeted.tileAspectRatio)
+        assertEquals(0xFF00FF00.toInt(), targeted.color)
     }
 
     @Test

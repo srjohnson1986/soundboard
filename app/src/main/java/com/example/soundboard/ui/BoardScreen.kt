@@ -149,15 +149,16 @@ fun BoardScreen(
     val message by vm.message.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
     val presets by vm.presets.collectAsStateWithLifecycle()
+    val openOnHomePage by vm.openOnHomePage.collectAsStateWithLifecycle()
     var editingTarget by remember { mutableStateOf<EditTarget?>(null) }
-    var showGridDialog by remember { mutableStateOf(false) }
+    var gridDialogIndex by remember { mutableStateOf<Int?>(null) }
     var showSavePresetDialog by remember { mutableStateOf(false) }
     var showPresetPickerDialog by remember { mutableStateOf(false) }
     var pendingPresetApply by remember { mutableStateOf<Pair<PresetRef, String>?>(null) }
     var showAddPageDialog by remember { mutableStateOf(false) }
     var renamePageIndex by remember { mutableStateOf<Int?>(null) }
     var pageOptionsIndex by remember { mutableStateOf<Int?>(null) }
-    var showPageColorDialog by remember { mutableStateOf(false) }
+    var pageColorDialogIndex by remember { mutableStateOf<Int?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
@@ -297,54 +298,31 @@ fun BoardScreen(
                                     )
                                 }
                                 HorizontalDivider()
-                                // Page layout
-                                MenuSectionHeader("${board.currentPage.name} Page Layout")
-                                DropdownMenuItem(
-                                    text = { Text("Grid size (${board.currentPage.rows}x${board.currentPage.columns})") },
-                                    leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        showGridDialog = true
+                                // Startup behavior — see BoardViewModel.openOnHomePage
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Filled.Home,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Text("Open on home page")
                                     }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Page color") },
-                                    leadingIcon = { Icon(Icons.Filled.Palette, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        showPageColorDialog = true
-                                    }
-                                )
-                                HorizontalDivider()
-                                // Page management
-                                MenuSectionHeader("Pages")
-                                DropdownMenuItem(
-                                    text = { Text("Add page") },
-                                    leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        showAddPageDialog = true
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Rename page") },
-                                    leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        renamePageIndex = board.currentPageIndex
-                                    }
-                                )
-                                if (board.pages.size > 1) {
-                                    DropdownMenuItem(
-                                        text = { Text("Delete page") },
-                                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                                        onClick = {
-                                            showMenu = false
-                                            requestDeletePage(board.currentPageIndex)
-                                        }
+                                    Switch(
+                                        checked = openOnHomePage,
+                                        onCheckedChange = { vm.setOpenOnHomePage(it) }
                                     )
                                 }
+                                HorizontalDivider()
                                 if (board.pinnedTiles.isEmpty()) {
+                                    MenuSectionHeader("Pages")
                                     DropdownMenuItem(
                                         text = { Text("Add pinned row") },
                                         leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
@@ -353,8 +331,8 @@ fun BoardScreen(
                                             vm.addPinnedRow()
                                         }
                                     )
+                                    HorizontalDivider()
                                 }
-                                HorizontalDivider()
                                 // Presets — lightweight, same-device version history (see PresetRepository)
                                 MenuSectionHeader("Presets")
                                 DropdownMenuItem(
@@ -420,57 +398,60 @@ fun BoardScreen(
                         }
                     }
                 )
-                if (board.pages.size > 1) {
-                    PrimaryScrollableTabRow(selectedTabIndex = board.currentPageIndex) {
-                        val tabHaptics = LocalHapticFeedback.current
-                        board.pages.forEachIndexed { index, page ->
-                            // Long-press detection must run on the Initial (outside-in) pointer
-                            // pass and win the race against Tab's own click before it can consume
-                            // the eventual up event on the Main pass — see the note above.
-                            Box(
-                                modifier = Modifier.pointerInput(page.id) {
-                                    awaitEachGesture {
-                                        awaitFirstDown(pass = PointerEventPass.Initial)
-                                        val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                                            waitForUpOrCancellation(pass = PointerEventPass.Initial)
-                                        }
-                                        if (up == null) {
-                                            tabHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            pageOptionsIndex = index
-                                            // Swallow the eventual release so Tab's own click,
-                                            // which runs on the later Main pass, never sees it.
-                                            waitForUpOrCancellation(pass = PointerEventPass.Initial)?.consume()
-                                        }
+                PrimaryScrollableTabRow(selectedTabIndex = board.currentPageIndex) {
+                    val tabHaptics = LocalHapticFeedback.current
+                    board.pages.forEachIndexed { index, page ->
+                        // Long-press detection must run on the Initial (outside-in) pointer
+                        // pass and win the race against Tab's own click before it can consume
+                        // the eventual up event on the Main pass — see the note above.
+                        Box(
+                            modifier = Modifier.pointerInput(page.id) {
+                                awaitEachGesture {
+                                    awaitFirstDown(pass = PointerEventPass.Initial)
+                                    val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                        waitForUpOrCancellation(pass = PointerEventPass.Initial)
+                                    }
+                                    if (up == null) {
+                                        tabHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        pageOptionsIndex = index
+                                        // Swallow the eventual release so Tab's own click,
+                                        // which runs on the later Main pass, never sees it.
+                                        waitForUpOrCancellation(pass = PointerEventPass.Initial)?.consume()
                                     }
                                 }
-                            ) {
-                                Tab(
-                                    selected = index == board.currentPageIndex,
-                                    onClick = {
-                                        touch()
-                                        vm.switchPage(index)
-                                    },
-                                    text = {
-                                        if (page.isHome) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(
-                                                    Icons.Filled.Home,
-                                                    contentDescription = "Home page",
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                                Spacer(Modifier.width(4.dp))
-                                                Text(page.name, fontWeight = FontWeight.Bold)
-                                            }
-                                        } else {
-                                            Text(page.name)
-                                        }
-                                    },
-                                    selectedContentColor = page.color?.let { Color(it) }
-                                        ?: MaterialTheme.colorScheme.primary
-                                )
                             }
+                        ) {
+                            Tab(
+                                selected = index == board.currentPageIndex,
+                                onClick = {
+                                    touch()
+                                    vm.switchPage(index)
+                                },
+                                text = {
+                                    if (page.isHome) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                Icons.Filled.Home,
+                                                contentDescription = "Home page",
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                            Spacer(Modifier.width(4.dp))
+                                            Text(page.name, fontWeight = FontWeight.Bold)
+                                        }
+                                    } else {
+                                        Text(page.name)
+                                    }
+                                },
+                                selectedContentColor = page.color?.let { Color(it) }
+                                    ?: MaterialTheme.colorScheme.primary
+                            )
                         }
                     }
+                    Tab(
+                        selected = false,
+                        onClick = { showAddPageDialog = true },
+                        icon = { Icon(Icons.Filled.Add, contentDescription = "Add page") }
+                    )
                 }
             }
         }
@@ -569,26 +550,30 @@ fun BoardScreen(
         null -> Unit
     }
 
-    if (showGridDialog) {
-        GridSizeDialog(
-            rows = board.currentPage.rows,
-            columns = board.currentPage.columns,
-            aspectRatio = board.currentPage.tileAspectRatio,
-            onConfirm = { r, c, ratio ->
-                vm.resize(r, c)
-                vm.setTileAspectRatio(ratio)
-                showGridDialog = false
-            },
-            onDismiss = { showGridDialog = false }
-        )
+    gridDialogIndex?.let { index ->
+        board.pages.getOrNull(index)?.let { page ->
+            GridSizeDialog(
+                rows = page.rows,
+                columns = page.columns,
+                aspectRatio = page.tileAspectRatio,
+                onConfirm = { r, c, ratio ->
+                    vm.resize(index, r, c)
+                    vm.setTileAspectRatio(index, ratio)
+                    gridDialogIndex = null
+                },
+                onDismiss = { gridDialogIndex = null }
+            )
+        }
     }
 
-    if (showPageColorDialog) {
-        PageColorDialog(
-            current = board.currentPage.color,
-            onSelect = { vm.setPageColor(it) },
-            onDismiss = { showPageColorDialog = false }
-        )
+    pageColorDialogIndex?.let { index ->
+        board.pages.getOrNull(index)?.let { page ->
+            PageColorDialog(
+                current = page.color,
+                onSelect = { vm.setPageColor(index, it) },
+                onDismiss = { pageColorDialogIndex = null }
+            )
+        }
     }
 
     if (showSavePresetDialog) {
@@ -671,6 +656,7 @@ fun BoardScreen(
             PageOptionsDialog(
                 pageName = page.name,
                 isHome = page.isHome,
+                gridSize = "${page.rows}x${page.columns}",
                 canMoveLeft = index > 0,
                 canMoveRight = index < board.pages.lastIndex,
                 canDelete = board.pages.size > 1,
@@ -681,6 +667,14 @@ fun BoardScreen(
                 onSetHome = {
                     pageOptionsIndex = null
                     vm.setHomePage(index)
+                },
+                onGridSize = {
+                    pageOptionsIndex = null
+                    gridDialogIndex = index
+                },
+                onPageColor = {
+                    pageOptionsIndex = null
+                    pageColorDialogIndex = index
                 },
                 onMoveLeft = {
                     vm.movePage(index, index - 1)
@@ -1206,11 +1200,14 @@ private fun PageColorDialog(current: Int?, onSelect: (Int?) -> Unit, onDismiss: 
 private fun PageOptionsDialog(
     pageName: String,
     isHome: Boolean,
+    gridSize: String,
     canMoveLeft: Boolean,
     canMoveRight: Boolean,
     canDelete: Boolean,
     onRename: () -> Unit,
     onSetHome: () -> Unit,
+    onGridSize: () -> Unit,
+    onPageColor: () -> Unit,
     onMoveLeft: () -> Unit,
     onMoveRight: () -> Unit,
     onDelete: () -> Unit,
@@ -1245,6 +1242,17 @@ private fun PageOptionsDialog(
                     leadingIcon = { Icon(Icons.Filled.Home, contentDescription = null) },
                     enabled = !isHome,
                     onClick = onSetHome
+                )
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text("Grid size ($gridSize)") },
+                    leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null) },
+                    onClick = onGridSize
+                )
+                DropdownMenuItem(
+                    text = { Text("Page color") },
+                    leadingIcon = { Icon(Icons.Filled.Palette, contentDescription = null) },
+                    onClick = onPageColor
                 )
                 HorizontalDivider()
                 Row(

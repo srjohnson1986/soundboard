@@ -35,6 +35,10 @@ class BoardRepositoryTest {
 
     @Test
     fun `save then load round-trips including tile ids`() {
+        // load() sanitizes a fileName with no backing file (see the sanitize tests
+        // below), so a tile expected to round-trip as filled needs a real file.
+        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        repo.soundFile("c.wav").apply { parentFile?.mkdirs() }.writeText("c")
         val board = Board(
             pages = listOf(
                 Page(
@@ -71,6 +75,7 @@ class BoardRepositoryTest {
 
     @Test
     fun `save then load round-trips pinned tiles, home page, page color and tile aspect ratio`() {
+        repo.soundFile("hey.mp3").apply { parentFile?.mkdirs() }.writeText("hey")
         val board = Board(
             pages = listOf(
                 Page(name = "Trouble", color = 0xFFB74D, tileAspectRatio = 4f / 3f),
@@ -140,6 +145,45 @@ class BoardRepositoryTest {
         assertEquals(null, loaded.homePageIndex)
         assertEquals(null, loaded.pages[0].color)
         assertEquals(1f, loaded.pages[0].tileAspectRatio)
+    }
+
+    @Test
+    fun `a tile whose fileName has no backing file loads as empty rather than silently unplayable`() {
+        // A generic preset can ship a board.json referencing clips that were never
+        // recorded (or a partial import), so a tile can claim a fileName with
+        // nothing behind it. That should read as "still needs recording," not as
+        // filled-but-broken.
+        repo.save(
+            Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Call Mom", fileName = "missing.mp3")))))
+        )
+
+        val loaded = repo.load()
+
+        val tile = loaded.currentPage.tiles.first { it.id == "a" }
+        assertNull(tile.fileName)
+        assertEquals("Call Mom", tile.label)
+        assertTrue(tile.isEmpty)
+    }
+
+    @Test
+    fun `a tile whose file does exist keeps its fileName`() {
+        repo.soundFile("real.mp3").apply { parentFile?.mkdirs() }.writeText("real")
+        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", fileName = "real.mp3"))))))
+
+        val loaded = repo.load()
+
+        assertEquals("real.mp3", loaded.currentPage.tiles.first { it.id == "a" }.fileName)
+    }
+
+    @Test
+    fun `a pinned tile whose fileName has no backing file also loads as empty`() {
+        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", label = "Hey", fileName = "missing.mp3"))))
+
+        val loaded = repo.load()
+
+        val tile = loaded.pinnedTiles.first { it.id == "hey" }
+        assertNull(tile.fileName)
+        assertEquals("Hey", tile.label)
     }
 
     @Test

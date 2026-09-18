@@ -90,10 +90,19 @@ copies to keep in sync by hand. `BoardViewModel` mirrors the five page-tile
 mutators (`setLabel`/`setVolume`/`setColor`/`assignSound`/`clearTile`) as
 pinned-scoped equivalents (`setPinnedLabel`, etc.) operating on
 `Board.pinnedTiles` directly instead of `updatingCurrentPage`.
-`BoardViewModel.resize()` grows `pinnedTiles` to match a page's new column
-count whenever it's resized wider (never shrinks it — same
-never-drop-a-tile rule as `Page.resized()`); `addPinnedRow()` is the one-time
-action that materializes the row in the first place (a no-op once it exists).
+`addPinnedRow()` materializes the row at a fixed width (`PINNED_ROW_SIZE`,
+currently 4) the first time it's called — a no-op once one exists.
+
+**The pinned row's width is deliberately independent of any page's column
+count (#15).** It used to grow to match whichever page's grid was widest
+(`BoardViewModel.resize()` used to pad `pinnedTiles` up to the new column
+count on every resize); that coupling was removed so a board's pages can
+have arbitrary, independent grid sizes without dragging the pinned row's
+width around with whichever page happens to be resized. `resize()` now only
+ever touches the current page — `PinnedRow` in `BoardScreen.kt` renders the
+full `board.pinnedTiles` list unconditionally rather than truncating it to
+`currentPage.columns`. A future version may make the pinned row's width
+user-configurable; for now it's a fixed constant.
 
 **Invariant: `tiles.size` is always `>= rows * columns`, per page.**
 `Page.resized()` only ever grows the list; shrinking the grid just lowers
@@ -149,6 +158,18 @@ to pre-validate. `Board`'s own mutators (`addPage`, `removePage`, `renamePage`,
   It runs after *both* branches above — the pages-shaped decode and the
   `LegacyBoard` one — so an old board doesn't need to clear both migrations
   to get its home page back, just this one.
+  **`sanitizeMissingSounds(board)` runs last, on every `load()`.** A tile's
+  `fileName` is just a claim — nothing enforces that the file it names
+  actually exists. A generic preset can legitimately ship with some or all
+  clips unrecorded, and any zip import in general could be missing a file for
+  other reasons. Rather than let a tile render as "filled" while silently
+  doing nothing when tapped, `sanitizeMissingSounds` walks every tile (pages
+  and pinned) and resets `fileName` to `null` wherever `soundFile(fileName)`
+  doesn't exist — same label, now honestly `isEmpty`. This runs unconditionally
+  on every load, not just right after an import, so it also self-heals a
+  board whose sound file went missing some other way. It does not rewrite
+  `board.json` — the fix-up is in-memory only, and gets persisted naturally
+  the next time any ordinary mutation calls `commit()`.
 - `filesDir/sounds/<uuid>.<ext>` — every picked audio file, copied in by
   `importSound()`. The UUID is generated at import time and has no relation
   to the tile's own `id`. Copying (instead of holding onto the picked
@@ -474,6 +495,16 @@ gesture.
   menu, `TileCard` renders the pencil purely as a visual indicator whenever
   `editMode` is true, and `onTap` checks `tile.isEmpty || editMode` to decide
   whether a tap on the whole card edits or plays.
+- **A labeled-but-empty tile is visually distinct from a plain blank one.**
+  `TileCard`'s `needsRecording = tile.isEmpty && tile.label.isNotBlank()`
+  renders a small 🔇 glyph in the opposite corner from the edit-mode pencil.
+  This is the state a generic preset leaves a tile in after
+  `BoardRepository.sanitizeMissingSounds()` (see "Persistence") clears a
+  `fileName` with nothing behind it — the label still shows (rather than a
+  bare "+"), so the board reads as "labeled, still needs a recording"
+  instead of either "filled" or "totally empty." Tapping it opens the edit
+  dialog exactly like any other empty tile (`onTap` already checks
+  `tile.isEmpty`, unchanged).
 - **Drag math.** `cellStepPx` (cell size + spacing, in pixels) is computed
   from the grid's measured width (`Modifier.onSizeChanged`) divided by column
   count. During a drag, the accumulated offset is converted to a row/column

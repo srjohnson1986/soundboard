@@ -178,23 +178,19 @@ class BoardViewModel(
         }
     }
 
-    /** Materializes an empty pinned row sized to the current page's width; a no-op once one exists. */
+    /**
+     * Materializes an empty pinned row at a fixed width; a no-op once one exists.
+     * Deliberately independent of any page's column count (#15) — a future version
+     * may make this configurable, but for now every board's pinned row is the same
+     * size regardless of how wide its pages are.
+     */
     fun addPinnedRow() {
         if (_board.value.pinnedTiles.isNotEmpty()) return
-        commit(_board.value.copy(pinnedTiles = List(_board.value.currentPage.columns) { Tile() }))
+        commit(_board.value.copy(pinnedTiles = List(PINNED_ROW_SIZE) { Tile() }))
     }
 
     fun resize(rows: Int, columns: Int) {
-        val resized = _board.value.updatingCurrentPage { it.resized(rows, columns) }
-        // The pinned row always spans the page's column count; grow it to match
-        // (never shrink — same never-drop-a-tile rule as Page.resized()).
-        val pinned = resized.pinnedTiles
-        val nextPinned = if (pinned.isNotEmpty() && pinned.size < columns) {
-            pinned + List(columns - pinned.size) { Tile() }
-        } else {
-            pinned
-        }
-        commit(resized.copy(pinnedTiles = nextPinned))
+        commit(_board.value.updatingCurrentPage { it.resized(rows, columns) })
     }
 
     fun setTileAspectRatio(ratio: Float) {
@@ -386,6 +382,9 @@ class BoardViewModel(
 
         /** Debug-only (src/debug/assets/) — only actually available where that asset is packaged. */
         private const val JEREMY_PRESET_ASSET = "jeremy-care-board.zip"
+
+        /** Fixed width of a newly-created pinned row — independent of any page's column count (#15). */
+        private const val PINNED_ROW_SIZE = 4
     }
 }
 

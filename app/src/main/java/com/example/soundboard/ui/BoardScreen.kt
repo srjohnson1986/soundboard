@@ -446,7 +446,7 @@ fun BoardScreen(
         ) {
             if (board.pinnedTiles.isNotEmpty()) {
                 PinnedRow(
-                    tiles = board.pinnedTiles.take(board.currentPage.columns),
+                    tiles = board.pinnedTiles,
                     editMode = editMode,
                     aspectRatio = board.currentPage.tileAspectRatio,
                     onTap = { tile ->
@@ -817,6 +817,10 @@ private fun TileCard(
     onTap: () -> Unit
 ) {
     val filled = !tile.isEmpty
+    // A preset can ship a tile with a label but no recording yet (see
+    // BoardRepository.sanitizeMissingSounds) — flag that distinctly from a
+    // plain blank tile so it reads as "still needs recording," not "empty."
+    val needsRecording = tile.isEmpty && tile.label.isNotBlank()
     val customColor = tile.colorArgb?.let { Color(it) }
     val defaultColor = pageColor.takeIf { filled }
     val containerColor = customColor ?: defaultColor ?: if (filled) {
@@ -861,6 +865,16 @@ private fun TileCard(
                     color = contentColor,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
+                        .padding(2.dp)
+                )
+            }
+            if (needsRecording) {
+                Text(
+                    text = "🔇",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = contentColor,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
                         .padding(2.dp)
                 )
             }

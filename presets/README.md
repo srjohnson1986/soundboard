@@ -11,6 +11,14 @@ recorded anything. Both zips here show up in the **☰** menu's **Load preset**
 picker automatically, labeled "Factory," alongside whatever you've saved
 yourself.
 
+A factory preset (or any backup zip, via **Import backup**) doesn't need
+every tile's clip actually present in `sounds/` — `BoardRepository.load()`
+sanitizes any tile whose `fileName` has no backing file back to empty
+(keeping its label), rather than leaving it "filled" with nothing playable.
+That makes a layout-and-labels-only zip, with sparse or no recorded audio, a
+legitimate way to build a generic starting template — see the "Presets"
+section in `docs/USER_GUIDE.md`.
+
 ## `steve-care-board.zip` — "Steve Draft Care Board"
 
 Four pages — **Trouble**, **Needs** (home), **Talking**, **Well Wishes** —

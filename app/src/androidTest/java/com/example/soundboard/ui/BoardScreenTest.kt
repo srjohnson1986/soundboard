@@ -6,6 +6,7 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -98,7 +99,7 @@ class BoardScreenTest {
             Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Air horn", fileName = "a.mp3")))))
         )
 
-        composeRule.onNodeWithText("☰").performClick()
+        composeRule.onNodeWithContentDescription("Menu").performClick()
         composeRule.onNodeWithText("Edit mode").performClick()
         composeRule.onNodeWithText("Air horn").performClick()
 
@@ -114,7 +115,7 @@ class BoardScreenTest {
     fun saveAsPresetRenamesBoardAndUpdatesTitle() {
         launchWith(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))))
 
-        composeRule.onNodeWithText("☰").performClick()
+        composeRule.onNodeWithContentDescription("Menu").performClick()
         composeRule.onNodeWithText("Save as preset").performClick()
         // "New Board" appears twice once the dialog is up (the title bar behind
         // it, and the field's prefilled value) — hasSetTextAction() narrows to
@@ -139,8 +140,6 @@ class BoardScreenTest {
 
     @Test
     fun applyingNewGridSizeChangesTileCount() {
-        // All tiles filled so the empty-tile "+" glyph can't collide with the
-        // grid dialog's stepper "+" buttons.
         launchWith(
             Board(
                 pages = listOf(
@@ -153,13 +152,12 @@ class BoardScreenTest {
             )
         )
 
-        composeRule.onNodeWithText("☰").performClick()
+        composeRule.onNodeWithContentDescription("Menu").performClick()
         composeRule.onNodeWithText("Grid size (2 x 2)").performClick()
-        // Steppers render Rows then Columns; bump the columns stepper.
-        composeRule.onAllNodesWithText("+")[1].performClick()
+        composeRule.onNodeWithContentDescription("Increase Columns").performClick()
         composeRule.onNodeWithText("Apply").performClick()
 
-        composeRule.onNodeWithText("☰").performClick()
+        composeRule.onNodeWithContentDescription("Menu").performClick()
         composeRule.onNodeWithText("Grid size (2 x 3)").assertIsDisplayed()
     }
 
@@ -224,7 +222,7 @@ class BoardScreenTest {
     fun addPageCreatesANewNamedPageAndSwitchesToIt() {
         launchWith(Board(pages = listOf(Page(name = "First", rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))))
 
-        composeRule.onNodeWithText("☰").performClick()
+        composeRule.onNodeWithContentDescription("Menu").performClick()
         composeRule.onNodeWithText("Add page").performClick()
         composeRule.onNode(hasSetTextAction()).performTextReplacement("Feelings")
         composeRule.onNodeWithText("Save").performClick()
@@ -245,7 +243,7 @@ class BoardScreenTest {
             )
         )
 
-        composeRule.onNodeWithText("☰").performClick()
+        composeRule.onNodeWithContentDescription("Menu").performClick()
         composeRule.onNodeWithText("Add pinned row").performClick()
 
         // The pinned row is a fixed 4 empty tiles regardless of the page's own

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Flattened fallback for API 24-25 (minSdk 24), which predate adaptive icons
+     (API 26) — mipmap-anydpi-v26/ic_launcher.xml takes over on newer devices. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#5E35B1"
+        android:pathData="M0,0L108,0L108,108L0,108Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M21,36L35,36L35,72L21,72Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M47,26L61,26L61,82L47,82Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M73,32L87,32L87,76L73,76Z" />
+</vector>

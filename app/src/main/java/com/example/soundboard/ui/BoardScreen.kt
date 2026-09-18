@@ -2,6 +2,7 @@ package com.example.soundboard.ui
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +12,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,13 +22,35 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -33,11 +58,16 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -69,6 +99,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,6 +112,7 @@ import com.example.soundboard.PresetRef
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
+import com.example.soundboard.ui.theme.presetColors
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
@@ -231,19 +263,34 @@ fun BoardScreen(
                     },
                     actions = {
                         Box {
-                            TextButton(onClick = { showMenu = true }) {
-                                Text("☰")
+                            IconButton(onClick = { showMenu = true }) {
+                                Icon(Icons.Filled.Menu, contentDescription = "Menu")
                             }
-                            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false },
+                                // The Edit mode row's fillMaxWidth() doesn't report an intrinsic
+                                // width, so without a floor the menu can size itself too narrow
+                                // and crowd the switch against the label text.
+                                modifier = Modifier.widthIn(min = 260.dp)
+                            ) {
                                 // Mode
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("Edit mode")
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Filled.Edit,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.width(12.dp))
+                                        Text("Edit mode")
+                                    }
                                     Switch(
                                         checked = editMode,
                                         onCheckedChange = { editMode = it }
@@ -251,81 +298,56 @@ fun BoardScreen(
                                 }
                                 HorizontalDivider()
                                 // Page layout
-                                Row(modifier = Modifier.fillMaxWidth()) {
-                                    TextButton(
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            showMenu = false
-                                            showGridDialog = true
-                                        }
-                                    ) {
-                                        Text("Grid size (${board.currentPage.rows}x${board.currentPage.columns})")
+                                MenuSectionHeader("${board.currentPage.name} Page Layout")
+                                DropdownMenuItem(
+                                    text = { Text("Grid size (${board.currentPage.rows}x${board.currentPage.columns})") },
+                                    leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        showGridDialog = true
                                     }
-                                    TextButton(
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            showMenu = false
-                                            showPageColorDialog = true
-                                        }
-                                    ) {
-                                        Text("Page color")
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Page color") },
+                                    leadingIcon = { Icon(Icons.Filled.Palette, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        showPageColorDialog = true
                                     }
-                                }
+                                )
                                 HorizontalDivider()
                                 // Page management
-                                Row(modifier = Modifier.fillMaxWidth()) {
-                                    TextButton(
-                                        modifier = Modifier.weight(1f),
+                                MenuSectionHeader("Pages")
+                                DropdownMenuItem(
+                                    text = { Text("Add page") },
+                                    leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        showAddPageDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Rename page") },
+                                    leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        renamePageIndex = board.currentPageIndex
+                                    }
+                                )
+                                if (board.pages.size > 1) {
+                                    DropdownMenuItem(
+                                        text = { Text("Delete page") },
+                                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
                                         onClick = {
                                             showMenu = false
-                                            showAddPageDialog = true
-                                        }
-                                    ) {
-                                        Text("Add page")
-                                    }
-                                    TextButton(
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            showMenu = false
-                                            renamePageIndex = board.currentPageIndex
-                                        }
-                                    ) {
-                                        Text("Rename page")
-                                    }
-                                    if (board.pages.size > 1) {
-                                        TextButton(
-                                            modifier = Modifier.weight(1f),
-                                            onClick = {
-                                                showMenu = false
-                                                requestDeletePage(board.currentPageIndex)
-                                            }
-                                        ) {
-                                            Text("Delete page")
-                                        }
-                                    }
-                                }
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text("Home page")
-                                    Switch(
-                                        checked = board.homePageIndex == board.currentPageIndex,
-                                        onCheckedChange = { checked ->
-                                            if (checked) {
-                                                vm.setHomePage(board.currentPageIndex)
-                                            } else {
-                                                vm.clearHomePage()
-                                            }
+                                            requestDeletePage(board.currentPageIndex)
                                         }
                                     )
                                 }
                                 if (board.pinnedTiles.isEmpty()) {
                                     DropdownMenuItem(
                                         text = { Text("Add pinned row") },
+                                        leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
                                         onClick = {
                                             showMenu = false
                                             vm.addPinnedRow()
@@ -334,49 +356,43 @@ fun BoardScreen(
                                 }
                                 HorizontalDivider()
                                 // Presets — lightweight, same-device version history (see PresetRepository)
-                                Row(modifier = Modifier.fillMaxWidth()) {
-                                    TextButton(
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            showMenu = false
-                                            showSavePresetDialog = true
-                                        }
-                                    ) {
-                                        Text("Save as preset")
+                                MenuSectionHeader("Presets")
+                                DropdownMenuItem(
+                                    text = { Text("Save as preset") },
+                                    leadingIcon = { Icon(Icons.Filled.Save, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        showSavePresetDialog = true
                                     }
-                                    TextButton(
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            showMenu = false
-                                            vm.refreshPresets()
-                                            showPresetPickerDialog = true
-                                        }
-                                    ) {
-                                        Text("Load preset")
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Load preset") },
+                                    leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        vm.refreshPresets()
+                                        showPresetPickerDialog = true
                                     }
-                                }
+                                )
                                 HorizontalDivider()
                                 // Backup — full, portable, self-contained (structure + audio)
-                                Row(modifier = Modifier.fillMaxWidth()) {
-                                    TextButton(
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            showMenu = false
-                                            exportLauncher.launch("soundboard-backup.zip")
-                                        }
-                                    ) {
-                                        Text("Export backup")
+                                MenuSectionHeader("Backup")
+                                DropdownMenuItem(
+                                    text = { Text("Export backup") },
+                                    leadingIcon = { Icon(Icons.Filled.Upload, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        exportLauncher.launch("soundboard-backup.zip")
                                     }
-                                    TextButton(
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            showMenu = false
-                                            importLauncher.launch(arrayOf("application/zip"))
-                                        }
-                                    ) {
-                                        Text("Import backup")
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Import backup") },
+                                    leadingIcon = { Icon(Icons.Filled.Download, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        importLauncher.launch(arrayOf("application/zip"))
                                     }
-                                }
+                                )
                                 HorizontalDivider()
                                 DropdownMenuItem(
                                     text = {
@@ -384,6 +400,13 @@ fun BoardScreen(
                                             APP_VERSION,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Filled.Info,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     },
                                     onClick = {
@@ -405,8 +428,7 @@ fun BoardScreen(
                             // pass and win the race against Tab's own click before it can consume
                             // the eventual up event on the Main pass — see the note above.
                             Box(
-                                modifier = Modifier.pointerInput(page.id, editMode) {
-                                    if (!editMode) return@pointerInput
+                                modifier = Modifier.pointerInput(page.id) {
                                     awaitEachGesture {
                                         awaitFirstDown(pass = PointerEventPass.Initial)
                                         val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
@@ -428,7 +450,21 @@ fun BoardScreen(
                                         touch()
                                         vm.switchPage(index)
                                     },
-                                    text = { Text(page.name) },
+                                    text = {
+                                        if (page.isHome) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    Icons.Filled.Home,
+                                                    contentDescription = "Home page",
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(Modifier.width(4.dp))
+                                                Text(page.name, fontWeight = FontWeight.Bold)
+                                            }
+                                        } else {
+                                            Text(page.name)
+                                        }
+                                    },
                                     selectedContentColor = page.color?.let { Color(it) }
                                         ?: MaterialTheme.colorScheme.primary
                                 )
@@ -634,12 +670,17 @@ fun BoardScreen(
         board.pages.getOrNull(index)?.let { page ->
             PageOptionsDialog(
                 pageName = page.name,
+                isHome = page.isHome,
                 canMoveLeft = index > 0,
                 canMoveRight = index < board.pages.lastIndex,
                 canDelete = board.pages.size > 1,
                 onRename = {
                     pageOptionsIndex = null
                     renamePageIndex = index
+                },
+                onSetHome = {
+                    pageOptionsIndex = null
+                    vm.setHomePage(index)
                 },
                 onMoveLeft = {
                     vm.movePage(index, index - 1)
@@ -838,7 +879,9 @@ private fun TileCard(
         modifier = modifier
             .aspectRatio(aspectRatio)
             .combinedClickable(onClick = onTap),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (filled) 2.dp else 0.dp),
+        border = if (filled) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Box(
             modifier = Modifier
@@ -859,23 +902,25 @@ private fun TileCard(
                 modifier = Modifier.align(Alignment.Center)
             )
             if (editMode) {
-                Text(
-                    text = "✎",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = contentColor,
+                Icon(
+                    Icons.Filled.Edit,
+                    contentDescription = "Edit mode",
+                    tint = contentColor,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(2.dp)
+                        .size(16.dp)
                 )
             }
             if (needsRecording) {
-                Text(
-                    text = "🔇",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = contentColor,
+                Icon(
+                    Icons.Filled.MicOff,
+                    contentDescription = "Needs recording",
+                    tint = contentColor,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(2.dp)
+                        .size(16.dp)
                 )
             }
         }
@@ -890,18 +935,15 @@ private fun TileCard(
  * a light custom background. Deciding from the color's own luminance instead
  * keeps every custom color readable regardless of theme.
  */
-private fun textColorFor(background: Color): Color =
-    if (background.luminance() > 0.5f) Color.Black else Color.White
-
-private val presetColors = listOf<Color?>(
-    null,
-    Color(0xFFE57373),
-    Color(0xFFFFB74D),
-    Color(0xFFFFF176),
-    Color(0xFF81C784),
-    Color(0xFF64B5F6),
-    Color(0xFFBA68C8)
-)
+private fun textColorFor(background: Color): Color {
+    val bg = background.luminance()
+    // WCAG contrast ratio: (lighter + 0.05) / (darker + 0.05). Comparing against
+    // black (luminance 0) and white (luminance 1) picks whichever contrasts more;
+    // the crossover is at bg ≈ 0.179, not the naive halfway point of 0.5.
+    val contrastWithBlack = (bg + 0.05f) / 0.05f
+    val contrastWithWhite = 1.05f / (bg + 0.05f)
+    return if (contrastWithBlack >= contrastWithWhite) Color.Black else Color.White
+}
 
 @Composable
 private fun EditTileDialog(
@@ -1019,7 +1061,10 @@ private fun EditTileDialog(
 
                 Column {
                     Text("Color", style = MaterialTheme.typography.labelMedium)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
                         presetColors.forEach { color ->
                             ColorSwatch(
                                 color = color,
@@ -1057,18 +1102,26 @@ private fun EditTileDialog(
 
 @Composable
 private fun ColorSwatch(color: Color?, selected: Boolean, onClick: () -> Unit) {
+    // Outer box is a full 48dp touch target (Material's minimum); the visible
+    // circle stays 32dp so a full row of presets still fits without crowding.
     Box(
         modifier = Modifier
-            .size(32.dp)
-            .clip(CircleShape)
-            .background(color ?: MaterialTheme.colorScheme.surfaceVariant)
-            .border(
-                width = if (selected) 2.dp else 1.dp,
-                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                shape = CircleShape
-            )
-            .clickable(onClick = onClick)
-    )
+            .size(48.dp)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(color ?: MaterialTheme.colorScheme.surfaceVariant)
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    shape = CircleShape
+                )
+        )
+    }
 }
 
 @Composable
@@ -1096,8 +1149,18 @@ private fun GridSizeDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Tile shape", modifier = Modifier.weight(1f))
-                    TextButton(onClick = { wide = false }) { Text(if (!wide) "Square ✓" else "Square") }
-                    TextButton(onClick = { wide = true }) { Text(if (wide) "Wide ✓" else "Wide") }
+                    SingleChoiceSegmentedButtonRow {
+                        SegmentedButton(
+                            selected = !wide,
+                            onClick = { wide = false },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                        ) { Text("Square") }
+                        SegmentedButton(
+                            selected = wide,
+                            onClick = { wide = true },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                        ) { Text("Wide") }
+                    }
                 }
                 if (shrinking) {
                     Text(
@@ -1122,7 +1185,10 @@ private fun PageColorDialog(current: Int?, onSelect: (Int?) -> Unit, onDismiss: 
         onDismissRequest = onDismiss,
         title = { Text("Page color") },
         text = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 presetColors.forEach { color ->
                     ColorSwatch(
                         color = color,
@@ -1139,10 +1205,12 @@ private fun PageColorDialog(current: Int?, onSelect: (Int?) -> Unit, onDismiss: 
 @Composable
 private fun PageOptionsDialog(
     pageName: String,
+    isHome: Boolean,
     canMoveLeft: Boolean,
     canMoveRight: Boolean,
     canDelete: Boolean,
     onRename: () -> Unit,
+    onSetHome: () -> Unit,
     onMoveLeft: () -> Unit,
     onMoveRight: () -> Unit,
     onDelete: () -> Unit,
@@ -1150,28 +1218,79 @@ private fun PageOptionsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(pageName) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = onRename, modifier = Modifier.fillMaxWidth()) {
-                    Text("Rename")
+        title = {
+            if (isHome) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.Home,
+                        contentDescription = "Home page",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(pageName)
                 }
-                Row(modifier = Modifier.fillMaxWidth()) {
+            } else {
+                Text(pageName)
+            }
+        },
+        text = {
+            Column {
+                DropdownMenuItem(
+                    text = { Text("Rename") },
+                    leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null) },
+                    onClick = onRename
+                )
+                DropdownMenuItem(
+                    text = { Text("Set as home page") },
+                    leadingIcon = { Icon(Icons.Filled.Home, contentDescription = null) },
+                    enabled = !isHome,
+                    onClick = onSetHome
+                )
+                HorizontalDivider()
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     TextButton(
                         onClick = onMoveLeft,
                         enabled = canMoveLeft,
                         modifier = Modifier.weight(1f)
-                    ) { Text("Move left") }
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text("Move left")
+                    }
                     TextButton(
                         onClick = onMoveRight,
                         enabled = canMoveRight,
                         modifier = Modifier.weight(1f)
-                    ) { Text("Move right") }
+                    ) {
+                        Text("Move right")
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
                 if (canDelete) {
-                    TextButton(onClick = onDelete, modifier = Modifier.fillMaxWidth()) {
-                        Text("Delete page")
-                    }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("Delete page", color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        },
+                        onClick = onDelete
+                    )
                 }
             }
         },
@@ -1269,14 +1388,28 @@ private fun TextInputDialog(
 }
 
 @Composable
+private fun MenuSectionHeader(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+    )
+}
+
+@Composable
 private fun Stepper(label: String, value: Int, onChange: (Int) -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, modifier = Modifier.weight(1f))
-        TextButton(onClick = { if (value > 1) onChange(value - 1) }) { Text("-") }
+        IconButton(onClick = { if (value > 1) onChange(value - 1) }) {
+            Icon(Icons.Filled.Remove, contentDescription = "Decrease $label")
+        }
         Text("$value", style = MaterialTheme.typography.titleMedium)
-        TextButton(onClick = { if (value < 50) onChange(value + 1) }) { Text("+") }
+        IconButton(onClick = { if (value < 50) onChange(value + 1) }) {
+            Icon(Icons.Filled.Add, contentDescription = "Increase $label")
+        }
     }
 }

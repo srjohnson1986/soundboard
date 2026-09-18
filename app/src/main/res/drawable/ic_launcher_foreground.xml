@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Three equalizer-style bars, kept inside the adaptive-icon safe zone
+     (the centered ~66dp region that survives every launcher's mask shape). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M21,36L35,36L35,72L21,72Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M47,26L61,26L61,82L47,82Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M73,32L87,32L87,76L73,76Z" />
+</vector>

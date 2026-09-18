@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launcher icon background — a deep violet, distinct from the neutral
+         Material default so the app is recognizable on a home screen. -->
+    <color name="ic_launcher_background">#5E35B1</color>
+</resources>

@@ -22,5 +22,5 @@ fun SoundboardTheme(
         darkTheme -> darkColorScheme()
         else -> lightColorScheme()
     }
-    MaterialTheme(colorScheme = colors, content = content)
+    MaterialTheme(colorScheme = colors, shapes = SoundboardShapes, content = content)
 }

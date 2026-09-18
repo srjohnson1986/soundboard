@@ -1,9 +1,15 @@
-# Test presets
+# Factory presets
 
-The app doesn't have a separate "preset" concept — a preset is just a backup
-zip in the format `BoardRepository.exportTo()`/`importFrom()` produces:
-`board.json` at the zip root plus every referenced sound under `sounds/`.
-Anything built to that shape can be loaded with the app's **Import** button.
+The app has two kinds of preset (see `docs/ARCHITECTURE.md`'s "Presets"
+section): lightweight, on-device saves made in-app via **Save as preset**
+(just a small JSON snapshot, no audio of its own), and **factory presets** —
+the two zips in this folder. A factory preset is a full backup-shaped zip
+(`board.json` at the root plus every referenced sound under `sounds/`, the
+same format `BoardRepository.exportTo()`/`importFrom()` produce) bundled as
+an app asset, so it's self-contained and works on a device that has never
+recorded anything. Both zips here show up in the **☰** menu's **Load preset**
+picker automatically, labeled "Factory," alongside whatever you've saved
+yourself.
 
 ## `steve-care-board.zip` — "Steve Draft Care Board"
 
@@ -64,14 +70,10 @@ not a test fixture. Once *any* board gets saved — including this
 auto-import — it's never triggered again; uninstall (or clear app data) to
 see it re-trigger.
 
-To load it by hand instead (e.g. onto a build that already has a saved
-board):
-
-1. Get the zip onto the device/emulator, e.g. `adb push presets/steve-care-board.zip /sdcard/Download/`.
-2. In the app, tap **Import** in the top bar and pick the file.
-
-**Heads up:** Import fully replaces the current board — export first if you
-want to keep what's there.
+Once it's the fallback, the normal way to get back to it on a board that's
+already been saved is the **☰** menu's **Load preset**, which lists it as a
+"Factory" entry ("Steve Draft Care Board") — no `adb push` or file picker
+needed. Loading it over a board that has sounds asks for confirmation first.
 
 ## `jeremy-care-board.zip` — "Jeremy Draft Care Board"
 
@@ -82,12 +84,12 @@ script as Steve's, filename-for-filename identical except for two extras
 (see below). It doesn't auto-load on install like Steve's does — only one
 board can be the fallback — but it's still bundled for convenience: a copy
 lives at `app/src/debug/assets/jeremy-care-board.zip` (debug builds only,
-unlike Steve's which is in every build), and the `☰` menu's **Load Jeremy
-test preset** item (also debug-only, gated on `BuildConfig.DEBUG`) imports
-it directly via `BoardViewModel.importJeremyTestPreset()` — no `adb push`
-or file picker needed when testing in an emulator. It's still a normal
-preset otherwise: pushing the zip and using **Import** works too, e.g. on
-a real device.
+unlike Steve's which is in every build). `BoardViewModel.factoryPresets()`
+checks whether that asset actually opens, so it appears in the **Load
+preset** picker only where it's packaged — debug builds — with no separate
+menu item or `BuildConfig` check of its own needed. On a release build (or
+any build where the asset isn't there), pushing the zip and using **Import
+backup** still works the same as any other backup.
 
 Trouble, Needs, and the pinned row are fully recorded; Talking is missing
 only "Not that", same gap as Steve's board. The same clips are deferred for

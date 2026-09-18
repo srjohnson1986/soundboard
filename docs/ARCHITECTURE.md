@@ -9,12 +9,13 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 |---|---|
 | `model/Board.kt` | `Tile`, `Page`, and `Board` data classes; resize, visibility, reorder, and page-management logic. No Android dependencies. |
 | `data/BoardRepository.kt` | Reads/writes `board.json`, copies picked audio into app storage, zips/unzips backups. All file I/O. |
+| `data/PresetRepository.kt` | Reads/writes small `Board`-snapshot JSON files under `filesDir/presets/` — same-device version history, deliberately not carrying its own copy of audio (see "Presets" below). |
 | `audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
 | `audio/SoundPlayer.kt` | Real `Player` implementation: owns the `SoundPool` and the current `MediaPlayer`. No knowledge of `Board` or `Tile`. |
 | `audio/Recorder.kt` | Interface (`start`/`stop`/`cancel`) that `BoardViewModel` depends on for recording — same fake-in-tests seam as `Player`. |
 | `audio/AudioRecorder.kt` | Real `Recorder` implementation: owns a `MediaRecorder`, encoding straight to a file `BoardRepository` hands it. |
-| `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other four together, single write path. Takes `BoardRepository`/`Player`/`Recorder`/dispatcher as constructor params (see below) rather than constructing them. |
-| `ui/BoardScreen.kt` | Compose UI: pinned row, per-page swipeable grid (`HorizontalPager`), drag-to-reorder, edit dialog, grid-size/save/page/color dialogs, top bar showing the active board's name, and a tab row for switching pages. |
+| `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other layers together, single write path. Takes `BoardRepository`/`Player`/`Recorder`/`PresetRepository`/dispatcher as constructor params (see below) rather than constructing them. |
+| `ui/BoardScreen.kt` | Compose UI: pinned row, per-page swipeable grid (`HorizontalPager`), drag-to-reorder, edit dialog, grid-size/preset/page/color dialogs, top bar showing the active board's name, and a tab row for switching pages. |
 | `MainActivity.kt` | Just sets content to `SoundboardTheme { BoardScreen() }`. |
 
 Data flows one way: UI calls a `BoardViewModel` function → it updates
@@ -40,34 +41,48 @@ data class Page(
     val columns: Int = 4,
     val tiles: List<Tile> = List(16) { Tile() },
     val tileAspectRatio: Float = 1f,  // width:height; e.g. 4f/3f for wider-than-tall
-    val color: Int? = null            // page-identity accent; null = theme default
+    val color: Int? = null,           // page-identity accent; null = theme default
+    val isHome: Boolean = false       // auto-return target; at most one page should have this set
 )
 
 data class Board(
     val name: String = "New Board",
     val pages: List<Page> = listOf(Page()),
     val currentPageIndex: Int = 0,
-    val pinnedTiles: List<Tile> = emptyList(),  // shown above every page, identical everywhere
-    val homePageIndex: Int? = null              // auto-return target; null disables it
-)
+    val pinnedTiles: List<Tile> = emptyList()  // shown above every page, identical everywhere
+) {
+    val homePageIndex: Int?   // computed — derived from pages, not stored; see "Why isHome is per-page" below
+    val hasAnySound: Boolean  // computed — any tile, pinned or on any page, has a sound
+}
 ```
 
 A board is one or more `Page`s, each an independent grid, switched via tabs
 in the UI. `Board.name` identifies the whole board (shown in the title bar);
 each `Page.name` identifies just that tab; `Page.color` is that tab's own
 identity accent, distinct from `Tile.colorArgb` (a tile's own color always
-wins). `name`, `currentPageIndex`, `pinnedTiles`, and `homePageIndex` are the
-board-level state that isn't grid geometry or page tiles —
-`BoardViewModel.renameBoard()`/`switchPage()`/pinned-tile mutators/`setHomePage()`
-are their write paths, and none of them need a dedicated persistence concept
-since they're just more fields in `board.json`. `Board.currentPage` resolves
-the active `Page` (clamping `currentPageIndex` defensively);
-`Board.updatingCurrentPage { transform }` is how every tile/grid mutation
-reaches it without the caller handling the page list itself. `addPage()`,
-`removePage()` (a no-op on the last remaining page; also clears or shifts
-`homePageIndex` if it pointed at or past the removed page), `renamePage()`,
-and `switchTo()` round out page management, all returning a new `Board` like
-every other mutator here.
+wins). `name`, `currentPageIndex`, and `pinnedTiles` are the board-level state
+that isn't grid geometry or page tiles — `BoardViewModel.renameBoard()`/`switchPage()`/
+pinned-tile mutators are their write paths, and none of them need a dedicated
+persistence concept since they're just more fields in `board.json`.
+`Board.currentPage` resolves the active `Page` (clamping `currentPageIndex`
+defensively); `Board.updatingCurrentPage { transform }` is how every tile/grid
+mutation reaches it without the caller handling the page list itself.
+`addPage()`, `removePage()` (a no-op on the last remaining page),
+`renamePage()`, and `switchTo()` round out page management, all returning a
+new `Board` like every other mutator here.
+
+**Why `isHome` is per-page, not a board-level index.** It used to be a single
+`Board.homePageIndex: Int?`, which meant `removePage()`/`movedPage()` both had
+to carry index-remapping logic (shift it down, clear it, or follow a move) any
+time the page list changed shape. Moving the flag onto `Page` itself made that
+bookkeeping unnecessary — deleting a page deletes its `isHome` flag with it,
+and reordering pages doesn't touch `isHome` at all, since it's intrinsic to
+the `Page` object rather than a position in a list. `Board.homePageIndex` is
+kept as a computed property (`pages.indexOfFirst { it.isHome }`) purely so the
+handful of read sites (the auto-return effect, the Home-page toggle) didn't
+need to change at all. `withHomePage(index)`/`clearingHomePage()` are still
+the write paths, just implemented as `pages.map { it.copy(isHome = ...) }`
+now instead of setting a single field.
 
 **`pinnedTiles` is deliberately on `Board`, not `Page`.** The whole point is
 a row identical on every page — putting it on `Page` would mean N independent
@@ -118,13 +133,22 @@ to pre-validate. `Board`'s own mutators (`addPage`, `removePage`, `renamePage`,
   bundled fallback preset, itself old-format when this migration was added)
   never needed regenerating — the migration runs on every `load()`, so it
   applies the moment the asset is imported. By contrast, `pinnedTiles`,
-  `homePageIndex`, `Page.color`, and
-  `Page.tileAspectRatio` needed **no** new branching logic in `load()` at
-  all — they're additive fields onto an already-`pages`-shaped `Board`, so
-  the ordinary `ignoreUnknownKeys` + defaults path handles them exactly like
-  `volume`/`colorArgb` did originally. The structural-migration branch above
-  only exists for the one field (`pages` itself) that changed the JSON's
-  *shape* rather than just adding to it.
+  `Page.color`, and `Page.tileAspectRatio` needed **no** new branching logic
+  in `load()` at all — they're additive fields onto an already-`pages`-shaped
+  `Board`, so the ordinary `ignoreUnknownKeys` + defaults path handles them
+  exactly like `volume`/`colorArgb` did originally.
+  **`homePageIndex` is the one exception, and a second, different kind of
+  migration.** It used to be a single board-level field; now it's derived
+  from each page's own `isHome` (see the data-model section above).
+  `ignoreUnknownKeys` only helps with fields that were *added* — a field that
+  *moved* would just be silently dropped, since today's `Board` has nowhere
+  to put a stray top-level `homePageIndex` key. `load()`'s
+  `migrateHomePageIndex(board, root)` reads that raw key straight off the
+  parsed `JsonObject` (the same one already extracted to check for `"pages"`)
+  and calls `board.withHomePage(index)` if no page already claims to be home.
+  It runs after *both* branches above — the pages-shaped decode and the
+  `LegacyBoard` one — so an old board doesn't need to clear both migrations
+  to get its home page back, just this one.
 - `filesDir/sounds/<uuid>.<ext>` — every picked audio file, copied in by
   `importSound()`. The UUID is generated at import time and has no relation
   to the tile's own `id`. Copying (instead of holding onto the picked
@@ -140,6 +164,62 @@ either. `importFrom()` overwrites `board.json` and merges files into
 `sounds/` — it does not clear `sounds/` first, so an import after manually
 adding stray files there could leave orphans; in practice the app is the only
 thing that ever writes there, so this hasn't mattered.
+
+## Presets
+
+**Presets and Backup solve different problems and deliberately don't share a
+mechanism**, even though a preset's content is exactly a `Board`. Backup is
+the *portable, self-contained* one — a zip carrying its own audio, meant to
+survive a reinstall or move to another device. A **preset** is *same-device
+version history* — you're saving a snapshot of your own board's layout to
+come back to later, on this device, while its sound files are still sitting
+in the shared `sounds/` directory you already have.
+
+`PresetRepository` stores each saved preset as its own small file,
+`filesDir/presets/<uuid>.json` — literally just `Board` JSON, no new schema.
+Once `isHome` moved onto `Page` (above), `Board` already was exactly the
+shape a preset needs: pages, names, order, home page, dimensions, and every
+tile's label/sound-reference/volume/color. Critically, **a saved preset does
+not copy any audio** — `Tile.fileName` stays a bare filename resolved against
+whatever `sounds/` directory it's loaded into, so a saved preset just
+references the same files the live board already uses. This keeps a save
+cheap (a few KB of JSON, not a copy of every recorded clip) but means a saved
+preset **cannot survive a reinstall or cleared app data on its own** — that
+wipes `sounds/` too, leaving the preset's `fileName`s pointing at nothing.
+Backup is still what you'd use for that. `PresetRepository.list()` scans
+`presets/*.json` directly rather than keeping a separate index file, so the
+list can never drift from what's actually on disk, and skips (rather than
+crashes on) a file that fails to decode.
+
+**This creates one sharp edge `BoardViewModel.commit()` has to guard
+against.** `commit()`'s existing job is pruning `sounds/` files no longer
+referenced by the live board (`repo.pruneUnused(after)`). Once a saved preset
+can reference a file the *live* board no longer does, that same prune would
+silently delete audio a saved preset still needs — clearing a tile today,
+loading that preset tomorrow, and finding it silently plays nothing.
+`commit()` folds `presetRepo.allReferencedFileNames()` (every `fileName`
+across every saved preset) into the keep-set before pruning:
+`repo.pruneUnused(after + presetRepo.allReferencedFileNames())`. This is the
+one correctness-critical piece of the whole feature.
+
+`BoardViewModel.saveAsPreset(name)` also renames the live board to `name` —
+the save dialog already prompts for a name defaulting to the current board
+name, so this absorbed what used to be a separate "Save" (rename-only) menu
+action rather than keeping both. `applyPreset(ref)` takes a `PresetRef`,
+which is either `Saved(id)` (loaded via `PresetRepository.load()`, then
+`commit()`ed like any other board mutation) or `Factory(assetName, label)`
+(the two bundled zips, still going through `BoardRepository.importFromAsset()`
+exactly as before — they're self-contained zips, not lightweight JSON, so
+they don't need `PresetRepository` at all). `factoryPresets(context)` builds
+that Factory list by attempting `context.assets.open(assetName)` — Jeremy's
+entry simply doesn't appear when its asset isn't packaged (debug builds
+only), the same practical availability the old `BuildConfig.DEBUG`-gated menu
+item had, without importing `BuildConfig` into the ViewModel.
+
+`Board.hasAnySound` (any tile, pinned or on any page, with a `fileName`)
+gates the UI's confirm dialog before applying a preset over a board that has
+real content — same reasoning, and same shape, as the page-delete confirm
+(`requestDeletePage`) already uses.
 
 ## Audio playback
 
@@ -218,19 +298,21 @@ class BoardViewModel(
     private val repo: BoardRepository,
     private val player: Player,
     private val recorder: Recorder,
+    private val presetRepo: PresetRepository,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel()
 ```
 
 `BoardViewModel.Factory(application)` builds the real `BoardRepository`,
-`SoundPlayer`, and `AudioRecorder` and is what `BoardScreen` passes to
-`viewModel(factory = ...)`. Tests construct `BoardViewModel` directly
-instead, passing a real `BoardRepository` (against a Robolectric or
-instrumented context — file I/O is cheap enough not to fake), a `FakePlayer`
-in place of `SoundPlayer`, and a `FakeRecorder` in place of `AudioRecorder`.
-`ioDispatcher` defaults to `Dispatchers.IO` in production; tests pass an
-`UnconfinedTestDispatcher` so the persistence coroutine in `commit()` (below)
-runs synchronously instead of racing a real background thread.
+`SoundPlayer`, `AudioRecorder`, and `PresetRepository` and is what
+`BoardScreen` passes to `viewModel(factory = ...)`. Tests construct
+`BoardViewModel` directly instead, passing a real `BoardRepository` and
+`PresetRepository` (against a Robolectric or instrumented context — file I/O
+is cheap enough not to fake), a `FakePlayer` in place of `SoundPlayer`, and a
+`FakeRecorder` in place of `AudioRecorder`. `ioDispatcher` defaults to
+`Dispatchers.IO` in production; tests pass an `UnconfinedTestDispatcher` so
+the persistence coroutine in `commit()` (below) runs synchronously instead of
+racing a real background thread.
 
 ## The single write path
 
@@ -249,7 +331,7 @@ private fun commit(board: Board) {
 
     viewModelScope.launch(ioDispatcher) {
         repo.save(board)
-        repo.pruneUnused(after)
+        repo.pruneUnused(after + presetRepo.allReferencedFileNames())
     }
 }
 ```
@@ -259,7 +341,10 @@ pinned row, not just the current page** — a sound assigned on a page you're
 not viewing (or on a pinned tile) must still survive pruning — unloads
 anything that fell out of the referenced set, updates the in-memory state
 immediately (so the UI never waits on disk I/O), then persists on
-`ioDispatcher`. `loadSounds()` (called on initial load and after import) uses
+`ioDispatcher`. The keep-set folds in `presetRepo.allReferencedFileNames()`
+too — see "Presets" above for why a saved preset's audio needs the same
+protection a live tile's does. `loadSounds()` (called on initial load and
+after import) uses
 the same `allTiles()` helper to preload everything for the same reason:
 `SoundPool` needs a clip decoded before it can play regardless of which page
 is visible when the app starts. Adding a new mutation to a single page means
@@ -288,35 +373,40 @@ gesture.
 
 `BoardScreen` is one `@Composable` function plus private helpers
 (`PinnedRow`, `PageGrid`, `TileCard`, `EditTileDialog`, `ColorSwatch`,
-`GridSizeDialog`, `PageColorDialog`, `TextInputDialog`, `Stepper`).
-A few things worth knowing if you're touching it:
+`GridSizeDialog`, `PageColorDialog`, `PresetPickerDialog`, `TextInputDialog`,
+`Stepper`). A few things worth knowing if you're touching it:
 
 - **The active board's name lives in the title, not a separate label.**
   `TopAppBar`'s `title` is a two-line `Column`: "Soundboard" (the app) in
   `labelSmall`, then `board.name` in `titleLarge`. It's the only place the
   active board is identified, so a board with no name of its own reads as
-  "New Board" rather than blank. The `☰` menu's **Save** item is unrelated
-  to the auto-save every other mutation already gets — it exists solely to
-  open a `TextInputDialog` and change this name via `vm.renameBoard()`.
-  **Add page**/**Rename page** open the same `TextInputDialog` composable
-  against `vm.addPage()`/`vm.renamePage()`; **Delete page** is hidden from
-  the menu entirely when only one page remains (`Board.removePage()` is a
-  no-op on the last page anyway, so hiding it just avoids a dead menu entry),
-  and otherwise routes through `requestDeletePage()`, which checks
-  `page.tiles.any { !it.isEmpty }` — a page with any sound assigned shows a
-  confirm dialog naming how many tiles would be lost before calling
-  `vm.deletePage()`, while an all-empty page deletes immediately. **Page
-  color** opens `PageColorDialog` (the same swatch-picker `ColorSwatch` the
-  tile-edit dialog uses) against `vm.setPageColor()`. **Add pinned row** only
-  appears while `board.pinnedTiles` is empty, since `vm.addPinnedRow()` is a
-  no-op afterward anyway. **Set as home page**/**Home page ✓** toggles
-  `vm.setHomePage(board.currentPageIndex)`. **Load Jeremy test preset** is
-  gated on `BuildConfig.DEBUG` (requires `buildFeatures.buildConfig = true`
-  in `app/build.gradle.kts`) and calls `vm.importJeremyTestPreset()`, which
-  imports `app/src/debug/assets/jeremy-care-board.zip` the same way the
-  fallback board imports on a fresh install — it exists purely so testing
-  in an emulator doesn't need `adb push` plus the file picker every time;
-  it never appears, and the asset isn't even packaged, in a release build.
+  "New Board" rather than blank. There's no dedicated rename-only menu item —
+  **Save as preset** (below) prompts for a name and renames the board to
+  match as a side effect, which absorbed what used to be a separate **Save**
+  action. **Add page**/**Rename page** open the same `TextInputDialog`
+  composable against `vm.addPage()`/`vm.renamePage()`; **Delete page** is
+  hidden from the menu entirely when only one page remains
+  (`Board.removePage()` is a no-op on the last page anyway, so hiding it just
+  avoids a dead menu entry), and otherwise routes through `requestDeletePage()`,
+  which checks `page.tiles.any { !it.isEmpty }` — a page with any sound
+  assigned shows a confirm dialog naming how many tiles would be lost before
+  calling `vm.deletePage()`, while an all-empty page deletes immediately.
+  **Page color** opens `PageColorDialog` (the same swatch-picker `ColorSwatch`
+  the tile-edit dialog uses) against `vm.setPageColor()`. **Add pinned row**
+  only appears while `board.pinnedTiles` is empty, since `vm.addPinnedRow()`
+  is a no-op afterward anyway. **Set as home page**/**Home page ✓** toggles
+  `vm.setHomePage(board.currentPageIndex)`.
+- **Save as preset**/**Load preset** are the same-device version-history
+  actions (see "Presets" above), kept visually grouped and separate from
+  **Export backup**/**Import backup**. **Save as preset** opens
+  `TextInputDialog` against `vm.saveAsPreset()`. **Load preset** calls
+  `vm.refreshPresets()` then opens `PresetPickerDialog`, listing
+  `vm.factoryPresets(context)` (bundled zips — Jeremy's only appears where
+  its asset actually opens, i.e. debug builds) above `vm.presets` (on-device
+  saved snapshots, newest first). Picking one routes through
+  `requestApplyPreset()`, mirroring `requestDeletePage()`'s shape: a confirm
+  `AlertDialog` only when `board.hasAnySound`, otherwise `vm.applyPreset()`
+  runs immediately.
 - **Pages are a `PrimaryScrollableTabRow` under the `TopAppBar`, shown only
   when there's more than one, plus a `HorizontalPager` driving the actual
   grid.** Both the app bar and tab row live inside one `Column` passed to
@@ -420,12 +510,13 @@ A few things worth knowing if you're touching it:
 | Layer | File(s) | Runs on |
 |---|---|---|
 | `Page.resized()`/`.moved()` | `test/.../model/PageTest.kt` | plain JVM (JUnit) |
-| `Board` page management (`addPage`/`removePage`/`renamePage`/`switchTo`/`withHomePage`) | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
-| `BoardRepository`, incl. the legacy-schema migration and additive-field defaults in `load()` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
-| `BoardViewModel`, incl. pinned-tile mutators, cross-page/pinned orphan pruning, and record/stop/cancel | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
+| `Board` page management (`addPage`/`removePage`/`renamePage`/`switchTo`/`withHomePage`) and `hasAnySound` | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
+| `BoardRepository`, incl. the legacy-schema and `homePageIndex` migrations and additive-field defaults in `load()` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
+| `PresetRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/PresetRepositoryTest.kt` | Robolectric |
+| `BoardViewModel`, incl. pinned-tile mutators, cross-page/pinned/preset orphan pruning, record/stop/cancel, and saveAsPreset/applyPreset | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
 | `BoardScreen`, incl. the pinned row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 
-`./gradlew test` runs the first three; `./gradlew connectedAndroidTest` runs
+`./gradlew test` runs the first four; `./gradlew connectedAndroidTest` runs
 the Compose layer against a connected device or emulator.
 
 - **`FakePlayer`** (a `Player`) exists twice — once under `test/`, once under
@@ -480,10 +571,11 @@ the Compose layer against a connected device or emulator.
   until the drag ends or cancels. This sidesteps relying on Compose's
   child-before-ancestor gesture consumption for a case (dragging a tile
   across the full page width) where that alone wasn't verified to hold up.
-- **Page reordering isn't supported** — `addPage()` always appends, so pages
-  land in creation order with no way to move one later without deleting and
-  re-adding it. Fine as long as pages are created in the order you want them
-  to stay in.
+- **There's no "Delete preset" action.** Every `saveAsPreset()` call writes a
+  new file under `presets/` and nothing ever removes one. This is low-risk in
+  practice — each saved preset is a few KB of JSON, not a copy of any audio —
+  but old, no-longer-wanted saves will accumulate indefinitely until a delete
+  action is added.
 - **Recording is untested against a real microphone.** `BoardViewModelTest`
   covers the start/stop/cancel state machine against `FakeRecorder`, but
   nothing exercises `AudioRecorder` against actual `MediaRecorder` I/O —

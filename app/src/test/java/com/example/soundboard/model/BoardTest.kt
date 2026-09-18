@@ -122,10 +122,7 @@ class BoardTest {
 
     @Test
     fun `removePage clears the home index when the home page itself is removed`() {
-        val board = Board(
-            pages = listOf(Page(name = "A"), Page(name = "B")),
-            homePageIndex = 1
-        )
+        val board = Board(pages = listOf(Page(name = "A"), Page(name = "B", isHome = true)))
 
         val result = board.removePage(1)
 
@@ -135,8 +132,7 @@ class BoardTest {
     @Test
     fun `removePage shifts the home index down when a page before it is removed`() {
         val board = Board(
-            pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")),
-            homePageIndex = 2
+            pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C", isHome = true))
         )
 
         val result = board.removePage(0)
@@ -197,12 +193,37 @@ class BoardTest {
     @Test
     fun `movedPage follows the home page along with its page`() {
         val board = Board(
-            pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")),
-            homePageIndex = 0
+            pages = listOf(Page(name = "A", isHome = true), Page(name = "B"), Page(name = "C"))
         )
 
         val result = board.movedPage(0, 2)
 
         assertEquals("A", result.pages[result.homePageIndex!!].name)
+    }
+
+    @Test
+    fun `hasAnySound is false for an all-empty board`() {
+        val board = Board(pages = listOf(Page(rows = 1, columns = 2, tiles = listOf(Tile(), Tile()))))
+
+        assertEquals(false, board.hasAnySound)
+    }
+
+    @Test
+    fun `hasAnySound is true when a page tile has a sound`() {
+        val board = Board(
+            pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(fileName = "a.mp3"))))
+        )
+
+        assertEquals(true, board.hasAnySound)
+    }
+
+    @Test
+    fun `hasAnySound is true when only a pinned tile has a sound`() {
+        val board = Board(
+            pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile()))),
+            pinnedTiles = listOf(Tile(fileName = "hey.mp3"))
+        )
+
+        assertEquals(true, board.hasAnySound)
     }
 }

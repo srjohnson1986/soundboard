@@ -29,7 +29,9 @@ data class Page(
     /** Card width:height, e.g. 1f for square or 4f/3f for wider-than-tall. */
     val tileAspectRatio: Float = 1f,
     /** Page-identity accent; null keeps today's neutral theme color. Overridden per-tile by [Tile.colorArgb]. */
-    val color: Int? = null
+    val color: Int? = null,
+    /** Auto-return snaps back to whichever page has this set; at most one page should. */
+    val isHome: Boolean = false
 ) {
     /** Tiles currently shown on the grid, in row-major order. */
     val visibleTiles: List<Tile> get() = tiles.take(rows * columns)
@@ -69,11 +71,16 @@ data class Board(
     val pages: List<Page> = listOf(Page()),
     val currentPageIndex: Int = 0,
     /** Shown fixed above every page's scrollable grid, identical everywhere — not per-page data. */
-    val pinnedTiles: List<Tile> = emptyList(),
-    /** Page auto-returned to after inactivity; null disables auto-return. */
-    val homePageIndex: Int? = null
+    val pinnedTiles: List<Tile> = emptyList()
 ) {
     val currentPage: Page get() = pages[currentPageIndex.coerceIn(pages.indices)]
+
+    /** Index of the page auto-return snaps back to; null if no page is marked home. */
+    val homePageIndex: Int? get() = pages.indexOfFirst { it.isHome }.takeIf { it >= 0 }
+
+    /** Whether any tile — pinned or on any page — has a sound assigned, for gating destructive replace actions. */
+    val hasAnySound: Boolean get() =
+        pages.any { page -> page.tiles.any { !it.isEmpty } } || pinnedTiles.any { !it.isEmpty }
 
     /** Applies [transform] to the current page only, leaving the rest of the board untouched. */
     fun updatingCurrentPage(transform: (Page) -> Page): Board {
@@ -89,17 +96,9 @@ data class Board(
     fun removePage(index: Int): Board {
         if (pages.size <= 1 || index !in pages.indices) return this
         val nextPages = pages.filterIndexed { i, _ -> i != index }
-        val nextHome = homePageIndex?.let { home ->
-            when {
-                home == index -> null
-                home > index -> home - 1
-                else -> home
-            }
-        }
         return copy(
             pages = nextPages,
-            currentPageIndex = currentPageIndex.coerceIn(nextPages.indices),
-            homePageIndex = nextHome
+            currentPageIndex = currentPageIndex.coerceIn(nextPages.indices)
         )
     }
 
@@ -114,12 +113,16 @@ data class Board(
     fun switchTo(index: Int): Board =
         if (index in pages.indices) copy(currentPageIndex = index) else this
 
-    /** Marks [index] as the page auto-return snaps back to; a no-op if out of range. */
+    /** Marks [index] as the page auto-return snaps back to, and no other; a no-op if out of range. */
     fun withHomePage(index: Int): Board =
-        if (index in pages.indices) copy(homePageIndex = index) else this
+        if (index in pages.indices) {
+            copy(pages = pages.mapIndexed { i, p -> p.copy(isHome = i == index) })
+        } else {
+            this
+        }
 
     /** Clears the home page, disabling auto-return. */
-    fun clearingHomePage(): Board = copy(homePageIndex = null)
+    fun clearingHomePage(): Board = copy(pages = pages.map { it.copy(isHome = false) })
 
     /** Reorders pages by moving [fromIndex] to [toIndex]; the current and home page follow their page. */
     fun movedPage(fromIndex: Int, toIndex: Int): Board {
@@ -137,8 +140,7 @@ data class Board(
 
         return copy(
             pages = nextPages,
-            currentPageIndex = remap(currentPageIndex),
-            homePageIndex = homePageIndex?.let(::remap)
+            currentPageIndex = remap(currentPageIndex)
         )
     }
 }

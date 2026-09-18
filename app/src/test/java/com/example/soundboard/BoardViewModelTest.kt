@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.soundboard.audio.FakePlayer
 import com.example.soundboard.audio.FakeRecorder
 import com.example.soundboard.data.BoardRepository
+import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
@@ -33,9 +34,10 @@ class BoardViewModelTest {
     private lateinit var repo: BoardRepository
     private lateinit var player: FakePlayer
     private lateinit var recorder: FakeRecorder
+    private lateinit var presetRepo: PresetRepository
 
     private fun newViewModel() =
-        BoardViewModel(repo, player, recorder, ioDispatcher = UnconfinedTestDispatcher())
+        BoardViewModel(repo, player, recorder, presetRepo, ioDispatcher = UnconfinedTestDispatcher())
 
     @Before
     fun setUp() {
@@ -43,6 +45,7 @@ class BoardViewModelTest {
         repo = BoardRepository(context)
         player = FakePlayer()
         recorder = FakeRecorder()
+        presetRepo = PresetRepository(context)
     }
 
     private fun boardWith(vararg tiles: Tile) = Board(
@@ -433,13 +436,60 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `importJeremyTestPreset loads the debug-only preset asset`() {
+    fun `applyPreset with a factory ref loads the bundled asset`() {
         val vm = newViewModel()
 
-        vm.importJeremyTestPreset()
+        vm.applyPreset(PresetRef.Factory("jeremy-care-board.zip", "Jeremy Draft Care Board"))
 
         assertEquals("Jeremy Draft Care Board", vm.board.value.name)
         assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), vm.board.value.pages.map { it.name })
-        assertEquals("Loaded Jeremy test preset", vm.message.value)
+        assertEquals("Loaded \"Jeremy Draft Care Board\"", vm.message.value)
+    }
+
+    @Test
+    fun `saveAsPreset renames the board and appears in presets`() {
+        repo.save(boardWith(Tile(id = "a", label = "old")))
+        val vm = newViewModel()
+
+        vm.saveAsPreset("My Layout")
+
+        assertEquals("My Layout", vm.board.value.name)
+        assertEquals(listOf("My Layout"), vm.presets.value.map { it.name })
+    }
+
+    @Test
+    fun `applyPreset with a saved ref restores that snapshot`() {
+        repo.save(boardWith(Tile(id = "a", label = "first")))
+        val vm = newViewModel()
+        vm.saveAsPreset("Version 1")
+        val savedId = vm.presets.value.first().id
+
+        vm.setLabel("a", "changed")
+        vm.applyPreset(PresetRef.Saved(savedId))
+
+        assertEquals("first", vm.board.value.currentPage.tiles.first { it.id == "a" }.label)
+    }
+
+    @Test
+    fun `applyPreset with an unknown saved id reports failure without touching the board`() {
+        repo.save(boardWith(Tile(id = "a", label = "unchanged")))
+        val vm = newViewModel()
+
+        vm.applyPreset(PresetRef.Saved("does-not-exist"))
+
+        assertEquals("unchanged", vm.board.value.currentPage.tiles.first { it.id == "a" }.label)
+        assertEquals("Couldn't load preset", vm.message.value)
+    }
+
+    @Test
+    fun `saving a preset protects its sound from being pruned after the live tile changes`() {
+        repo.save(boardWith(Tile(id = "a", fileName = "a.mp3")))
+        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        val vm = newViewModel()
+
+        vm.saveAsPreset("Backup layout")
+        vm.clearTile("a")
+
+        assertTrue(repo.soundFile("a.mp3").exists())
     }
 }

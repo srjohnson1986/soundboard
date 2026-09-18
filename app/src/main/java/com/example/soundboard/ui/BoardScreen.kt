@@ -77,7 +77,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.soundboard.BoardViewModel
-import com.example.soundboard.BuildConfig
+import com.example.soundboard.PresetRef
+import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
 import kotlin.math.roundToInt
@@ -104,9 +105,12 @@ fun BoardScreen(
     val board by vm.board.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
+    val presets by vm.presets.collectAsStateWithLifecycle()
     var editingTarget by remember { mutableStateOf<EditTarget?>(null) }
     var showGridDialog by remember { mutableStateOf(false) }
-    var showSaveDialog by remember { mutableStateOf(false) }
+    var showSavePresetDialog by remember { mutableStateOf(false) }
+    var showPresetPickerDialog by remember { mutableStateOf(false) }
+    var pendingPresetApply by remember { mutableStateOf<Pair<PresetRef, String>?>(null) }
     var showAddPageDialog by remember { mutableStateOf(false) }
     var renamePageIndex by remember { mutableStateOf<Int?>(null) }
     var pageOptionsIndex by remember { mutableStateOf<Int?>(null) }
@@ -130,6 +134,16 @@ fun BoardScreen(
             deletePageIndex = index
         } else {
             vm.deletePage(index)
+        }
+    }
+
+    // Applying a preset over a board with any sound needs an explicit confirm — same
+    // reasoning as page deletion, just board-wide instead of one page.
+    fun requestApplyPreset(ref: PresetRef, label: String) {
+        if (board.hasAnySound) {
+            pendingPresetApply = ref to label
+        } else {
+            vm.applyPreset(ref)
         }
     }
 
@@ -308,16 +322,39 @@ fun BoardScreen(
                                     )
                                 }
                                 HorizontalDivider()
-                                // File actions
+                                // Presets — lightweight, same-device version history (see PresetRepository)
                                 Row(modifier = Modifier.fillMaxWidth()) {
                                     TextButton(
                                         modifier = Modifier.weight(1f),
                                         onClick = {
                                             showMenu = false
-                                            showSaveDialog = true
+                                            showSavePresetDialog = true
                                         }
                                     ) {
-                                        Text("Save")
+                                        Text("Save as preset")
+                                    }
+                                    TextButton(
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            showMenu = false
+                                            vm.refreshPresets()
+                                            showPresetPickerDialog = true
+                                        }
+                                    ) {
+                                        Text("Load preset")
+                                    }
+                                }
+                                HorizontalDivider()
+                                // Backup — full, portable, self-contained (structure + audio)
+                                Row(modifier = Modifier.fillMaxWidth()) {
+                                    TextButton(
+                                        modifier = Modifier.weight(1f),
+                                        onClick = {
+                                            showMenu = false
+                                            exportLauncher.launch("soundboard-backup.zip")
+                                        }
+                                    ) {
+                                        Text("Export backup")
                                     }
                                     TextButton(
                                         modifier = Modifier.weight(1f),
@@ -326,27 +363,8 @@ fun BoardScreen(
                                             importLauncher.launch(arrayOf("application/zip"))
                                         }
                                     ) {
-                                        Text("Import")
+                                        Text("Import backup")
                                     }
-                                    TextButton(
-                                        modifier = Modifier.weight(1f),
-                                        onClick = {
-                                            showMenu = false
-                                            exportLauncher.launch("soundboard-backup.zip")
-                                        }
-                                    ) {
-                                        Text("Export")
-                                    }
-                                }
-                                if (BuildConfig.DEBUG) {
-                                    HorizontalDivider()
-                                    DropdownMenuItem(
-                                        text = { Text("Load Jeremy test preset") },
-                                        onClick = {
-                                            showMenu = false
-                                            vm.importJeremyTestPreset()
-                                        }
-                                    )
                                 }
                             }
                         }
@@ -510,16 +528,50 @@ fun BoardScreen(
         )
     }
 
-    if (showSaveDialog) {
+    if (showSavePresetDialog) {
         TextInputDialog(
-            title = "Save board",
-            label = "Board name",
+            title = "Save as preset",
+            label = "Preset name",
             initial = board.name,
             onConfirm = {
-                vm.renameBoard(it.trim())
-                showSaveDialog = false
+                vm.saveAsPreset(it.trim())
+                showSavePresetDialog = false
             },
-            onDismiss = { showSaveDialog = false }
+            onDismiss = { showSavePresetDialog = false }
+        )
+    }
+
+    if (showPresetPickerDialog) {
+        PresetPickerDialog(
+            factoryPresets = vm.factoryPresets(LocalContext.current),
+            savedPresets = presets,
+            onSelect = { ref, label ->
+                showPresetPickerDialog = false
+                requestApplyPreset(ref, label)
+            },
+            onDismiss = { showPresetPickerDialog = false }
+        )
+    }
+
+    pendingPresetApply?.let { (ref, label) ->
+        AlertDialog(
+            onDismissRequest = { pendingPresetApply = null },
+            title = { Text("Replace current board with \"$label\"?") },
+            text = {
+                Text(
+                    "This board has sounds on it. Loading a preset replaces everything — " +
+                        "export a backup first if you want to keep it."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.applyPreset(ref)
+                    pendingPresetApply = null
+                }) { Text("Load") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingPresetApply = null }) { Text("Cancel") }
+            }
         )
     }
 
@@ -1085,6 +1137,67 @@ private fun PageOptionsDialog(
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
+}
+
+/** Lists bundled ("Factory") and on-device saved presets to load; picking one hands the choice back for the caller's own confirm gate. */
+@Composable
+private fun PresetPickerDialog(
+    factoryPresets: List<PresetRef.Factory>,
+    savedPresets: List<SavedPreset>,
+    onSelect: (PresetRef, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Load preset") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                factoryPresets.forEach { ref ->
+                    PresetRow(name = ref.label, subtitle = "Factory", onClick = { onSelect(ref, ref.label) })
+                }
+                savedPresets.forEach { saved ->
+                    PresetRow(
+                        name = saved.name,
+                        subtitle = "Saved · ${relativeSavedAt(saved.savedAt)}",
+                        onClick = { onSelect(PresetRef.Saved(saved.id), saved.name) }
+                    )
+                }
+                if (factoryPresets.isEmpty() && savedPresets.isEmpty()) {
+                    Text(
+                        "No presets yet — use \"Save as preset\" to create one.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+private fun PresetRow(name: String, subtitle: String, onClick: () -> Unit) {
+    TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(name, style = MaterialTheme.typography.bodyLarge)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** Coarse "how long ago" for a saved-preset timestamp — good enough for a picker list, no date library needed. */
+private fun relativeSavedAt(savedAt: Long): String {
+    val elapsedMs = (System.currentTimeMillis() - savedAt).coerceAtLeast(0)
+    val minutes = elapsedMs / 60_000
+    val hours = minutes / 60
+    val days = hours / 24
+    return when {
+        minutes < 1 -> "just now"
+        minutes < 60 -> "${minutes}m ago"
+        hours < 24 -> "${hours}h ago"
+        else -> "${days}d ago"
+    }
 }
 
 @Composable

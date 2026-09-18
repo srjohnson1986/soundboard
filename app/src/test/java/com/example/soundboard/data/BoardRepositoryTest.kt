@@ -74,9 +74,8 @@ class BoardRepositoryTest {
         val board = Board(
             pages = listOf(
                 Page(name = "Trouble", color = 0xFFB74D, tileAspectRatio = 4f / 3f),
-                Page(name = "Needs")
+                Page(name = "Needs", isHome = true)
             ),
-            homePageIndex = 1,
             pinnedTiles = listOf(
                 Tile(id = "hey", label = "Hey", fileName = "hey.mp3", colorArgb = 0xE57373)
             )
@@ -86,6 +85,35 @@ class BoardRepositoryTest {
         val loaded = repo.load()
 
         assertEquals(board, loaded)
+        assertEquals(1, loaded.homePageIndex)
+    }
+
+    @Test
+    fun `a board saved before isHome moved onto Page still loads with its home page intact`() {
+        // What repo.save() would have written when home page was a single board-level
+        // "homePageIndex" rather than per-page "isHome" — ignoreUnknownKeys silently
+        // drops that stray key, so without an explicit migration this board would
+        // load with no home page at all.
+        boardFile.parentFile?.mkdirs()
+        boardFile.writeText(
+            """
+            {
+              "name": "Old Board",
+              "pages": [
+                {"id": "p1", "name": "Page 1", "rows": 4, "columns": 4, "tiles": []},
+                {"id": "p2", "name": "Page 2", "rows": 4, "columns": 4, "tiles": []}
+              ],
+              "currentPageIndex": 0,
+              "homePageIndex": 1
+            }
+            """.trimIndent()
+        )
+
+        val loaded = repo.load()
+
+        assertEquals(1, loaded.homePageIndex)
+        assertTrue(loaded.pages[1].isHome)
+        assertFalse(loaded.pages[0].isHome)
     }
 
     @Test

@@ -18,6 +18,7 @@ import com.example.soundboard.BoardViewModel
 import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.Recorder
 import com.example.soundboard.data.BoardRepository
+import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
@@ -60,7 +61,7 @@ class BoardScreenTest {
         repo = BoardRepository(context)
         repo.save(board)
         player = FakePlayer()
-        vm = BoardViewModel(repo, player, FakeRecorder())
+        vm = BoardViewModel(repo, player, FakeRecorder(), PresetRepository(context))
 
         composeRule.setContent {
             BoardScreen(vm = vm)
@@ -289,10 +290,9 @@ class BoardScreenTest {
         launchWith(
             Board(
                 pages = listOf(
-                    Page(name = "First", rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Alpha", fileName = "a.mp3"))),
+                    Page(name = "First", rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Alpha", fileName = "a.mp3")), isHome = true),
                     Page(name = "Second", rows = 1, columns = 1, tiles = listOf(Tile(id = "b", label = "Beta", fileName = "b.mp3")))
-                ),
-                homePageIndex = 0
+                )
             )
         )
 

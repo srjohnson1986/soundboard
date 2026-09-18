@@ -352,16 +352,18 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `addPinnedRow materializes empty tiles sized to the current page and persists`() {
+    fun `addPinnedRow materializes a fixed-width empty row regardless of the current page and persists`() {
+        // Fixed at 4 regardless of the page's own column count (3 here) — the
+        // pinned row is deliberately decoupled from page grid width (#15).
         repo.save(boardWith(Tile(id = "a"), Tile(id = "b"), Tile(id = "c")))
         val vm = newViewModel()
 
         vm.addPinnedRow()
 
-        assertEquals(3, vm.board.value.pinnedTiles.size)
+        assertEquals(4, vm.board.value.pinnedTiles.size)
         assertTrue(vm.board.value.pinnedTiles.all { it.isEmpty })
         val second = newViewModel()
-        assertEquals(3, second.board.value.pinnedTiles.size)
+        assertEquals(4, second.board.value.pinnedTiles.size)
     }
 
     @Test
@@ -375,7 +377,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `resize grows the pinned row to match new columns without dropping tiles`() {
+    fun `resize does not touch the pinned row`() {
         repo.save(
             Board(
                 pages = listOf(Page(rows = 1, columns = 2)),
@@ -386,8 +388,7 @@ class BoardViewModelTest {
 
         vm.resize(1, 4)
 
-        assertEquals(4, vm.board.value.pinnedTiles.size)
-        assertEquals(listOf("hey", "sos"), vm.board.value.pinnedTiles.take(2).map { it.id })
+        assertEquals(listOf("hey", "sos"), vm.board.value.pinnedTiles.map { it.id })
     }
 
     @Test

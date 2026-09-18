@@ -53,7 +53,7 @@ class BoardRepository(private val context: Context) {
                 pages = listOf(Page(rows = legacy.rows, columns = legacy.columns, tiles = legacy.tiles))
             )
         }
-        migrateHomePageIndex(board, root)
+        sanitizeMissingSounds(migrateHomePageIndex(board, root))
     }.getOrElse { Board() }
 
     /**
@@ -67,6 +67,25 @@ class BoardRepository(private val context: Context) {
         if (board.pages.any { it.isHome }) return board
         val index = (root["homePageIndex"] as? JsonPrimitive)?.intOrNull ?: return board
         return board.withHomePage(index)
+    }
+
+    /**
+     * A tile's `fileName` can point at audio that was never actually copied in —
+     * a generic preset shipped with only some (or none) of its clips recorded
+     * yet, or a backup zip missing a file for some other reason. Rather than
+     * rendering that tile as "filled" with a sound that silently does nothing
+     * when tapped, drop back to `fileName = null`: same tile, same label, now
+     * honestly reported as still needing a recording. Runs on every load, not
+     * just right after an import, so it also self-heals a board whose sound
+     * file went missing some other way.
+     */
+    private fun sanitizeMissingSounds(board: Board): Board {
+        fun fix(tile: Tile): Tile =
+            if (tile.fileName != null && !soundFile(tile.fileName).exists()) tile.copy(fileName = null) else tile
+        return board.copy(
+            pages = board.pages.map { page -> page.copy(tiles = page.tiles.map(::fix)) },
+            pinnedTiles = board.pinnedTiles.map(::fix)
+        )
     }
 
     /** True once a board has ever been saved — false only on a fresh install. */

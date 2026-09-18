@@ -10,8 +10,12 @@ as a preset (see "Presets" below), which is also how you rename one.
 
 ## The grid
 
-Each tile is either empty (shows a **+**) or filled (shows its label, or
-"Unnamed" if you haven't given it one).
+Each tile is either empty (shows a **+**), filled (shows its label, or
+"Unnamed" if you haven't given it one), or labeled but without a sound yet —
+shown with a small 🔇 in the corner. That last state is what a preset built
+from labels alone (see "Presets" below) leaves a tile in before you've
+recorded anything for it; tapping it opens the edit dialog just like any
+other empty tile.
 
 - **Tap an empty tile** — opens the edit dialog so you can give it a sound.
 - **Tap a filled tile** — plays its sound. Tapping any other tile while one
@@ -109,9 +113,11 @@ switch pages — the same tiles, in the same place, no matter which page
 you're on. It's meant for anything you need reachable no matter where the
 board happens to be — a call for help, "something's wrong," a way to summon
 someone. Editing a pinned tile from any page updates it everywhere, since
-it's really one shared row, not a per-page copy. It grows automatically to
-match a page's column count if you widen the grid; it never shrinks or loses
-a tile on its own.
+it's really one shared row, not a per-page copy.
+
+The pinned row is always 4 tiles, on its own, independent of how wide any
+page's grid is — resizing a page's grid never grows or shrinks it. A future
+version may make that width adjustable; for now it's fixed.
 
 ### Returning to a home page automatically
 
@@ -150,6 +156,16 @@ at too). If you want a copy that survives that — or that you can move to
 another device — use **Export** below instead. The two bundled factory
 presets don't have this limitation, since their sounds ship inside the app
 itself.
+
+**A generic, mostly-unrecorded layout works fine too.** If you build (or are
+handed) a backup zip whose board.json has real pages, names, and tile labels
+but little or no actual audio, importing it (**Import backup**, below) works
+exactly as well as importing a fully-recorded one — any tile whose sound
+doesn't actually exist in the zip just loads as labeled-but-empty (the 🔇
+tiles described above) instead of a broken "filled" tile that plays nothing.
+That's the practical way to get a shareable starting layout: label every
+tile up front, record what you have, and let whoever imports it record the
+rest.
 
 ## Backup
 

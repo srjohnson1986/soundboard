@@ -248,9 +248,11 @@ class BoardScreenTest {
         composeRule.onNodeWithText("☰").performClick()
         composeRule.onNodeWithText("Add pinned row").performClick()
 
-        // The pinned row's one empty tile is the only "+" on screen; name it so
-        // it's easy to find again on the other page.
-        composeRule.onNodeWithText("+").performClick()
+        // The pinned row is a fixed 4 empty tiles regardless of the page's own
+        // 1-column width (#15) — every "+" on screen belongs to it, since both
+        // pages' own tiles are filled. Name the first one so it's easy to find
+        // again on the other page.
+        composeRule.onAllNodesWithText("+")[0].performClick()
         composeRule.onNodeWithText("Name").performTextInput("Hey")
         composeRule.onNodeWithText("Save").performClick()
 

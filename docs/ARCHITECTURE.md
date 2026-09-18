@@ -257,10 +257,13 @@ A few things worth knowing if you're touching it:
   to the auto-save every other mutation already gets — it exists solely to
   open a `TextInputDialog` and change this name via `vm.renameBoard()`.
   **Add page**/**Rename page** open the same `TextInputDialog` composable
-  against `vm.addPage()`/`vm.renamePage()`; **Delete page** acts immediately
-  (`vm.deletePage()`) and is hidden from the menu entirely when only one page
-  remains, rather than confirming — `Board.removePage()` is a no-op on the
-  last page anyway, so hiding it just avoids a dead menu entry. **Page
+  against `vm.addPage()`/`vm.renamePage()`; **Delete page** is hidden from
+  the menu entirely when only one page remains (`Board.removePage()` is a
+  no-op on the last page anyway, so hiding it just avoids a dead menu entry),
+  and otherwise routes through `requestDeletePage()`, which checks
+  `page.tiles.any { !it.isEmpty }` — a page with any sound assigned shows a
+  confirm dialog naming how many tiles would be lost before calling
+  `vm.deletePage()`, while an all-empty page deletes immediately. **Page
   color** opens `PageColorDialog` (the same swatch-picker `ColorSwatch` the
   tile-edit dialog uses) against `vm.setPageColor()`. **Add pinned row** only
   appears while `board.pinnedTiles` is empty, since `vm.addPinnedRow()` is a
@@ -338,6 +341,12 @@ A few things worth knowing if you're touching it:
   so the dragged tile keeps tracking the finger smoothly across multiple
   cell-crossings in one gesture. Non-dragged items get `Modifier.animateItem()`
   so they slide into their new slot instead of jump-cutting.
+- **Arming a drag is announced, not just shown.** `onDragStart` fires
+  `LocalHapticFeedback.current.performHapticFeedback(HapticFeedbackType.LongPress)`
+  alongside the visual lift (scale + shadow) — a hesitant press that
+  accidentally armed reorder is obvious immediately rather than only once the
+  tile visibly moves. The page-tab long-press that opens `PageOptionsDialog`
+  fires the same feedback constant when it arms, for the same reason.
 - **Color and contrast.** A custom `colorArgb`, or failing that a filled
   tile's page color, overrides the card's container color. Text/icon color
   for either comes from `textColorFor()`, a local helper that picks black or
@@ -418,15 +427,14 @@ the Compose layer against a connected device or emulator.
   currently reachable through normal use (the app is the only writer to that
   directory), but worth knowing if you build a "manage backups" feature that
   juggles multiple exports.
-- **Pager swipe vs. long-press drag-to-reorder is untested on a real device.**
-  Both gestures live in the same on-screen area (`HorizontalPager` wrapping
-  `PageGrid`, whose tiles have their own `detectDragGesturesAfterLongPress`).
-  The expectation is that a long-press-then-drag is recognized as a tile
-  drag before the pager's own pan detection claims the gesture (Compose lets
-  a child's gesture detector consume pointer input before an ancestor's), the
-  same way tile drag-reorder already coexists with the grid's own vertical
-  scroll — but this hasn't been verified against the pager specifically.
-  Check it manually before shipping a board that relies on both.
+- **Pager swipe vs. long-press drag-to-reorder is resolved via an explicit
+  lock, not gesture-priority alone.** `PageGrid` reports drag state up
+  through `onDragActiveChanged`, and `BoardScreen` feeds it into
+  `HorizontalPager(userScrollEnabled = !isDragActive)` — so once a tile is
+  armed for reorder, the pager simply can't consume horizontal movement
+  until the drag ends or cancels. This sidesteps relying on Compose's
+  child-before-ancestor gesture consumption for a case (dragging a tile
+  across the full page width) where that alone wasn't verified to hold up.
 - **Page reordering isn't supported** — `addPage()` always appends, so pages
   land in creation order with no way to move one later without deleting and
   re-adding it. Fine as long as pages are created in the order you want them

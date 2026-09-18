@@ -17,8 +17,13 @@ Each tile is either empty (shows a **+**) or filled (shows its label, or
 - **Tap a filled tile** — plays its sound. Tapping any other tile while one
   is playing stops the first and starts the new one; only one clip plays at
   a time.
-- **Long-press and drag a tile** — reorders the grid. Drop it over another
-  tile to swap positions; everything else slides out of the way as you drag.
+- **Long-press and drag a tile** — reorders the grid. A haptic tick and a
+  slight lift confirm the moment the drag arms, so a hesitant press that
+  didn't quite mean to grab a tile is obvious right away, and dropping it
+  back where it started leaves the board unchanged. Swiping between pages is
+  disabled for as long as a tile is lifted, so crossing the screen mid-drag
+  moves the tile instead of turning the page. Drop it over another tile to
+  swap positions; everything else slides out of the way as you drag.
 
 ## Editing a tile
 
@@ -73,9 +78,10 @@ onto one grid.
 - **Page color** — pick an accent for the page you're on; it tints that
   page's tab and its filled tiles (a tile's own color, if it has one, always
   wins). One glance at the tab bar tells you which page you're on.
-- **Delete page** — removes whichever page is currently showing, sounds and
-  all. Only appears in the menu when there's more than one page, since a
-  board always needs at least one.
+- **Delete page** — removes whichever page is currently showing. Only appears
+  in the menu when there's more than one page, since a board always needs at
+  least one. If the page has any tiles with sounds assigned, you'll be asked
+  to confirm before it's gone for good; an all-empty page deletes right away.
 - **Grid size** resizes only the page you're currently on — other pages keep
   their own dimensions.
 

@@ -111,11 +111,11 @@ class BoardScreenTest {
     }
 
     @Test
-    fun saveBoardRenamesBoardAndUpdatesTitle() {
+    fun saveAsPresetRenamesBoardAndUpdatesTitle() {
         launchWith(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))))
 
         composeRule.onNodeWithText("☰").performClick()
-        composeRule.onNodeWithText("Save").performClick()
+        composeRule.onNodeWithText("Save as preset").performClick()
         // "New Board" appears twice once the dialog is up (the title bar behind
         // it, and the field's prefilled value) — hasSetTextAction() narrows to
         // the actual editable field regardless of window traversal order.

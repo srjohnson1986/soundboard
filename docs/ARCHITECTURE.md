@@ -404,19 +404,23 @@ gesture.
   "New Board" rather than blank. There's no dedicated rename-only menu item —
   **Save as preset** (below) prompts for a name and renames the board to
   match as a side effect, which absorbed what used to be a separate **Save**
-  action. **Add page**/**Rename page** open the same `TextInputDialog`
-  composable against `vm.addPage()`/`vm.renamePage()`; **Delete page** is
-  hidden from the menu entirely when only one page remains
-  (`Board.removePage()` is a no-op on the last page anyway, so hiding it just
-  avoids a dead menu entry), and otherwise routes through `requestDeletePage()`,
-  which checks `page.tiles.any { !it.isEmpty }` — a page with any sound
-  assigned shows a confirm dialog naming how many tiles would be lost before
-  calling `vm.deletePage()`, while an all-empty page deletes immediately.
-  **Page color** opens `PageColorDialog` (the same swatch-picker `ColorSwatch`
-  the tile-edit dialog uses) against `vm.setPageColor()`. **Add pinned row**
-  only appears while `board.pinnedTiles` is empty, since `vm.addPinnedRow()`
-  is a no-op afterward anyway. **Set as home page**/**Home page ✓** toggles
-  `vm.setHomePage(board.currentPageIndex)`.
+  action.
+- **The hamburger menu is settings and same-device history now, not page
+  management.** Its old emoji-style items were replaced with Material icons:
+  every `DropdownMenuItem` gets a `leadingIcon` with `contentDescription =
+  null`, since the adjacent `Text` already labels it, while an icon-only
+  control with no adjacent label — the menu button itself, or the tab row's
+  Add-page tab below — carries a real `contentDescription` instead. Top to
+  bottom, the menu holds: **Edit mode** and **Open on home page**, each a
+  manual `Row` (`Icon` + label + `Switch`) rather than a `DropdownMenuItem`,
+  since a switch doesn't fit that composable's trailing-content slot cleanly;
+  **Add pinned row**, which only appears while `board.pinnedTiles` is empty,
+  since `vm.addPinnedRow()` is a no-op afterward anyway; **Presets**
+  (**Save as preset**/**Load preset**); **Backup** (**Export backup**/
+  **Import backup**); and the app-version link at the bottom. Page-level
+  actions — add, rename, delete, grid size, page color, and home-page
+  selection — moved out of this menu entirely; see the tab row and
+  `PageOptionsDialog` below.
 - **Save as preset**/**Load preset** are the same-device version-history
   actions (see "Presets" above), kept visually grouped and separate from
   **Export backup**/**Import backup**. **Save as preset** opens
@@ -437,8 +441,8 @@ gesture.
   `"$RELEASES_BASE_URL/tag/$APP_VERSION"` instead so it lands on that
   version's own release notes. All three constants live next to
   `IDLE_TIMEOUT_MS` at the top of the file.
-- **Pages are a `PrimaryScrollableTabRow` under the `TopAppBar`, shown only
-  when there's more than one, plus a `HorizontalPager` driving the actual
+- **Pages are a `PrimaryScrollableTabRow` under the `TopAppBar`, always
+  shown even for a single page, plus a `HorizontalPager` driving the actual
   grid.** Both the app bar and tab row live inside one `Column` passed to
   `Scaffold`'s `topBar` slot; the pager fills the content area below the
   (optional) pinned row. Three navigation paths all have to agree on
@@ -454,7 +458,34 @@ gesture.
   `PageGrid(page, ..., isActive = pageIndex == board.currentPageIndex)`;
   drag-to-reorder's `pointerInput` is skipped entirely (`if (!isActive)
   return@pointerInput`) on any page that isn't the settled, on-screen one, so
-  a gesture during a swipe transition can't mutate the wrong page.
+  a gesture during a swipe transition can't mutate the wrong page. The row's
+  permanent last entry is an icon-only `Tab` (`Icons.Filled.Add`,
+  `contentDescription = "Add page"`) that opens the same `TextInputDialog`
+  used elsewhere, against `vm.addPage()` — which is why the row can't just
+  hide itself down to zero tabs. The home page's tab also renders
+  differently from the rest — bold `Text` plus a small leading
+  `Icons.Filled.Home` — so it reads as "home" without opening anything.
+- **Long-pressing a page's tab opens `PageOptionsDialog`, independent of
+  `editMode`.** The tab row's own `pointerInput` (see the Initial-pass note
+  above) sets `pageOptionsIndex = index` on a long-press regardless of
+  whether edit mode is on, unlike tile drag-reorder. `PageOptionsDialog` is
+  where per-page management actually lives now: **Rename** (`TextInputDialog`
+  → `vm.renamePage()`); **Set as home page** (`vm.setHomePage()`, `enabled =
+  !isHome` — once a page is already home there's no "remove home" action,
+  only setting a different page as the new home); **Grid size**/**Page
+  color**, opening `GridSizeDialog`/`PageColorDialog` against
+  `vm.resize()`/`vm.setTileAspectRatio()`/`vm.setPageColor()`; **Move
+  left**/**Move right** (`vm.movePage()`, each disabled at its respective end
+  of the page list); and **Delete page**, hidden entirely — not just
+  disabled — when `board.pages.size == 1` (matching `Board.removePage()`'s
+  own no-op-on-last-page behavior), and otherwise routing through
+  `requestDeletePage()`, which shows a confirm dialog naming how many tiles
+  have sounds before calling `vm.deletePage()`, or deletes immediately if the
+  page is all-empty. Because the long-pressed page (`pageOptionsIndex`) isn't
+  necessarily the one on screen (`board.currentPageIndex`), `resize()`,
+  `setTileAspectRatio()`, and `setPageColor()` all take an explicit page
+  `index` and go through `Board.updatingPage(index)` rather than
+  `updatingCurrentPage()`.
 - **The pinned row lives above the pager, rendered once — not once per
   page.** Since `Board.pinnedTiles` is the same list regardless of which page
   is showing, there is exactly one `PinnedRow` composable instance; it never

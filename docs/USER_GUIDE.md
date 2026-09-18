@@ -171,6 +171,12 @@ A Snackbar confirms success or failure at the bottom of the screen.
 board now is gone once the new one loads. Export first if you want to keep
 it.
 
+## App version
+
+The bottom of the **☰** menu shows the app's version (e.g. `vX.X.X` until the
+first real release exists). Tapping it opens that version's release page on
+GitHub in your browser.
+
 ## Long clips
 
 There's no length limit on what you can assign to a tile. Clips play

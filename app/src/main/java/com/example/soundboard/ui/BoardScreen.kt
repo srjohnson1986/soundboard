@@ -89,6 +89,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** Five minutes of no interaction before the board snaps back to its home page. */
 private const val IDLE_TIMEOUT_MS = 5 * 60 * 1000L
 
+/** Placeholder until the first tagged release exists — update alongside each real release. */
+private const val APP_VERSION = "vX.X.X"
+private const val RELEASE_URL = "https://github.com/srjohnson1986/soundboard/releases/tag/$APP_VERSION"
+
 /** Which tile an open [EditTileDialog] is showing — a page tile or one from the shared pinned row. */
 private sealed interface EditTarget {
     data class PageTile(val id: String) : EditTarget
@@ -102,6 +106,7 @@ fun BoardScreen(
         factory = BoardViewModel.Factory(LocalContext.current.applicationContext as android.app.Application)
     )
 ) {
+    val context = LocalContext.current
     val board by vm.board.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
@@ -366,6 +371,22 @@ fun BoardScreen(
                                         Text("Import backup")
                                     }
                                 }
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            APP_VERSION,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        context.startActivity(
+                                            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(RELEASE_URL))
+                                        )
+                                    }
+                                )
                             }
                         }
                     }
@@ -543,7 +564,7 @@ fun BoardScreen(
 
     if (showPresetPickerDialog) {
         PresetPickerDialog(
-            factoryPresets = vm.factoryPresets(LocalContext.current),
+            factoryPresets = vm.factoryPresets(context),
             savedPresets = presets,
             onSelect = { ref, label ->
                 showPresetPickerDialog = false

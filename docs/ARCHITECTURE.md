@@ -409,11 +409,13 @@ gesture.
   runs immediately.
 - **The last menu item is the app version, `APP_VERSION`** — a placeholder
   constant (`"vX.X.X"`) until a real release exists. Tapping it fires an
-  `ACTION_VIEW` intent at `RELEASE_URL`
-  (`.../releases/tag/$APP_VERSION`), opening that tag's GitHub release page in
-  the browser. Both constants live next to `IDLE_TIMEOUT_MS` at the top of
-  the file; bump `APP_VERSION` alongside each real tagged release so the link
-  actually resolves.
+  `ACTION_VIEW` intent at `RELEASE_URL`, opening a page in the browser.
+  `RELEASE_URL` currently just aliases `RELEASES_BASE_URL` (the repo's
+  `/releases` list) rather than pointing at a specific tag, since `APP_VERSION`
+  isn't a real version yet — once it is, point `RELEASE_URL` at
+  `"$RELEASES_BASE_URL/tag/$APP_VERSION"` instead so it lands on that
+  version's own release notes. All three constants live next to
+  `IDLE_TIMEOUT_MS` at the top of the file.
 - **Pages are a `PrimaryScrollableTabRow` under the `TopAppBar`, shown only
   when there's more than one, plus a `HorizontalPager` driving the actual
   grid.** Both the app bar and tab row live inside one `Column` passed to

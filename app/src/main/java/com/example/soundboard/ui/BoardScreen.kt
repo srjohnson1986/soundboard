@@ -63,10 +63,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -111,10 +113,23 @@ fun BoardScreen(
     var showMenu by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
+    var isDragActive by remember { mutableStateOf(false) }
+    var deletePageIndex by remember { mutableStateOf<Int?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     fun touch() {
         lastInteractionAt = System.currentTimeMillis()
+    }
+
+    // A page with any sound assigned needs an explicit confirm; an all-empty
+    // page is cheap to recreate, so deleting it outright isn't worth a dialog.
+    fun requestDeletePage(index: Int) {
+        val page = board.pages.getOrNull(index) ?: return
+        if (page.tiles.any { !it.isEmpty }) {
+            deletePageIndex = index
+        } else {
+            vm.deletePage(index)
+        }
     }
 
     LaunchedEffect(message) {
@@ -254,7 +269,7 @@ fun BoardScreen(
                                             modifier = Modifier.weight(1f),
                                             onClick = {
                                                 showMenu = false
-                                                vm.deletePage(board.currentPageIndex)
+                                                requestDeletePage(board.currentPageIndex)
                                             }
                                         ) {
                                             Text("Delete page")
@@ -336,6 +351,7 @@ fun BoardScreen(
                 )
                 if (board.pages.size > 1) {
                     PrimaryScrollableTabRow(selectedTabIndex = board.currentPageIndex) {
+                        val tabHaptics = LocalHapticFeedback.current
                         board.pages.forEachIndexed { index, page ->
                             // Long-press detection must run on the Initial (outside-in) pointer
                             // pass and win the race against Tab's own click before it can consume
@@ -349,6 +365,7 @@ fun BoardScreen(
                                             waitForUpOrCancellation(pass = PointerEventPass.Initial)
                                         }
                                         if (up == null) {
+                                            tabHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                             pageOptionsIndex = index
                                             // Swallow the eventual release so Tab's own click,
                                             // which runs on the later Main pass, never sees it.
@@ -396,6 +413,7 @@ fun BoardScreen(
             }
             HorizontalPager(
                 state = pagerState,
+                userScrollEnabled = !isDragActive,
                 modifier = Modifier.weight(1f)
             ) { pageIndex ->
                 val page = board.pages.getOrNull(pageIndex)
@@ -413,7 +431,8 @@ fun BoardScreen(
                             }
                         },
                         onPreviewMove = vm::previewMove,
-                        onCommitOrder = vm::commitOrder
+                        onCommitOrder = vm::commitOrder,
+                        onDragActiveChanged = { isDragActive = it }
                     )
                 }
             }
@@ -535,10 +554,35 @@ fun BoardScreen(
                     pageOptionsIndex = null
                 },
                 onDelete = {
-                    vm.deletePage(index)
                     pageOptionsIndex = null
+                    requestDeletePage(index)
                 },
                 onDismiss = { pageOptionsIndex = null }
+            )
+        }
+    }
+
+    deletePageIndex?.let { index ->
+        board.pages.getOrNull(index)?.let { page ->
+            val soundCount = page.tiles.count { !it.isEmpty }
+            AlertDialog(
+                onDismissRequest = { deletePageIndex = null },
+                title = { Text("Delete \"${page.name}\"?") },
+                text = {
+                    Text(
+                        "This page has $soundCount tile${if (soundCount == 1) "" else "s"} " +
+                            "with sounds. Deleting it can't be undone."
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        vm.deletePage(index)
+                        deletePageIndex = null
+                    }) { Text("Delete") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deletePageIndex = null }) { Text("Cancel") }
+                }
             )
         }
     }
@@ -579,9 +623,11 @@ private fun PageGrid(
     isActive: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewMove: (Int, Int) -> Unit,
-    onCommitOrder: () -> Unit
+    onCommitOrder: () -> Unit,
+    onDragActiveChanged: (Boolean) -> Unit
 ) {
     val density = LocalDensity.current
+    val haptics = LocalHapticFeedback.current
     var gridWidthPx by remember { mutableIntStateOf(0) }
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
@@ -624,17 +670,21 @@ private fun PageGrid(
                         if (!isActive) return@pointerInput
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 draggedIndex = index
                                 dragOffset = Offset.Zero
+                                onDragActiveChanged(true)
                             },
                             onDragEnd = {
                                 draggedIndex = null
                                 dragOffset = Offset.Zero
+                                onDragActiveChanged(false)
                                 onCommitOrder()
                             },
                             onDragCancel = {
                                 draggedIndex = null
                                 dragOffset = Offset.Zero
+                                onDragActiveChanged(false)
                             },
                             onDrag = { change, amount ->
                                 change.consume()

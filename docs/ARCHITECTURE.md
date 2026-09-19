@@ -445,7 +445,8 @@ gesture.
   runs immediately.
 - **The last menu item is the app version, `APP_VERSION`** — update it
   alongside every tagged release (and `versionName` in `app/build.gradle.kts`
-  to match). Tapping it fires an `ACTION_VIEW` intent at `RELEASE_URL`, opening
+  to match; see `docs/RELEASING.md` for the full cut-a-release checklist).
+  Tapping it fires an `ACTION_VIEW` intent at `RELEASE_URL`, opening
   a page in the browser; `RELEASE_URL` is `"$RELEASES_BASE_URL/tag/$APP_VERSION"`,
   landing on that specific version's own release notes rather than the bare
   `/releases` list. All three constants live next to

@@ -123,15 +123,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** Choices offered for the auto-return-to-home idle timeout in [SettingsDialog]; 0 means "Off". */
 private val IDLE_TIMEOUT_OPTIONS_MINUTES = listOf(0, 1, 2, 5, 10)
 
-/** Placeholder until the first tagged release exists — update alongside each real release. */
-private const val APP_VERSION = "vX.X.X"
+/** Update alongside each tagged release — [RELEASE_URL] points at this tag's own notes. */
+private const val APP_VERSION = "v0.1.0"
 
-/**
- * Points at the releases list rather than a specific tag until [APP_VERSION] is a real
- * version — switch this to "$RELEASES_BASE_URL/tag/$APP_VERSION" once it is.
- */
 private const val RELEASES_BASE_URL = "https://github.com/srjohnson1986/soundboard/releases"
-private const val RELEASE_URL = RELEASES_BASE_URL
+private const val RELEASE_URL = "$RELEASES_BASE_URL/tag/$APP_VERSION"
 
 /** Which tile an open [EditTileDialog] is showing — a page tile or one from the shared pinned row. */
 private sealed interface EditTarget {

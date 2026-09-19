@@ -443,14 +443,12 @@ gesture.
   `requestApplyPreset()`, mirroring `requestDeletePage()`'s shape: a confirm
   `AlertDialog` only when `board.hasAnySound`, otherwise `vm.applyPreset()`
   runs immediately.
-- **The last menu item is the app version, `APP_VERSION`** — a placeholder
-  constant (`"vX.X.X"`) until a real release exists. Tapping it fires an
-  `ACTION_VIEW` intent at `RELEASE_URL`, opening a page in the browser.
-  `RELEASE_URL` currently just aliases `RELEASES_BASE_URL` (the repo's
-  `/releases` list) rather than pointing at a specific tag, since `APP_VERSION`
-  isn't a real version yet — once it is, point `RELEASE_URL` at
-  `"$RELEASES_BASE_URL/tag/$APP_VERSION"` instead so it lands on that
-  version's own release notes. All three constants live next to
+- **The last menu item is the app version, `APP_VERSION`** — update it
+  alongside every tagged release (and `versionName` in `app/build.gradle.kts`
+  to match). Tapping it fires an `ACTION_VIEW` intent at `RELEASE_URL`, opening
+  a page in the browser; `RELEASE_URL` is `"$RELEASES_BASE_URL/tag/$APP_VERSION"`,
+  landing on that specific version's own release notes rather than the bare
+  `/releases` list. All three constants live next to
   `IDLE_TIMEOUT_OPTIONS_MINUTES` at the top of the file.
 - **Pages are a `PrimaryScrollableTabRow` under the `TopAppBar`, always
   shown even for a single page, plus a `HorizontalPager` driving the actual

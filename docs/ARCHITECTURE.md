@@ -411,16 +411,27 @@ gesture.
   null`, since the adjacent `Text` already labels it, while an icon-only
   control with no adjacent label — the menu button itself, or the tab row's
   Add-page tab below — carries a real `contentDescription` instead. Top to
-  bottom, the menu holds: **Edit mode** and **Open on home page**, each a
-  manual `Row` (`Icon` + label + `Switch`) rather than a `DropdownMenuItem`,
-  since a switch doesn't fit that composable's trailing-content slot cleanly;
-  **Add pinned row**, which only appears while `board.pinnedTiles` is empty,
-  since `vm.addPinnedRow()` is a no-op afterward anyway; **Presets**
+  bottom, the menu holds: **Edit mode**, a manual `Row` (`Icon` + label +
+  `Switch`) rather than a `DropdownMenuItem` since a switch doesn't fit that
+  composable's trailing-content slot cleanly; **Settings**, which opens
+  `SettingsDialog` (below) rather than exposing its contents as more menu
+  rows; **Add pinned row**, which only appears while `board.pinnedTiles` is
+  empty, since `vm.addPinnedRow()` is a no-op afterward anyway; **Presets**
   (**Save as preset**/**Load preset**); **Backup** (**Export backup**/
   **Import backup**); and the app-version link at the bottom. Page-level
   actions — add, rename, delete, grid size, page color, and home-page
-  selection — moved out of this menu entirely; see the tab row and
-  `PageOptionsDialog` below.
+  selection — live in the tab row and `PageOptionsDialog` instead; see below.
+- **`SettingsDialog` holds app-level preferences that aren't page content.**
+  Currently that's **Open on home page** (a `Switch`, unchanged from before —
+  see `BoardViewModel.setOpenOnHomePage`) and **auto-return to home page
+  after**, a `RadioButton` list built from `IDLE_TIMEOUT_OPTIONS_MINUTES`
+  (`0, 1, 2, 5, 10` — `0` means "Off"). Both persist through
+  `SettingsRepository` (`SharedPreferences`, same pattern for each: a
+  `BoardViewModel`-level `StateFlow` seeded from the repo, with a setter that
+  writes through to the repo and then updates the flow). Unlike `editMode`,
+  which lives entirely in Compose state, these two need to be restored across
+  process death, which is why they're modeled this way instead of as plain
+  `remember` state in `BoardScreen`.
 - **Save as preset**/**Load preset** are the same-device version-history
   actions (see "Presets" above), kept visually grouped and separate from
   **Export backup**/**Import backup**. **Save as preset** opens
@@ -440,7 +451,7 @@ gesture.
   isn't a real version yet — once it is, point `RELEASE_URL` at
   `"$RELEASES_BASE_URL/tag/$APP_VERSION"` instead so it lands on that
   version's own release notes. All three constants live next to
-  `IDLE_TIMEOUT_MS` at the top of the file.
+  `IDLE_TIMEOUT_OPTIONS_MINUTES` at the top of the file.
 - **Pages are a `PrimaryScrollableTabRow` under the `TopAppBar`, always
   shown even for a single page, plus a `HorizontalPager` driving the actual
   grid.** Both the app bar and tab row live inside one `Column` passed to
@@ -505,11 +516,15 @@ gesture.
   `touch()` call from every meaningful interaction (tile tap, tab tap, a
   settled swipe) rather than from a low-level raw-pointer listener,  so only
   real interactions with the board reset the countdown. A
-  `LaunchedEffect(lastInteractionAt, board.homePageIndex)` `delay()`s
-  `IDLE_TIMEOUT_MS` (5 minutes) and, if nothing has restarted it since and a
-  home page is set, calls `vm.switchPage(homeIndex)` — restarting the effect
-  is what "resets the timer," since a new key value cancels the previous
-  coroutine before it can fire.
+  `LaunchedEffect(lastInteractionAt, board.homePageIndex, idleTimeoutMinutes)`
+  returns immediately if `idleTimeoutMinutes` (from `SettingsDialog`, default
+  5) is `0`, otherwise `delay()`s that many minutes and, if nothing has
+  restarted it since and a home page is set, calls `vm.switchPage(homeIndex)`
+  — restarting the effect is what "resets the timer," since a new key value
+  cancels the previous coroutine before it can fire. Keying the effect on
+  `idleTimeoutMinutes` too means changing the setting mid-session restarts
+  the countdown under the new duration rather than waiting for the next
+  interaction.
 - **Tile shape and color are page properties, not global constants.**
   `TileCard` takes `aspectRatio`/`pageColor` as parameters instead of a
   hardcoded `1f` and a hardcoded `primaryContainer`; `GridSizeDialog` has a

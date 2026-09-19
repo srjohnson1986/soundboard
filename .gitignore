@@ -9,3 +9,8 @@ build/
 .cxx/
 local.properties
 .claude/
+
+# Release signing — see docs/RELEASING.md. Never commit the real keystore or its passwords.
+keystore.properties
+*.jks
+*.keystore

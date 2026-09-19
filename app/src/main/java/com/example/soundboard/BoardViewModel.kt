@@ -40,6 +40,9 @@ class BoardViewModel(
     private val _openOnHomePage = MutableStateFlow(settingsRepo.openOnHomePage)
     val openOnHomePage: StateFlow<Boolean> = _openOnHomePage.asStateFlow()
 
+    private val _idleTimeoutMinutes = MutableStateFlow(settingsRepo.idleTimeoutMinutes)
+    val idleTimeoutMinutes: StateFlow<Int> = _idleTimeoutMinutes.asStateFlow()
+
     /** One-off status text for the UI to show (e.g. in a Snackbar), then clear. */
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
@@ -217,6 +220,12 @@ class BoardViewModel(
     fun setOpenOnHomePage(value: Boolean) {
         settingsRepo.openOnHomePage = value
         _openOnHomePage.value = value
+    }
+
+    /** Minutes of inactivity before auto-return to home; 0 disables it. */
+    fun setIdleTimeoutMinutes(value: Int) {
+        settingsRepo.idleTimeoutMinutes = value
+        _idleTimeoutMinutes.value = value
     }
 
     fun renameBoard(name: String) {

@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -64,6 +65,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -118,8 +120,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Five minutes of no interaction before the board snaps back to its home page. */
-private const val IDLE_TIMEOUT_MS = 5 * 60 * 1000L
+/** Choices offered for the auto-return-to-home idle timeout in [SettingsDialog]; 0 means "Off". */
+private val IDLE_TIMEOUT_OPTIONS_MINUTES = listOf(0, 1, 2, 5, 10)
 
 /** Placeholder until the first tagged release exists — update alongside each real release. */
 private const val APP_VERSION = "vX.X.X"
@@ -150,6 +152,7 @@ fun BoardScreen(
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
     val presets by vm.presets.collectAsStateWithLifecycle()
     val openOnHomePage by vm.openOnHomePage.collectAsStateWithLifecycle()
+    val idleTimeoutMinutes by vm.idleTimeoutMinutes.collectAsStateWithLifecycle()
     var editingTarget by remember { mutableStateOf<EditTarget?>(null) }
     var gridDialogIndex by remember { mutableStateOf<Int?>(null) }
     var showSavePresetDialog by remember { mutableStateOf(false) }
@@ -160,6 +163,7 @@ fun BoardScreen(
     var pageOptionsIndex by remember { mutableStateOf<Int?>(null) }
     var pageColorDialogIndex by remember { mutableStateOf<Int?>(null) }
     var showMenu by remember { mutableStateOf(false) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
     var isDragActive by remember { mutableStateOf(false) }
@@ -209,11 +213,13 @@ fun BoardScreen(
         }
     }
 
-    // Auto-return to the home page after a few idle minutes. Restarts on every
-    // interaction (lastInteractionAt changing cancels the previous delay).
-    LaunchedEffect(lastInteractionAt, board.homePageIndex) {
+    // Auto-return to the home page after a few idle minutes (configurable in
+    // SettingsDialog; 0 disables it). Restarts on every interaction
+    // (lastInteractionAt changing cancels the previous delay).
+    LaunchedEffect(lastInteractionAt, board.homePageIndex, idleTimeoutMinutes) {
         val home = board.homePageIndex ?: return@LaunchedEffect
-        delay(IDLE_TIMEOUT_MS)
+        if (idleTimeoutMinutes <= 0) return@LaunchedEffect
+        delay(idleTimeoutMinutes * 60_000L)
         if (home != board.currentPageIndex) {
             vm.switchPage(home)
         }
@@ -298,28 +304,15 @@ fun BoardScreen(
                                     )
                                 }
                                 HorizontalDivider()
-                                // Startup behavior — see BoardViewModel.openOnHomePage
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            Icons.Filled.Home,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(Modifier.width(12.dp))
-                                        Text("Open on home page")
+                                // Settings — see SettingsDialog
+                                DropdownMenuItem(
+                                    text = { Text("Settings") },
+                                    leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        showSettingsDialog = true
                                     }
-                                    Switch(
-                                        checked = openOnHomePage,
-                                        onCheckedChange = { vm.setOpenOnHomePage(it) }
-                                    )
-                                }
+                                )
                                 HorizontalDivider()
                                 if (board.pinnedTiles.isEmpty()) {
                                     MenuSectionHeader("Pages")
@@ -574,6 +567,16 @@ fun BoardScreen(
                 onDismiss = { pageColorDialogIndex = null }
             )
         }
+    }
+
+    if (showSettingsDialog) {
+        SettingsDialog(
+            openOnHomePage = openOnHomePage,
+            onOpenOnHomePageChange = vm::setOpenOnHomePage,
+            idleTimeoutMinutes = idleTimeoutMinutes,
+            onIdleTimeoutMinutesChange = vm::setIdleTimeoutMinutes,
+            onDismiss = { showSettingsDialog = false }
+        )
     }
 
     if (showSavePresetDialog) {
@@ -1189,6 +1192,52 @@ private fun PageColorDialog(current: Int?, onSelect: (Int?) -> Unit, onDismiss: 
                         selected = color?.toArgb() == current,
                         onClick = { onSelect(color?.toArgb()) }
                     )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
+/** App-level preferences that aren't page content — see [com.example.soundboard.data.SettingsRepository]. */
+@Composable
+private fun SettingsDialog(
+    openOnHomePage: Boolean,
+    onOpenOnHomePageChange: (Boolean) -> Unit,
+    idleTimeoutMinutes: Int,
+    onIdleTimeoutMinutesChange: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Settings") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Open on home page")
+                    Switch(checked = openOnHomePage, onCheckedChange = onOpenOnHomePageChange)
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Auto-return to home page after", style = MaterialTheme.typography.bodyMedium)
+                IDLE_TIMEOUT_OPTIONS_MINUTES.forEach { minutes ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onIdleTimeoutMinutesChange(minutes) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = minutes == idleTimeoutMinutes,
+                            onClick = { onIdleTimeoutMinutesChange(minutes) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (minutes == 0) "Off" else "$minutes min")
+                    }
                 }
             }
         },

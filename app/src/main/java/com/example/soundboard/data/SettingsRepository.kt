@@ -12,7 +12,14 @@ class SettingsRepository(context: Context) {
         get() = prefs.getBoolean(KEY_OPEN_ON_HOME_PAGE, false)
         set(value) = prefs.edit().putBoolean(KEY_OPEN_ON_HOME_PAGE, value).apply()
 
+    /** Minutes of inactivity before the board auto-returns to its home page; 0 disables auto-return. */
+    var idleTimeoutMinutes: Int
+        get() = prefs.getInt(KEY_IDLE_TIMEOUT_MINUTES, DEFAULT_IDLE_TIMEOUT_MINUTES)
+        set(value) = prefs.edit().putInt(KEY_IDLE_TIMEOUT_MINUTES, value).apply()
+
     private companion object {
         const val KEY_OPEN_ON_HOME_PAGE = "open_on_home_page"
+        const val KEY_IDLE_TIMEOUT_MINUTES = "idle_timeout_minutes"
+        const val DEFAULT_IDLE_TIMEOUT_MINUTES = 5
     }
 }

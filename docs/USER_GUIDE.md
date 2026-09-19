@@ -189,10 +189,8 @@ it.
 
 ## App version
 
-The bottom of the **☰** menu shows the app's version (e.g. `vX.X.X` until the
-first real release exists). Tapping it opens the project's release page on
-GitHub in your browser — the general releases list for now, switching to
-that specific version's own release notes once a real release exists.
+The bottom of the **☰** menu shows the app's version (e.g. `v0.1.0`). Tapping
+it opens that version's own release notes on GitHub in your browser.
 
 ## Long clips
 

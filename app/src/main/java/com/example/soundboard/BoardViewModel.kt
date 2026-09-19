@@ -322,11 +322,11 @@ class BoardViewModel(
         }
     }
 
-    /** Factory presets bundled with this build — Steve's ships in every build; Jeremy's only where its asset is actually packaged (debug builds). */
+    /** Factory presets bundled with this build — Jeremy's ships in every build; Steve's only where its asset is actually packaged (debug builds). */
     fun factoryPresets(context: Context): List<PresetRef.Factory> = buildList {
-        add(PresetRef.Factory(FALLBACK_PRESET_ASSET, "Steve Draft Care Board"))
-        if (runCatching { context.assets.open(JEREMY_PRESET_ASSET).close() }.isSuccess) {
-            add(PresetRef.Factory(JEREMY_PRESET_ASSET, "Jeremy Draft Care Board"))
+        add(PresetRef.Factory(JEREMY_PRESET_ASSET, "Jeremy Draft Care Board"))
+        if (runCatching { context.assets.open(STEVE_PRESET_ASSET).close() }.isSuccess) {
+            add(PresetRef.Factory(STEVE_PRESET_ASSET, "Steve Draft Care Board"))
         }
     }
 
@@ -402,10 +402,13 @@ class BoardViewModel(
 
     companion object {
         /** Bundled in every build (src/main/assets/); see [BoardRepository.importFromAsset]. */
-        private const val FALLBACK_PRESET_ASSET = "steve-care-board.zip"
+        private const val JEREMY_PRESET_ASSET = "jeremy-care-board.zip"
+
+        /** Shipped as the default/fallback board for now. */
+        private const val FALLBACK_PRESET_ASSET = JEREMY_PRESET_ASSET
 
         /** Debug-only (src/debug/assets/) — only actually available where that asset is packaged. */
-        private const val JEREMY_PRESET_ASSET = "jeremy-care-board.zip"
+        private const val STEVE_PRESET_ASSET = "steve-care-board.zip"
 
         /** Fixed width of a newly-created pinned row — independent of any page's column count (#15). */
         private const val PINNED_ROW_SIZE = 4

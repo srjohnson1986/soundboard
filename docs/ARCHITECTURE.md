@@ -232,7 +232,7 @@ which is either `Saved(id)` (loaded via `PresetRepository.load()`, then
 (the two bundled zips, still going through `BoardRepository.importFromAsset()`
 exactly as before — they're self-contained zips, not lightweight JSON, so
 they don't need `PresetRepository` at all). `factoryPresets(context)` builds
-that Factory list by attempting `context.assets.open(assetName)` — Jeremy's
+that Factory list by attempting `context.assets.open(assetName)` — Steve's
 entry simply doesn't appear when its asset isn't packaged (debug builds
 only), the same practical availability the old `BuildConfig.DEBUG`-gated menu
 item had, without importing `BuildConfig` into the ViewModel.
@@ -426,7 +426,7 @@ gesture.
   **Export backup**/**Import backup**. **Save as preset** opens
   `TextInputDialog` against `vm.saveAsPreset()`. **Load preset** calls
   `vm.refreshPresets()` then opens `PresetPickerDialog`, listing
-  `vm.factoryPresets(context)` (bundled zips — Jeremy's only appears where
+  `vm.factoryPresets(context)` (bundled zips — Steve's only appears where
   its asset actually opens, i.e. debug builds) above `vm.presets` (on-device
   saved snapshots, newest first). Picking one routes through
   `requestApplyPreset()`, mirroring `requestDeletePage()`'s shape: a confirm

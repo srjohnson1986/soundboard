@@ -287,15 +287,16 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `the bundled steve-care-board preset imports and loads as a valid four-page board`() {
-        // Regression coverage for the actual shipped preset (presets/steve-care-board.zip,
-        // mirrored at app/src/main/assets/steve-care-board.zip) — guards against the zip
+    fun `the bundled jeremy-care-board preset imports and loads as a valid four-page board`() {
+        // Regression coverage for the actual shipped preset (presets/jeremy-care-board.zip,
+        // mirrored at app/src/main/assets/jeremy-care-board.zip) — guards against the zip
         // and the app's Board schema drifting apart silently.
-        val imported = repo.importFromAsset("steve-care-board.zip")
+        val imported = repo.importFromAsset("jeremy-care-board.zip")
 
         assertTrue(imported)
         val board = repo.load()
 
+        assertEquals("Jeremy Draft Care Board", board.name)
         assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
         assertEquals(1, board.homePageIndex)
         assertEquals(4, board.pinnedTiles.size)
@@ -312,14 +313,14 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `the jeremy-care-board preset imports and loads as a valid four-page board`() {
-        // presets/jeremy-care-board.zip isn't a bundled asset (it's loaded via the
-        // app's Import button, not auto-loaded like steve-care-board.zip), so this
-        // exercises the same import path a user tapping Import would, via a fake
-        // content:// uri pointed at the checked-in zip.
-        val zip = File("../presets/jeremy-care-board.zip")
+    fun `the steve-care-board preset imports and loads as a valid four-page board`() {
+        // presets/steve-care-board.zip is debug-only now (app/src/debug/assets/), not
+        // auto-loaded like jeremy-care-board.zip, so this exercises the same import
+        // path a user tapping Import would, via a fake content:// uri pointed at the
+        // checked-in zip.
+        val zip = File("../presets/steve-care-board.zip")
         assertTrue("expected ${zip.absolutePath} to exist", zip.exists())
-        val uri = Uri.parse("content://fake/jeremy-care-board.zip")
+        val uri = Uri.parse("content://fake/steve-care-board.zip")
         shadowOf(context.contentResolver).registerInputStream(uri, zip.inputStream())
 
         val imported = repo.importFrom(uri)
@@ -327,7 +328,6 @@ class BoardRepositoryTest {
         assertTrue(imported)
         val board = repo.load()
 
-        assertEquals("Jeremy Draft Care Board", board.name)
         assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
         assertEquals(1, board.homePageIndex)
         assertEquals(4, board.pinnedTiles.size)

@@ -471,6 +471,8 @@ class BoardViewModelTest {
         vm.setKeepScreenAwake(true)
         vm.setHapticFeedbackEnabled(false)
         vm.setPinnedRowSize(6)
+        vm.setDefaultPageRows(2)
+        vm.setDefaultPageColumns(6)
 
         vm.saveAsPreset("Version 1")
         val savedId = vm.presets.value.first().id
@@ -481,6 +483,8 @@ class BoardViewModelTest {
         vm.setKeepScreenAwake(false)
         vm.setHapticFeedbackEnabled(true)
         vm.setPinnedRowSize(4)
+        vm.setDefaultPageRows(4)
+        vm.setDefaultPageColumns(4)
 
         vm.applyPreset(PresetRef.Saved(savedId))
 
@@ -491,6 +495,8 @@ class BoardViewModelTest {
         assertTrue(vm.board.value.keepScreenAwake)
         assertFalse(vm.board.value.hapticFeedbackEnabled)
         assertEquals(6, vm.board.value.pinnedRowSize)
+        assertEquals(2, vm.board.value.defaultPageRows)
+        assertEquals(6, vm.board.value.defaultPageColumns)
     }
 
     @Test
@@ -527,6 +533,20 @@ class BoardViewModelTest {
         assertEquals(6, vm.board.value.pinnedRowSize)
         val second = newViewModel()
         assertEquals(6, second.board.value.pinnedRowSize)
+    }
+
+    @Test
+    fun `setDefaultPageRows and setDefaultPageColumns persist across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setDefaultPageRows(2)
+        vm.setDefaultPageColumns(6)
+
+        assertEquals(2, vm.board.value.defaultPageRows)
+        assertEquals(6, vm.board.value.defaultPageColumns)
+        val second = newViewModel()
+        assertEquals(2, second.board.value.defaultPageRows)
+        assertEquals(6, second.board.value.defaultPageColumns)
     }
 
     @Test

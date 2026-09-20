@@ -623,6 +623,10 @@ fun BoardScreen(
             onHapticFeedbackEnabledChange = vm::setHapticFeedbackEnabled,
             pinnedRowSize = board.pinnedRowSize,
             onPinnedRowSizeChange = vm::setPinnedRowSize,
+            defaultPageRows = board.defaultPageRows,
+            onDefaultPageRowsChange = vm::setDefaultPageRows,
+            defaultPageColumns = board.defaultPageColumns,
+            onDefaultPageColumnsChange = vm::setDefaultPageColumns,
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1268,6 +1272,10 @@ private fun SettingsDialog(
     onHapticFeedbackEnabledChange: (Boolean) -> Unit,
     pinnedRowSize: Int,
     onPinnedRowSizeChange: (Int) -> Unit,
+    defaultPageRows: Int,
+    onDefaultPageRowsChange: (Int) -> Unit,
+    defaultPageColumns: Int,
+    onDefaultPageColumnsChange: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -1380,6 +1388,10 @@ private fun SettingsDialog(
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Stepper("Pinned row width", pinnedRowSize, onPinnedRowSizeChange)
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Default grid size for new pages", style = MaterialTheme.typography.bodyMedium)
+                Stepper("Rows", defaultPageRows, onDefaultPageRowsChange)
+                Stepper("Columns", defaultPageColumns, onDefaultPageColumnsChange)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }

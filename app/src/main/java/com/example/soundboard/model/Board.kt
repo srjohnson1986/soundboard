@@ -71,7 +71,15 @@ data class Board(
     val pages: List<Page> = listOf(Page()),
     val currentPageIndex: Int = 0,
     /** Shown fixed above every page's scrollable grid, identical everywhere — not per-page data. */
-    val pinnedTiles: List<Tile> = emptyList()
+    val pinnedTiles: List<Tile> = emptyList(),
+    // The settings below live on the board rather than in device SharedPreferences so they
+    // travel with it — switching to a different person's preset switches these too.
+    /** Whether a fresh launch jumps straight to the home page instead of resuming the last-viewed one. */
+    val openOnHomePage: Boolean = false,
+    /** Minutes of inactivity before auto-returning to the home page; 0 disables auto-return. */
+    val idleTimeoutMinutes: Int = 5,
+    /** How long a page-tab press must be held before it counts as a long-press, in milliseconds. */
+    val longPressDurationMillis: Int = 500
 ) {
     val currentPage: Page get() = pages[currentPageIndex.coerceIn(pages.indices)]
 

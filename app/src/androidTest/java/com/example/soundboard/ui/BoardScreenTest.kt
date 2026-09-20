@@ -20,7 +20,6 @@ import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.Recorder
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.PresetRepository
-import com.example.soundboard.data.SettingsRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
@@ -63,7 +62,7 @@ class BoardScreenTest {
         repo = BoardRepository(context)
         repo.save(board)
         player = FakePlayer()
-        vm = BoardViewModel(repo, player, FakeRecorder(), PresetRepository(context), SettingsRepository(context))
+        vm = BoardViewModel(repo, player, FakeRecorder(), PresetRepository(context))
 
         composeRule.setContent {
             BoardScreen(vm = vm)

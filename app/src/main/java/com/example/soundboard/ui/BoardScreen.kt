@@ -161,9 +161,6 @@ fun BoardScreen(
     val message by vm.message.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
     val presets by vm.presets.collectAsStateWithLifecycle()
-    val openOnHomePage by vm.openOnHomePage.collectAsStateWithLifecycle()
-    val idleTimeoutMinutes by vm.idleTimeoutMinutes.collectAsStateWithLifecycle()
-    val longPressDurationMillis by vm.longPressDurationMillis.collectAsStateWithLifecycle()
     var editingTarget by remember { mutableStateOf<EditTarget?>(null) }
     var gridDialogIndex by remember { mutableStateOf<Int?>(null) }
     var showSavePresetDialog by remember { mutableStateOf(false) }
@@ -227,10 +224,10 @@ fun BoardScreen(
     // Auto-return to the home page after a few idle minutes (configurable in
     // SettingsDialog; 0 disables it). Restarts on every interaction
     // (lastInteractionAt changing cancels the previous delay).
-    LaunchedEffect(lastInteractionAt, board.homePageIndex, idleTimeoutMinutes) {
+    LaunchedEffect(lastInteractionAt, board.homePageIndex, board.idleTimeoutMinutes) {
         val home = board.homePageIndex ?: return@LaunchedEffect
-        if (idleTimeoutMinutes <= 0) return@LaunchedEffect
-        delay(idleTimeoutMinutes * 60_000L)
+        if (board.idleTimeoutMinutes <= 0) return@LaunchedEffect
+        delay(board.idleTimeoutMinutes * 60_000L)
         if (home != board.currentPageIndex) {
             vm.switchPage(home)
         }
@@ -409,7 +406,7 @@ fun BoardScreen(
                         // pass and win the race against Tab's own click before it can consume
                         // the eventual up event on the Main pass — see the note above.
                         Box(
-                            modifier = Modifier.pointerInput(page.id, longPressDurationMillis) {
+                            modifier = Modifier.pointerInput(page.id, board.longPressDurationMillis) {
                                 awaitEachGesture {
                                     val down = awaitFirstDown(pass = PointerEventPass.Initial)
                                     // Races the long-press timeout against the pointer either
@@ -418,7 +415,7 @@ fun BoardScreen(
                                     // the tab row itself, #34). The while(true) loop below only
                                     // exits via an explicit return, so withTimeoutOrNull returns
                                     // null exactly when the timeout genuinely wins that race.
-                                    val longPressed = withTimeoutOrNull(longPressDurationMillis.toLong()) {
+                                    val longPressed = withTimeoutOrNull(board.longPressDurationMillis.toLong()) {
                                         while (true) {
                                             val event = awaitPointerEvent(pass = PointerEventPass.Initial)
                                             val change = event.changes.firstOrNull { it.id == down.id } ?: continue
@@ -596,11 +593,11 @@ fun BoardScreen(
 
     if (showSettingsDialog) {
         SettingsDialog(
-            openOnHomePage = openOnHomePage,
+            openOnHomePage = board.openOnHomePage,
             onOpenOnHomePageChange = vm::setOpenOnHomePage,
-            idleTimeoutMinutes = idleTimeoutMinutes,
+            idleTimeoutMinutes = board.idleTimeoutMinutes,
             onIdleTimeoutMinutesChange = vm::setIdleTimeoutMinutes,
-            longPressDurationMillis = longPressDurationMillis,
+            longPressDurationMillis = board.longPressDurationMillis,
             onLongPressDurationMillisChange = vm::setLongPressDurationMillis,
             onDismiss = { showSettingsDialog = false }
         )

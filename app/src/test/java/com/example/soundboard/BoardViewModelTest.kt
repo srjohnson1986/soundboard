@@ -450,6 +450,17 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `setHapticFeedbackEnabled persists across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setHapticFeedbackEnabled(false)
+
+        assertFalse(vm.board.value.hapticFeedbackEnabled)
+        val second = newViewModel()
+        assertFalse(second.board.value.hapticFeedbackEnabled)
+    }
+
+    @Test
     fun `settings are captured by saveAsPreset and restored by applyPreset`() {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
@@ -458,6 +469,7 @@ class BoardViewModelTest {
         vm.setLongPressDurationMillis(800)
         vm.setThemeMode(ThemeMode.DARK)
         vm.setKeepScreenAwake(true)
+        vm.setHapticFeedbackEnabled(false)
 
         vm.saveAsPreset("Version 1")
         val savedId = vm.presets.value.first().id
@@ -466,6 +478,7 @@ class BoardViewModelTest {
         vm.setLongPressDurationMillis(500)
         vm.setThemeMode(ThemeMode.SYSTEM)
         vm.setKeepScreenAwake(false)
+        vm.setHapticFeedbackEnabled(true)
 
         vm.applyPreset(PresetRef.Saved(savedId))
 
@@ -474,6 +487,7 @@ class BoardViewModelTest {
         assertEquals(800, vm.board.value.longPressDurationMillis)
         assertEquals(ThemeMode.DARK, vm.board.value.themeMode)
         assertTrue(vm.board.value.keepScreenAwake)
+        assertFalse(vm.board.value.hapticFeedbackEnabled)
     }
 
     @Test

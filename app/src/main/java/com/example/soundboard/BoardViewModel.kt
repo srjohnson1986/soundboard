@@ -232,6 +232,10 @@ class BoardViewModel(
         commit(_board.value.copy(keepScreenAwake = value))
     }
 
+    fun setHapticFeedbackEnabled(value: Boolean) {
+        commit(_board.value.copy(hapticFeedbackEnabled = value))
+    }
+
     fun renameBoard(name: String) {
         commit(_board.value.copy(name = name.ifBlank { "New Board" }))
     }

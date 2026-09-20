@@ -14,6 +14,7 @@ import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Board
+import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
@@ -221,6 +222,10 @@ class BoardViewModel(
     /** How long a page-tab press must be held before it counts as a long-press, in milliseconds. */
     fun setLongPressDurationMillis(value: Int) {
         commit(_board.value.copy(longPressDurationMillis = value))
+    }
+
+    fun setThemeMode(mode: ThemeMode) {
+        commit(_board.value.copy(themeMode = mode))
     }
 
     fun renameBoard(name: String) {

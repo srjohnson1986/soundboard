@@ -8,6 +8,7 @@ import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
+import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import java.io.ByteArrayInputStream
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -427,24 +428,38 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `setThemeMode persists across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setThemeMode(ThemeMode.DARK)
+
+        assertEquals(ThemeMode.DARK, vm.board.value.themeMode)
+        val second = newViewModel()
+        assertEquals(ThemeMode.DARK, second.board.value.themeMode)
+    }
+
+    @Test
     fun `settings are captured by saveAsPreset and restored by applyPreset`() {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
         vm.setOpenOnHomePage(true)
         vm.setIdleTimeoutMinutes(2)
         vm.setLongPressDurationMillis(800)
+        vm.setThemeMode(ThemeMode.DARK)
 
         vm.saveAsPreset("Version 1")
         val savedId = vm.presets.value.first().id
         vm.setOpenOnHomePage(false)
         vm.setIdleTimeoutMinutes(5)
         vm.setLongPressDurationMillis(500)
+        vm.setThemeMode(ThemeMode.SYSTEM)
 
         vm.applyPreset(PresetRef.Saved(savedId))
 
         assertTrue(vm.board.value.openOnHomePage)
         assertEquals(2, vm.board.value.idleTimeoutMinutes)
         assertEquals(800, vm.board.value.longPressDurationMillis)
+        assertEquals(ThemeMode.DARK, vm.board.value.themeMode)
     }
 
     @Test

@@ -91,7 +91,10 @@ data class Board(
     /** Whether long-press haptics (page-tab options, tile drag-reorder arm) fire. */
     val hapticFeedbackEnabled: Boolean = true,
     /** Width of a newly-created pinned row — only takes effect before one exists (see BoardViewModel.addPinnedRow). */
-    val pinnedRowSize: Int = 4
+    val pinnedRowSize: Int = 4,
+    /** Grid size a newly-added page starts at — it can still be resized individually afterward. */
+    val defaultPageRows: Int = 4,
+    val defaultPageColumns: Int = 4
 ) {
     val currentPage: Page get() = pages[currentPageIndex.coerceIn(pages.indices)]
 
@@ -113,8 +116,18 @@ data class Board(
     }
 
     /** Appends a new empty page and switches to it. */
-    fun addPage(name: String = "Page ${pages.size + 1}"): Board =
-        copy(pages = pages + Page(name = name), currentPageIndex = pages.size)
+    fun addPage(name: String = "Page ${pages.size + 1}"): Board {
+        // Page's own tiles default (List(16)) is sized for its own 4x4 rows/columns default,
+        // not necessarily this board's configured default — build tiles to actually match so
+        // a larger default grid (e.g. 6x6) doesn't start with fewer tiles than cells.
+        val newPage = Page(
+            name = name,
+            rows = defaultPageRows,
+            columns = defaultPageColumns,
+            tiles = List(defaultPageRows * defaultPageColumns) { Tile() }
+        )
+        return copy(pages = pages + newPage, currentPageIndex = pages.size)
+    }
 
     /** Removes the page at [index]; a no-op if it's the only page left. */
     fun removePage(index: Int): Board {

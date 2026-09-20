@@ -201,6 +201,14 @@ class BoardViewModel(
         commit(_board.value.copy(pinnedRowSize = value))
     }
 
+    fun setDefaultPageRows(value: Int) {
+        commit(_board.value.copy(defaultPageRows = value))
+    }
+
+    fun setDefaultPageColumns(value: Int) {
+        commit(_board.value.copy(defaultPageColumns = value))
+    }
+
     fun resize(index: Int, rows: Int, columns: Int) {
         commit(_board.value.updatingPage(index) { it.resized(rows, columns) })
     }

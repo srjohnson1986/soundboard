@@ -31,6 +31,25 @@ class BoardTest {
     }
 
     @Test
+    fun `addPage uses the board's configured default grid size, tiles included`() {
+        // 6x6 = 36 tiles, deliberately more than Page's own 16-tile default — a naive
+        // Page(rows=6, columns=6) with no explicit tiles would under-fill the grid.
+        val board = Board(
+            pages = listOf(Page(name = "First")),
+            defaultPageRows = 6,
+            defaultPageColumns = 6
+        )
+
+        val result = board.addPage("Second")
+
+        val added = result.pages[1]
+        assertEquals(6, added.rows)
+        assertEquals(6, added.columns)
+        assertEquals(36, added.tiles.size)
+        assertEquals(36, added.visibleTiles.size)
+    }
+
+    @Test
     fun `removePage is a no-op when only one page remains`() {
         val board = Board(pages = listOf(Page(name = "Only")))
 

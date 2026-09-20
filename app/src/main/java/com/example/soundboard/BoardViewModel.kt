@@ -43,6 +43,9 @@ class BoardViewModel(
     private val _idleTimeoutMinutes = MutableStateFlow(settingsRepo.idleTimeoutMinutes)
     val idleTimeoutMinutes: StateFlow<Int> = _idleTimeoutMinutes.asStateFlow()
 
+    private val _longPressDurationMillis = MutableStateFlow(settingsRepo.longPressDurationMillis)
+    val longPressDurationMillis: StateFlow<Int> = _longPressDurationMillis.asStateFlow()
+
     /** One-off status text for the UI to show (e.g. in a Snackbar), then clear. */
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
@@ -226,6 +229,12 @@ class BoardViewModel(
     fun setIdleTimeoutMinutes(value: Int) {
         settingsRepo.idleTimeoutMinutes = value
         _idleTimeoutMinutes.value = value
+    }
+
+    /** How long a page-tab press must be held before it counts as a long-press, in milliseconds. */
+    fun setLongPressDurationMillis(value: Int) {
+        settingsRepo.longPressDurationMillis = value
+        _longPressDurationMillis.value = value
     }
 
     fun renameBoard(name: String) {

@@ -398,6 +398,17 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `setLongPressDurationMillis persists across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setLongPressDurationMillis(800)
+
+        assertEquals(800, vm.longPressDurationMillis.value)
+        val second = newViewModel()
+        assertEquals(800, second.longPressDurationMillis.value)
+    }
+
+    @Test
     fun `addPinnedRow materializes a fixed-width empty row regardless of the current page and persists`() {
         // Fixed at 4 regardless of the page's own column count (3 here) — the
         // pinned row is deliberately decoupled from page grid width (#15).

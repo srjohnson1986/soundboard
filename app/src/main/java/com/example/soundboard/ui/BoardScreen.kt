@@ -124,6 +124,14 @@ import kotlinx.coroutines.withTimeoutOrNull
 /** Choices offered for the auto-return-to-home idle timeout in [SettingsDialog]; 0 means "Off". */
 private val IDLE_TIMEOUT_OPTIONS_MINUTES = listOf(0, 1, 2, 5, 10)
 
+/**
+ * Choices offered for the page-tab long-press duration in [SettingsDialog]. 500ms is the
+ * Android platform default (ViewConfiguration.longPressTimeoutMillis); the longer options
+ * are for anyone who needs more of a deliberate hold before it fires, e.g. on a shared or
+ * care board someone else operates.
+ */
+private val LONG_PRESS_DURATION_OPTIONS_MILLIS = listOf(500, 800, 1200)
+
 /** Update alongside each tagged release — [RELEASE_URL] points at this tag's own notes. */
 private const val APP_VERSION = "v0.1.0"
 
@@ -150,6 +158,7 @@ fun BoardScreen(
     val presets by vm.presets.collectAsStateWithLifecycle()
     val openOnHomePage by vm.openOnHomePage.collectAsStateWithLifecycle()
     val idleTimeoutMinutes by vm.idleTimeoutMinutes.collectAsStateWithLifecycle()
+    val longPressDurationMillis by vm.longPressDurationMillis.collectAsStateWithLifecycle()
     var editingTarget by remember { mutableStateOf<EditTarget?>(null) }
     var gridDialogIndex by remember { mutableStateOf<Int?>(null) }
     var showSavePresetDialog by remember { mutableStateOf(false) }
@@ -395,7 +404,7 @@ fun BoardScreen(
                         // pass and win the race against Tab's own click before it can consume
                         // the eventual up event on the Main pass — see the note above.
                         Box(
-                            modifier = Modifier.pointerInput(page.id) {
+                            modifier = Modifier.pointerInput(page.id, longPressDurationMillis) {
                                 awaitEachGesture {
                                     val down = awaitFirstDown(pass = PointerEventPass.Initial)
                                     // Races the long-press timeout against the pointer either
@@ -404,7 +413,7 @@ fun BoardScreen(
                                     // the tab row itself, #34). The while(true) loop below only
                                     // exits via an explicit return, so withTimeoutOrNull returns
                                     // null exactly when the timeout genuinely wins that race.
-                                    val longPressed = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                    val longPressed = withTimeoutOrNull(longPressDurationMillis.toLong()) {
                                         while (true) {
                                             val event = awaitPointerEvent(pass = PointerEventPass.Initial)
                                             val change = event.changes.firstOrNull { it.id == down.id } ?: continue
@@ -586,6 +595,8 @@ fun BoardScreen(
             onOpenOnHomePageChange = vm::setOpenOnHomePage,
             idleTimeoutMinutes = idleTimeoutMinutes,
             onIdleTimeoutMinutesChange = vm::setIdleTimeoutMinutes,
+            longPressDurationMillis = longPressDurationMillis,
+            onLongPressDurationMillisChange = vm::setLongPressDurationMillis,
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1217,6 +1228,8 @@ private fun SettingsDialog(
     onOpenOnHomePageChange: (Boolean) -> Unit,
     idleTimeoutMinutes: Int,
     onIdleTimeoutMinutesChange: (Int) -> Unit,
+    longPressDurationMillis: Int,
+    onLongPressDurationMillisChange: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -1248,6 +1261,30 @@ private fun SettingsDialog(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(if (minutes == 0) "Off" else "$minutes min")
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Long-press duration", style = MaterialTheme.typography.bodyMedium)
+                LONG_PRESS_DURATION_OPTIONS_MILLIS.forEach { millis ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onLongPressDurationMillisChange(millis) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = millis == longPressDurationMillis,
+                            onClick = { onLongPressDurationMillisChange(millis) }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            when (millis) {
+                                500 -> "Default"
+                                800 -> "Long"
+                                else -> "Longer"
+                            }
+                        )
                     }
                 }
             }

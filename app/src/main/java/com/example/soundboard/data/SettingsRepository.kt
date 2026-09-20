@@ -17,9 +17,17 @@ class SettingsRepository(context: Context) {
         get() = prefs.getInt(KEY_IDLE_TIMEOUT_MINUTES, DEFAULT_IDLE_TIMEOUT_MINUTES)
         set(value) = prefs.edit().putInt(KEY_IDLE_TIMEOUT_MINUTES, value).apply()
 
+    /** How long a page-tab press must be held before it's treated as a long-press, in milliseconds. */
+    var longPressDurationMillis: Int
+        get() = prefs.getInt(KEY_LONG_PRESS_DURATION_MILLIS, DEFAULT_LONG_PRESS_DURATION_MILLIS)
+        set(value) = prefs.edit().putInt(KEY_LONG_PRESS_DURATION_MILLIS, value).apply()
+
     private companion object {
         const val KEY_OPEN_ON_HOME_PAGE = "open_on_home_page"
         const val KEY_IDLE_TIMEOUT_MINUTES = "idle_timeout_minutes"
         const val DEFAULT_IDLE_TIMEOUT_MINUTES = 5
+        const val KEY_LONG_PRESS_DURATION_MILLIS = "long_press_duration_millis"
+        /** Matches the Android platform default (ViewConfiguration.longPressTimeoutMillis). */
+        const val DEFAULT_LONG_PRESS_DURATION_MILLIS = 500
     }
 }

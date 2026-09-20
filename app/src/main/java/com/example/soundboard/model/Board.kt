@@ -89,7 +89,9 @@ data class Board(
     /** Whether to prevent the screen from auto-locking while the board is open. */
     val keepScreenAwake: Boolean = false,
     /** Whether long-press haptics (page-tab options, tile drag-reorder arm) fire. */
-    val hapticFeedbackEnabled: Boolean = true
+    val hapticFeedbackEnabled: Boolean = true,
+    /** Width of a newly-created pinned row — only takes effect before one exists (see BoardViewModel.addPinnedRow). */
+    val pinnedRowSize: Int = 4
 ) {
     val currentPage: Page get() = pages[currentPageIndex.coerceIn(pages.indices)]
 

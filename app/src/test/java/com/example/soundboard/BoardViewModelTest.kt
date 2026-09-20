@@ -470,6 +470,7 @@ class BoardViewModelTest {
         vm.setThemeMode(ThemeMode.DARK)
         vm.setKeepScreenAwake(true)
         vm.setHapticFeedbackEnabled(false)
+        vm.setPinnedRowSize(6)
 
         vm.saveAsPreset("Version 1")
         val savedId = vm.presets.value.first().id
@@ -479,6 +480,7 @@ class BoardViewModelTest {
         vm.setThemeMode(ThemeMode.SYSTEM)
         vm.setKeepScreenAwake(false)
         vm.setHapticFeedbackEnabled(true)
+        vm.setPinnedRowSize(4)
 
         vm.applyPreset(PresetRef.Saved(savedId))
 
@@ -488,6 +490,7 @@ class BoardViewModelTest {
         assertEquals(ThemeMode.DARK, vm.board.value.themeMode)
         assertTrue(vm.board.value.keepScreenAwake)
         assertFalse(vm.board.value.hapticFeedbackEnabled)
+        assertEquals(6, vm.board.value.pinnedRowSize)
     }
 
     @Test
@@ -503,6 +506,27 @@ class BoardViewModelTest {
         assertTrue(vm.board.value.pinnedTiles.all { it.isEmpty })
         val second = newViewModel()
         assertEquals(4, second.board.value.pinnedTiles.size)
+    }
+
+    @Test
+    fun `addPinnedRow uses the board's configured pinnedRowSize`() {
+        repo.save(boardWith(Tile(id = "a")).copy(pinnedRowSize = 6))
+        val vm = newViewModel()
+
+        vm.addPinnedRow()
+
+        assertEquals(6, vm.board.value.pinnedTiles.size)
+    }
+
+    @Test
+    fun `setPinnedRowSize persists across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setPinnedRowSize(6)
+
+        assertEquals(6, vm.board.value.pinnedRowSize)
+        val second = newViewModel()
+        assertEquals(6, second.board.value.pinnedRowSize)
     }
 
     @Test

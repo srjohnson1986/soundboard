@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -620,6 +621,8 @@ fun BoardScreen(
             onKeepScreenAwakeChange = vm::setKeepScreenAwake,
             hapticFeedbackEnabled = board.hapticFeedbackEnabled,
             onHapticFeedbackEnabledChange = vm::setHapticFeedbackEnabled,
+            pinnedRowSize = board.pinnedRowSize,
+            onPinnedRowSizeChange = vm::setPinnedRowSize,
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1263,13 +1266,18 @@ private fun SettingsDialog(
     onKeepScreenAwakeChange: (Boolean) -> Unit,
     hapticFeedbackEnabled: Boolean,
     onHapticFeedbackEnabledChange: (Boolean) -> Unit,
+    pinnedRowSize: Int,
+    onPinnedRowSizeChange: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Settings") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1370,6 +1378,8 @@ private fun SettingsDialog(
                     Text("Haptic feedback")
                     Switch(checked = hapticFeedbackEnabled, onCheckedChange = onHapticFeedbackEnabledChange)
                 }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Stepper("Pinned row width", pinnedRowSize, onPinnedRowSizeChange)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }

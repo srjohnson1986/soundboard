@@ -439,6 +439,17 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `setKeepScreenAwake persists across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setKeepScreenAwake(true)
+
+        assertTrue(vm.board.value.keepScreenAwake)
+        val second = newViewModel()
+        assertTrue(second.board.value.keepScreenAwake)
+    }
+
+    @Test
     fun `settings are captured by saveAsPreset and restored by applyPreset`() {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
@@ -446,6 +457,7 @@ class BoardViewModelTest {
         vm.setIdleTimeoutMinutes(2)
         vm.setLongPressDurationMillis(800)
         vm.setThemeMode(ThemeMode.DARK)
+        vm.setKeepScreenAwake(true)
 
         vm.saveAsPreset("Version 1")
         val savedId = vm.presets.value.first().id
@@ -453,6 +465,7 @@ class BoardViewModelTest {
         vm.setIdleTimeoutMinutes(5)
         vm.setLongPressDurationMillis(500)
         vm.setThemeMode(ThemeMode.SYSTEM)
+        vm.setKeepScreenAwake(false)
 
         vm.applyPreset(PresetRef.Saved(savedId))
 
@@ -460,6 +473,7 @@ class BoardViewModelTest {
         assertEquals(2, vm.board.value.idleTimeoutMinutes)
         assertEquals(800, vm.board.value.longPressDurationMillis)
         assertEquals(ThemeMode.DARK, vm.board.value.themeMode)
+        assertTrue(vm.board.value.keepScreenAwake)
     }
 
     @Test

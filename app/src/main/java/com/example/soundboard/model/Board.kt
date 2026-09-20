@@ -85,7 +85,9 @@ data class Board(
     /** How long a page-tab press must be held before it counts as a long-press, in milliseconds. */
     val longPressDurationMillis: Int = 500,
     /** Whether to force light/dark or follow the system setting. */
-    val themeMode: ThemeMode = ThemeMode.SYSTEM
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    /** Whether to prevent the screen from auto-locking while the board is open. */
+    val keepScreenAwake: Boolean = false
 ) {
     val currentPage: Page get() = pages[currentPageIndex.coerceIn(pages.indices)]
 

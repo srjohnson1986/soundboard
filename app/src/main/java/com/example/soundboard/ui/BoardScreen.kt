@@ -82,6 +82,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -105,6 +106,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -232,6 +234,15 @@ fun BoardScreen(
         if (home != board.currentPageIndex) {
             vm.switchPage(home)
         }
+    }
+
+    // Prevents auto-lock while the board is on screen — meant for boards mounted or left
+    // open as a standing communication aid. Cleared onDispose so leaving BoardScreen (or
+    // toggling the setting off) doesn't leave the window flag stuck on.
+    val view = LocalView.current
+    DisposableEffect(board.keepScreenAwake) {
+        view.keepScreenOn = board.keepScreenAwake
+        onDispose { view.keepScreenOn = false }
     }
 
     val pagerState = rememberPagerState(initialPage = board.currentPageIndex) { board.pages.size }
@@ -602,6 +613,8 @@ fun BoardScreen(
             onLongPressDurationMillisChange = vm::setLongPressDurationMillis,
             themeMode = board.themeMode,
             onThemeModeChange = vm::setThemeMode,
+            keepScreenAwake = board.keepScreenAwake,
+            onKeepScreenAwakeChange = vm::setKeepScreenAwake,
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1238,6 +1251,8 @@ private fun SettingsDialog(
     onLongPressDurationMillisChange: (Int) -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
+    keepScreenAwake: Boolean,
+    onKeepScreenAwakeChange: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -1326,6 +1341,15 @@ private fun SettingsDialog(
                             )
                         }
                     }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Keep screen awake")
+                    Switch(checked = keepScreenAwake, onCheckedChange = onKeepScreenAwakeChange)
                 }
             }
         },

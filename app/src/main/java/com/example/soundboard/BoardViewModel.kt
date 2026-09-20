@@ -228,6 +228,10 @@ class BoardViewModel(
         commit(_board.value.copy(themeMode = mode))
     }
 
+    fun setKeepScreenAwake(value: Boolean) {
+        commit(_board.value.copy(keepScreenAwake = value))
+    }
+
     fun renameBoard(name: String) {
         commit(_board.value.copy(name = name.ifBlank { "New Board" }))
     }

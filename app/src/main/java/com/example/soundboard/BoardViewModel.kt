@@ -13,7 +13,6 @@ import com.example.soundboard.audio.SoundPlayer
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.data.SavedPreset
-import com.example.soundboard.data.SettingsRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Tile
 import java.io.File
@@ -30,21 +29,11 @@ class BoardViewModel(
     private val player: Player,
     private val recorder: Recorder,
     private val presetRepo: PresetRepository,
-    private val settingsRepo: SettingsRepository,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     private val _board = MutableStateFlow(Board())
     val board: StateFlow<Board> = _board.asStateFlow()
-
-    private val _openOnHomePage = MutableStateFlow(settingsRepo.openOnHomePage)
-    val openOnHomePage: StateFlow<Boolean> = _openOnHomePage.asStateFlow()
-
-    private val _idleTimeoutMinutes = MutableStateFlow(settingsRepo.idleTimeoutMinutes)
-    val idleTimeoutMinutes: StateFlow<Int> = _idleTimeoutMinutes.asStateFlow()
-
-    private val _longPressDurationMillis = MutableStateFlow(settingsRepo.longPressDurationMillis)
-    val longPressDurationMillis: StateFlow<Int> = _longPressDurationMillis.asStateFlow()
 
     /** One-off status text for the UI to show (e.g. in a Snackbar), then clear. */
     private val _message = MutableStateFlow<String?>(null)
@@ -67,7 +56,7 @@ class BoardViewModel(
             val loaded = withContext(ioDispatcher) { repo.load() }
             // Only overrides where the pager starts, not what's saved to disk — a plain
             // switchTo(), same as any other in-session page switch, see BoardViewModel.switchPage.
-            val initial = if (settingsRepo.openOnHomePage) {
+            val initial = if (loaded.openOnHomePage) {
                 loaded.homePageIndex?.let { loaded.switchTo(it) } ?: loaded
             } else {
                 loaded
@@ -221,20 +210,17 @@ class BoardViewModel(
 
     /** Whether a fresh launch jumps to the home page instead of resuming the last-viewed one. */
     fun setOpenOnHomePage(value: Boolean) {
-        settingsRepo.openOnHomePage = value
-        _openOnHomePage.value = value
+        commit(_board.value.copy(openOnHomePage = value))
     }
 
     /** Minutes of inactivity before auto-return to home; 0 disables it. */
     fun setIdleTimeoutMinutes(value: Int) {
-        settingsRepo.idleTimeoutMinutes = value
-        _idleTimeoutMinutes.value = value
+        commit(_board.value.copy(idleTimeoutMinutes = value))
     }
 
     /** How long a page-tab press must be held before it counts as a long-press, in milliseconds. */
     fun setLongPressDurationMillis(value: Int) {
-        settingsRepo.longPressDurationMillis = value
-        _longPressDurationMillis.value = value
+        commit(_board.value.copy(longPressDurationMillis = value))
     }
 
     fun renameBoard(name: String) {
@@ -412,8 +398,7 @@ class BoardViewModel(
                 BoardRepository(app),
                 SoundPlayer(),
                 AudioRecorder(app),
-                PresetRepository(app),
-                SettingsRepository(app)
+                PresetRepository(app)
             ) as T
         }
     }

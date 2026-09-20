@@ -6,7 +6,6 @@ import com.example.soundboard.audio.FakePlayer
 import com.example.soundboard.audio.FakeRecorder
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.PresetRepository
-import com.example.soundboard.data.SettingsRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
@@ -36,10 +35,9 @@ class BoardViewModelTest {
     private lateinit var player: FakePlayer
     private lateinit var recorder: FakeRecorder
     private lateinit var presetRepo: PresetRepository
-    private lateinit var settingsRepo: SettingsRepository
 
     private fun newViewModel() =
-        BoardViewModel(repo, player, recorder, presetRepo, settingsRepo, ioDispatcher = UnconfinedTestDispatcher())
+        BoardViewModel(repo, player, recorder, presetRepo, ioDispatcher = UnconfinedTestDispatcher())
 
     @Before
     fun setUp() {
@@ -48,7 +46,6 @@ class BoardViewModelTest {
         player = FakePlayer()
         recorder = FakeRecorder()
         presetRepo = PresetRepository(context)
-        settingsRepo = SettingsRepository(context)
     }
 
     private fun boardWith(vararg tiles: Tile) = Board(
@@ -365,8 +362,13 @@ class BoardViewModelTest {
 
     @Test
     fun `openOnHomePage jumps a fresh view model to the home page without touching disk`() {
-        repo.save(Board(pages = listOf(Page(name = "A", isHome = true), Page(name = "B")), currentPageIndex = 1))
-        settingsRepo.openOnHomePage = true
+        repo.save(
+            Board(
+                pages = listOf(Page(name = "A", isHome = true), Page(name = "B")),
+                currentPageIndex = 1,
+                openOnHomePage = true
+            )
+        )
 
         val vm = newViewModel()
 
@@ -378,8 +380,13 @@ class BoardViewModelTest {
 
     @Test
     fun `openOnHomePage is a no-op when no page is marked home`() {
-        repo.save(Board(pages = listOf(Page(name = "A"), Page(name = "B")), currentPageIndex = 1))
-        settingsRepo.openOnHomePage = true
+        repo.save(
+            Board(
+                pages = listOf(Page(name = "A"), Page(name = "B")),
+                currentPageIndex = 1,
+                openOnHomePage = true
+            )
+        )
 
         val vm = newViewModel()
 
@@ -392,9 +399,20 @@ class BoardViewModelTest {
 
         vm.setOpenOnHomePage(true)
 
-        assertTrue(vm.openOnHomePage.value)
+        assertTrue(vm.board.value.openOnHomePage)
         val second = newViewModel()
-        assertTrue(second.openOnHomePage.value)
+        assertTrue(second.board.value.openOnHomePage)
+    }
+
+    @Test
+    fun `setIdleTimeoutMinutes persists across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setIdleTimeoutMinutes(2)
+
+        assertEquals(2, vm.board.value.idleTimeoutMinutes)
+        val second = newViewModel()
+        assertEquals(2, second.board.value.idleTimeoutMinutes)
     }
 
     @Test
@@ -403,9 +421,30 @@ class BoardViewModelTest {
 
         vm.setLongPressDurationMillis(800)
 
-        assertEquals(800, vm.longPressDurationMillis.value)
+        assertEquals(800, vm.board.value.longPressDurationMillis)
         val second = newViewModel()
-        assertEquals(800, second.longPressDurationMillis.value)
+        assertEquals(800, second.board.value.longPressDurationMillis)
+    }
+
+    @Test
+    fun `settings are captured by saveAsPreset and restored by applyPreset`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+        vm.setOpenOnHomePage(true)
+        vm.setIdleTimeoutMinutes(2)
+        vm.setLongPressDurationMillis(800)
+
+        vm.saveAsPreset("Version 1")
+        val savedId = vm.presets.value.first().id
+        vm.setOpenOnHomePage(false)
+        vm.setIdleTimeoutMinutes(5)
+        vm.setLongPressDurationMillis(500)
+
+        vm.applyPreset(PresetRef.Saved(savedId))
+
+        assertTrue(vm.board.value.openOnHomePage)
+        assertEquals(2, vm.board.value.idleTimeoutMinutes)
+        assertEquals(800, vm.board.value.longPressDurationMillis)
     }
 
     @Test

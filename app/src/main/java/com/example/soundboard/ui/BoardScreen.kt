@@ -97,6 +97,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -396,11 +397,25 @@ fun BoardScreen(
                         Box(
                             modifier = Modifier.pointerInput(page.id) {
                                 awaitEachGesture {
-                                    awaitFirstDown(pass = PointerEventPass.Initial)
-                                    val up = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                                        waitForUpOrCancellation(pass = PointerEventPass.Initial)
-                                    }
-                                    if (up == null) {
+                                    val down = awaitFirstDown(pass = PointerEventPass.Initial)
+                                    // Races the long-press timeout against the pointer either
+                                    // lifting (a tap, left for Tab's own Main-pass click) or
+                                    // moving past touch-slop (a drag — most commonly scrolling
+                                    // the tab row itself, #34). The while(true) loop below only
+                                    // exits via an explicit return, so withTimeoutOrNull returns
+                                    // null exactly when the timeout genuinely wins that race.
+                                    val longPressed = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                        while (true) {
+                                            val event = awaitPointerEvent(pass = PointerEventPass.Initial)
+                                            val change = event.changes.firstOrNull { it.id == down.id } ?: continue
+                                            val movedPastSlop = (change.position - down.position)
+                                                .getDistance() > viewConfiguration.touchSlop
+                                            if (change.changedToUpIgnoreConsumed() || movedPastSlop) {
+                                                return@withTimeoutOrNull
+                                            }
+                                        }
+                                    } == null
+                                    if (longPressed) {
                                         tabHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                         pageOptionsIndex = index
                                         // Swallow the eventual release so Tab's own click,

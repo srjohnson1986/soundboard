@@ -3,6 +3,10 @@ package com.example.soundboard.model
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
+/** Whether the app follows the system's light/dark setting or is pinned to one. */
+@Serializable
+enum class ThemeMode { SYSTEM, LIGHT, DARK }
+
 /**
  * One pad on the board. [fileName] points at a file inside the app's private
  * sounds directory, never at the URI the user originally picked.
@@ -79,7 +83,9 @@ data class Board(
     /** Minutes of inactivity before auto-returning to the home page; 0 disables auto-return. */
     val idleTimeoutMinutes: Int = 5,
     /** How long a page-tab press must be held before it counts as a long-press, in milliseconds. */
-    val longPressDurationMillis: Int = 500
+    val longPressDurationMillis: Int = 500,
+    /** Whether to force light/dark or follow the system setting. */
+    val themeMode: ThemeMode = ThemeMode.SYSTEM
 ) {
     val currentPage: Page get() = pages[currentPageIndex.coerceIn(pages.indices)]
 

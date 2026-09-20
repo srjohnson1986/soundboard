@@ -117,6 +117,7 @@ import com.example.soundboard.BoardViewModel
 import com.example.soundboard.PresetRef
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Page
+import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.ui.theme.presetColors
 import kotlin.math.roundToInt
@@ -599,6 +600,8 @@ fun BoardScreen(
             onIdleTimeoutMinutesChange = vm::setIdleTimeoutMinutes,
             longPressDurationMillis = board.longPressDurationMillis,
             onLongPressDurationMillisChange = vm::setLongPressDurationMillis,
+            themeMode = board.themeMode,
+            onThemeModeChange = vm::setThemeMode,
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1233,6 +1236,8 @@ private fun SettingsDialog(
     onIdleTimeoutMinutesChange: (Int) -> Unit,
     longPressDurationMillis: Int,
     onLongPressDurationMillisChange: (Int) -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -1301,6 +1306,25 @@ private fun SettingsDialog(
                                 else -> "Longer"
                             }
                         )
+                    }
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Theme", style = MaterialTheme.typography.bodyMedium)
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    ThemeMode.entries.forEachIndexed { index, mode ->
+                        SegmentedButton(
+                            selected = mode == themeMode,
+                            onClick = { onThemeModeChange(mode) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = ThemeMode.entries.size)
+                        ) {
+                            Text(
+                                when (mode) {
+                                    ThemeMode.SYSTEM -> "System"
+                                    ThemeMode.LIGHT -> "Light"
+                                    ThemeMode.DARK -> "Dark"
+                                }
+                            )
+                        }
                     }
                 }
             }

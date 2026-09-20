@@ -58,6 +58,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -123,6 +126,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /** Choices offered for the auto-return-to-home idle timeout in [SettingsDialog]; 0 means "Off". */
 private val IDLE_TIMEOUT_OPTIONS_MINUTES = listOf(0, 1, 2, 5, 10)
+
+private fun idleTimeoutLabel(minutes: Int) = if (minutes == 0) "Off" else "$minutes min"
 
 /**
  * Choices offered for the page-tab long-press duration in [SettingsDialog]. 500ms is the
@@ -1222,6 +1227,7 @@ private fun PageColorDialog(current: Int?, onSelect: (Int?) -> Unit, onDismiss: 
 }
 
 /** App-level preferences that aren't page content — see [com.example.soundboard.data.SettingsRepository]. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsDialog(
     openOnHomePage: Boolean,
@@ -1246,21 +1252,34 @@ private fun SettingsDialog(
                     Switch(checked = openOnHomePage, onCheckedChange = onOpenOnHomePageChange)
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text("Auto-return to home page after", style = MaterialTheme.typography.bodyMedium)
-                IDLE_TIMEOUT_OPTIONS_MINUTES.forEach { minutes ->
-                    Row(
+                var idleTimeoutExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = idleTimeoutExpanded,
+                    onExpandedChange = { idleTimeoutExpanded = it }
+                ) {
+                    OutlinedTextField(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onIdleTimeoutMinutesChange(minutes) }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                        value = idleTimeoutLabel(idleTimeoutMinutes),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Auto-return to home page after") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = idleTimeoutExpanded) }
+                    )
+                    ExposedDropdownMenu(
+                        expanded = idleTimeoutExpanded,
+                        onDismissRequest = { idleTimeoutExpanded = false }
                     ) {
-                        RadioButton(
-                            selected = minutes == idleTimeoutMinutes,
-                            onClick = { onIdleTimeoutMinutesChange(minutes) }
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (minutes == 0) "Off" else "$minutes min")
+                        IDLE_TIMEOUT_OPTIONS_MINUTES.forEach { minutes ->
+                            DropdownMenuItem(
+                                text = { Text(idleTimeoutLabel(minutes)) },
+                                onClick = {
+                                    onIdleTimeoutMinutesChange(minutes)
+                                    idleTimeoutExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

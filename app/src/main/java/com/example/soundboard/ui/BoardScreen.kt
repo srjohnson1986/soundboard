@@ -439,7 +439,9 @@ fun BoardScreen(
                                         }
                                     } == null
                                     if (longPressed) {
-                                        tabHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        if (board.hapticFeedbackEnabled) {
+                                            tabHaptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        }
                                         pageOptionsIndex = index
                                         // Swallow the eventual release so Tab's own click,
                                         // which runs on the later Main pass, never sees it.
@@ -514,6 +516,7 @@ fun BoardScreen(
                         page = page,
                         editMode = editMode,
                         isActive = pageIndex == board.currentPageIndex,
+                        hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                         onTap = { tile ->
                             touch()
                             if (tile.isEmpty || editMode) {
@@ -615,6 +618,8 @@ fun BoardScreen(
             onThemeModeChange = vm::setThemeMode,
             keepScreenAwake = board.keepScreenAwake,
             onKeepScreenAwakeChange = vm::setKeepScreenAwake,
+            hapticFeedbackEnabled = board.hapticFeedbackEnabled,
+            onHapticFeedbackEnabledChange = vm::setHapticFeedbackEnabled,
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -795,6 +800,7 @@ private fun PageGrid(
     page: Page,
     editMode: Boolean,
     isActive: Boolean,
+    hapticFeedbackEnabled: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewMove: (Int, Int) -> Unit,
     onCommitOrder: () -> Unit,
@@ -840,11 +846,13 @@ private fun PageGrid(
                         }
                     }
                     .zIndex(if (isDragged) 1f else 0f)
-                    .pointerInput(tile.id, columns, isActive) {
+                    .pointerInput(tile.id, columns, isActive, hapticFeedbackEnabled) {
                         if (!isActive) return@pointerInput
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                if (hapticFeedbackEnabled) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                }
                                 draggedIndex = index
                                 dragOffset = Offset.Zero
                                 onDragActiveChanged(true)
@@ -1253,6 +1261,8 @@ private fun SettingsDialog(
     onThemeModeChange: (ThemeMode) -> Unit,
     keepScreenAwake: Boolean,
     onKeepScreenAwakeChange: (Boolean) -> Unit,
+    hapticFeedbackEnabled: Boolean,
+    onHapticFeedbackEnabledChange: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -1350,6 +1360,15 @@ private fun SettingsDialog(
                 ) {
                     Text("Keep screen awake")
                     Switch(checked = keepScreenAwake, onCheckedChange = onKeepScreenAwakeChange)
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Haptic feedback")
+                    Switch(checked = hapticFeedbackEnabled, onCheckedChange = onHapticFeedbackEnabledChange)
                 }
             }
         },

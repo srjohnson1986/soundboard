@@ -87,7 +87,9 @@ data class Board(
     /** Whether to force light/dark or follow the system setting. */
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     /** Whether to prevent the screen from auto-locking while the board is open. */
-    val keepScreenAwake: Boolean = false
+    val keepScreenAwake: Boolean = false,
+    /** Whether long-press haptics (page-tab options, tile drag-reorder arm) fire. */
+    val hapticFeedbackEnabled: Boolean = true
 ) {
     val currentPage: Page get() = pages[currentPageIndex.coerceIn(pages.indices)]
 

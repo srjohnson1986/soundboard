@@ -178,6 +178,17 @@ to pre-validate. `Board`'s own mutators (`addPage`, `removePage`, `renamePage`,
   app updates, uninstalls, or the user moves the file, silently breaking the
   tile. Copying also means the app never needs `READ_EXTERNAL_STORAGE`.
 
+**`DevicePreferences` is the one setting deliberately *not* on `Board`.**
+Everything else in Settings travels with the board on purpose (loading a
+different preset switches those too — see the settings-on-board comment atop
+`Board`'s fields). Performance mode (disables tile shadows, see "The UI
+layer" below) describes the device the app happens to be running on, not the
+board's content, so it lives in ordinary `SharedPreferences`
+(`DevicePreferences`, a small `Context`-backed wrapper) instead — loading a
+different preset must not silently turn it back off. `BoardViewModel` reads
+it once at construction into its own `performanceModeEnabled: StateFlow<Boolean>`,
+separate from `board`.
+
 **Backup** (`exportTo/importFrom`) is just those two things zipped: `board.json`
 at the zip root, every file under `sounds/` mirrored into a `sounds/` entry.
 Both go through Storage Access Framework document pickers
@@ -321,17 +332,21 @@ class BoardViewModel(
     private val player: Player,
     private val recorder: Recorder,
     private val presetRepo: PresetRepository,
+    private val speaker: Speaker,
+    private val devicePrefs: DevicePreferences,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel()
 ```
 
 `BoardViewModel.Factory(application)` builds the real `BoardRepository`,
-`SoundPlayer`, `AudioRecorder`, and `PresetRepository` and is what
-`BoardScreen` passes to `viewModel(factory = ...)`. Tests construct
-`BoardViewModel` directly instead, passing a real `BoardRepository` and
-`PresetRepository` (against a Robolectric or instrumented context — file I/O
-is cheap enough not to fake), a `FakePlayer` in place of `SoundPlayer`, and a
-`FakeRecorder` in place of `AudioRecorder`. `ioDispatcher` defaults to
+`SoundPlayer`, `AudioRecorder`, `PresetRepository`, `TtsSpeaker`, and
+`DevicePreferences` and is what `BoardScreen` passes to
+`viewModel(factory = ...)`. Tests construct `BoardViewModel` directly
+instead, passing a real `BoardRepository`, `PresetRepository`, and
+`DevicePreferences` (against a Robolectric or instrumented context — file I/O
+and `SharedPreferences` are cheap enough not to fake), a `FakePlayer` in
+place of `SoundPlayer`, a `FakeRecorder` in place of `AudioRecorder`, and a
+`FakeSpeaker` in place of `TtsSpeaker`. `ioDispatcher` defaults to
 `Dispatchers.IO` in production; tests pass an `UnconfinedTestDispatcher` so
 the persistence coroutine in `commit()` (below) runs synchronously instead of
 racing a real background thread.

@@ -6,6 +6,7 @@ import com.example.soundboard.audio.FakePlayer
 import com.example.soundboard.audio.FakeRecorder
 import com.example.soundboard.audio.FakeSpeaker
 import com.example.soundboard.data.BoardRepository
+import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
@@ -38,9 +39,10 @@ class BoardViewModelTest {
     private lateinit var recorder: FakeRecorder
     private lateinit var presetRepo: PresetRepository
     private lateinit var speaker: FakeSpeaker
+    private lateinit var devicePrefs: DevicePreferences
 
     private fun newViewModel() =
-        BoardViewModel(repo, player, recorder, presetRepo, speaker, ioDispatcher = UnconfinedTestDispatcher())
+        BoardViewModel(repo, player, recorder, presetRepo, speaker, devicePrefs, ioDispatcher = UnconfinedTestDispatcher())
 
     @Before
     fun setUp() {
@@ -50,6 +52,7 @@ class BoardViewModelTest {
         recorder = FakeRecorder()
         presetRepo = PresetRepository(context)
         speaker = FakeSpeaker()
+        devicePrefs = DevicePreferences(context)
     }
 
     private fun boardWith(vararg tiles: Tile) = Board(
@@ -570,6 +573,36 @@ class BoardViewModelTest {
         assertFalse(vm.board.value.hapticFeedbackEnabled)
         val second = newViewModel()
         assertFalse(second.board.value.hapticFeedbackEnabled)
+    }
+
+    @Test
+    fun `performanceModeEnabled defaults to false`() {
+        val vm = newViewModel()
+
+        assertFalse(vm.performanceModeEnabled.value)
+    }
+
+    @Test
+    fun `setPerformanceModeEnabled persists across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setPerformanceModeEnabled(true)
+
+        assertTrue(vm.performanceModeEnabled.value)
+        val second = newViewModel()
+        assertTrue(second.performanceModeEnabled.value)
+    }
+
+    @Test
+    fun `setPerformanceModeEnabled survives loading a different board`() {
+        // Device-local (DevicePreferences), not board content — a preset with no
+        // opinion of its own on this setting must not silently flip it back off.
+        val vm = newViewModel()
+        vm.setPerformanceModeEnabled(true)
+
+        vm.applyPreset(PresetRef.Saved(presetRepo.save(Board(name = "Other"))))
+
+        assertTrue(vm.performanceModeEnabled.value)
     }
 
     @Test

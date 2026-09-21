@@ -442,10 +442,19 @@ fun BoardScreen(
                 PrimaryScrollableTabRow(selectedTabIndex = board.currentPageIndex) {
                     val tabHaptics = LocalHapticFeedback.current
                     board.pages.forEachIndexed { index, page ->
-                        // Long-press detection must run on the Initial (outside-in) pointer
-                        // pass and win the race against Tab's own click before it can consume
-                        // the eventual up event on the Main pass — see the note above.
-                        Box(
+                        Tab(
+                            selected = index == board.currentPageIndex,
+                            onClick = {
+                                touch()
+                                vm.switchPage(index)
+                            },
+                            // Long-press detection must run on the Initial (outside-in) pointer
+                            // pass and win the race against Tab's own click before it can consume
+                            // the eventual up event on the Main pass — see the note above. Attached
+                            // to Tab's own modifier (rather than an outer Box) so Tab stays the
+                            // direct child PrimaryScrollableTabRow measures for its selection
+                            // indicator — wrapping it in a separate Box threw off the indicator's
+                            // centering, most visible on short page names.
                             modifier = Modifier.pointerInput(page.id, board.longPressDurationMillis) {
                                 awaitEachGesture {
                                     val down = awaitFirstDown(pass = PointerEventPass.Initial)
@@ -476,33 +485,25 @@ fun BoardScreen(
                                         waitForUpOrCancellation(pass = PointerEventPass.Initial)?.consume()
                                     }
                                 }
-                            }
-                        ) {
-                            Tab(
-                                selected = index == board.currentPageIndex,
-                                onClick = {
-                                    touch()
-                                    vm.switchPage(index)
-                                },
-                                text = {
-                                    if (page.isHome) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                Icons.Filled.Home,
-                                                contentDescription = "Home page",
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                            Spacer(Modifier.width(4.dp))
-                                            Text(page.name, fontWeight = FontWeight.Bold)
-                                        }
-                                    } else {
-                                        Text(page.name)
+                            },
+                            text = {
+                                if (page.isHome) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Filled.Home,
+                                            contentDescription = "Home page",
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text(page.name, fontWeight = FontWeight.Bold)
                                     }
-                                },
-                                selectedContentColor = page.color?.let { Color(it) }
-                                    ?: MaterialTheme.colorScheme.primary
-                            )
-                        }
+                                } else {
+                                    Text(page.name)
+                                }
+                            },
+                            selectedContentColor = page.color?.let { Color(it) }
+                                ?: MaterialTheme.colorScheme.primary
+                        )
                     }
                     Tab(
                         selected = false,

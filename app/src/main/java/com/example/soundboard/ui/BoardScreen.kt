@@ -263,9 +263,14 @@ fun BoardScreen(
 
     val pagerState = rememberPagerState(initialPage = board.currentPageIndex) { board.pages.size }
 
-    // Swipe -> ViewModel: a settled swipe becomes the active page.
+    // Swipe -> ViewModel: a settled swipe becomes the active page. Watches
+    // settledPage, not currentPage — currentPage ticks through every page a
+    // multi-page animateScrollToPage() passes over (e.g. tapping the far tab
+    // from the opposite end), and reacting to those intermediate values here
+    // would fight the "ViewModel -> pager" effect below, cancelling its
+    // animation one page short of the actual target.
     LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.currentPage }.collect { page ->
+        snapshotFlow { pagerState.settledPage }.collect { page ->
             if (page != board.currentPageIndex) {
                 touch()
                 vm.switchPage(page)

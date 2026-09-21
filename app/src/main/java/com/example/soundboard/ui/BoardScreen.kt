@@ -599,7 +599,7 @@ fun BoardScreen(
                     onVolumeChange = { vm.setVolume(editing.id, it) },
                     onColorChange = { vm.setColor(editing.id, it) },
                     onSpeakLabelChange = { vm.setSpeakLabel(editing.id, it) },
-                    onPlay = { vm.play(editing) },
+                    onPlay = vm::play,
                     onStartRecording = vm::startRecording,
                     onStopRecording = { vm.stopRecording(editing.id) },
                     onDismiss = {
@@ -621,7 +621,7 @@ fun BoardScreen(
                     onVolumeChange = { vm.setPinnedVolume(editing.id, it) },
                     onColorChange = { vm.setPinnedColor(editing.id, it) },
                     onSpeakLabelChange = { vm.setPinnedSpeakLabel(editing.id, it) },
-                    onPlay = { vm.play(editing) },
+                    onPlay = vm::play,
                     onStartRecording = vm::startRecording,
                     onStopRecording = { vm.stopPinnedRecording(editing.id) },
                     onDismiss = {
@@ -1142,7 +1142,7 @@ private fun EditTileDialog(
     onVolumeChange: (Float) -> Unit,
     onColorChange: (Int?) -> Unit,
     onSpeakLabelChange: (Boolean) -> Unit,
-    onPlay: () -> Unit,
+    onPlay: (Tile) -> Unit,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
     onDismiss: () -> Unit
@@ -1219,11 +1219,11 @@ private fun EditTileDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     OutlinedButton(
-                        onClick = onPlay,
+                        onClick = { onPlay(tile.copy(label = label)) },
                         enabled = !tile.isEmpty && !isRecording,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text(if (tile.fileName == null) "Preview speech" else "Play clip")
+                        Text(if (tile.fileName == null) "Preview" else "Play clip")
                     }
                     OutlinedButton(
                         onClick = {

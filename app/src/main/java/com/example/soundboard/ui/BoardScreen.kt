@@ -47,6 +47,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -354,6 +355,16 @@ fun BoardScreen(
                                     onClick = {
                                         showMenu = false
                                         showSettingsDialog = true
+                                    }
+                                )
+                                HorizontalDivider()
+                                MenuSectionHeader("Page")
+                                DropdownMenuItem(
+                                    text = { Text("Page options (${board.currentPage.name})") },
+                                    leadingIcon = { Icon(Icons.Filled.MoreHoriz, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        pageOptionsIndex = board.currentPageIndex
                                     }
                                 )
                                 HorizontalDivider()

@@ -178,6 +178,24 @@ class BoardScreenTest {
         composeRule.onNodeWithText("Page 1").performTouchInput { up() }
     }
 
+    @Test
+    fun pageOptionsMenuItemOpensTheSameDialogAsLongPressingTheTab() {
+        // The long-press-and-hold gesture on a page tab is easy to trigger by
+        // accident while trying to drag/scroll the tab row (#1) — this explicit
+        // menu entry opens the same PageOptionsDialog for the current page.
+        launchWith(
+            Board(pages = listOf(Page(name = "Feelings", rows = 1, columns = 1, tiles = listOf(Tile(id = "a")))))
+        )
+
+        composeRule.onNodeWithContentDescription("Menu").performClick()
+        composeRule.onNodeWithText("Page options (Feelings)").performClick()
+
+        // "Feelings" itself is ambiguous here — it's both the tab label behind the
+        // dialog and the dialog's own title — so assert on content unique to the dialog.
+        composeRule.onNodeWithText("Rename").assertIsDisplayed()
+        composeRule.onNodeWithText("Grid size (1x1)").assertIsDisplayed()
+    }
+
     /** Holds a page tab down past the long-press timeout to open its PageOptionsDialog, without releasing it. */
     private fun longPressPageTab(pageName: String) {
         composeRule.onNodeWithText(pageName).performTouchInput { down(center) }

@@ -527,6 +527,7 @@ fun BoardScreen(
                     tiles = board.pinnedVisibleTiles,
                     editMode = editMode,
                     aspectRatio = board.currentPage.tileAspectRatio,
+                    hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                     onTap = { tile ->
                         touch()
                         if (tile.isEmpty || editMode) {
@@ -534,6 +535,10 @@ fun BoardScreen(
                         } else {
                             vm.play(tile)
                         }
+                    },
+                    onPreviewSound = { tile ->
+                        touch()
+                        vm.play(tile)
                     }
                 )
             }
@@ -556,6 +561,10 @@ fun BoardScreen(
                             } else {
                                 vm.play(tile)
                             }
+                        },
+                        onPreviewSound = { tile ->
+                            touch()
+                            vm.play(tile)
                         },
                         onPreviewMove = vm::previewMove,
                         onCommitOrder = vm::commitOrder,
@@ -844,8 +853,11 @@ private fun PinnedRow(
     tiles: List<Tile>,
     editMode: Boolean,
     aspectRatio: Float,
-    onTap: (Tile) -> Unit
+    hapticFeedbackEnabled: Boolean,
+    onTap: (Tile) -> Unit,
+    onPreviewSound: (Tile) -> Unit
 ) {
+    val haptics = LocalHapticFeedback.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -859,7 +871,18 @@ private fun PinnedRow(
                 aspectRatio = aspectRatio,
                 pageColor = null,
                 modifier = Modifier.weight(1f),
-                onTap = { onTap(tile) }
+                onTap = { onTap(tile) },
+                // Long-press previews what a pad will say without "using" it for real,
+                // same as PageGrid's hold-without-moving (#4) — not offered in edit mode,
+                // where a tap already opens the editor's own Play/Preview button.
+                onLongClick = if (!editMode && !tile.isEmpty) {
+                    {
+                        if (hapticFeedbackEnabled) {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                        onPreviewSound(tile)
+                    }
+                } else null
             )
         }
     }
@@ -873,6 +896,7 @@ private fun PageGrid(
     isActive: Boolean,
     hapticFeedbackEnabled: Boolean,
     onTap: (Tile) -> Unit,
+    onPreviewSound: (Tile) -> Unit,
     onPreviewMove: (Int, Int) -> Unit,
     onCommitOrder: () -> Unit,
     onDragActiveChanged: (Boolean) -> Unit
@@ -929,6 +953,13 @@ private fun PageGrid(
                                 onDragActiveChanged(true)
                             },
                             onDragEnd = {
+                                // A hold that never moved the tile to a different index wasn't a
+                                // reorder at all — treat it as a request to preview what the tile
+                                // says/plays without "using" it for real (#4), same as PinnedRow's
+                                // dedicated onLongClick (which has no competing drag gesture to share it with).
+                                if (!editMode && draggedIndex == index && !tile.isEmpty) {
+                                    onPreviewSound(tile)
+                                }
                                 draggedIndex = null
                                 dragOffset = Offset.Zero
                                 onDragActiveChanged(false)
@@ -971,7 +1002,8 @@ private fun TileCard(
     aspectRatio: Float,
     pageColor: Color?,
     modifier: Modifier = Modifier,
-    onTap: () -> Unit
+    onTap: () -> Unit,
+    onLongClick: (() -> Unit)? = null
 ) {
     val filled = !tile.isEmpty
     // A preset can ship a tile with a label but no recording yet (see
@@ -994,7 +1026,7 @@ private fun TileCard(
     Card(
         modifier = modifier
             .aspectRatio(aspectRatio)
-            .combinedClickable(onClick = onTap),
+            .combinedClickable(onClick = onTap, onLongClick = onLongClick),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = if (filled) 2.dp else 0.dp),
         border = if (filled) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)

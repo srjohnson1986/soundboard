@@ -15,6 +15,8 @@ import com.example.soundboard.audio.TtsSpeaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.PresetRepository
+import com.example.soundboard.data.RecentPresetEntry
+import com.example.soundboard.data.RecentPresetsRepository
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.ThemeMode
@@ -35,6 +37,7 @@ class BoardViewModel(
     private val presetRepo: PresetRepository,
     private val speaker: Speaker,
     private val devicePrefs: DevicePreferences,
+    private val recentPresetsRepo: RecentPresetsRepository,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -51,6 +54,10 @@ class BoardViewModel(
 
     private val _presets = MutableStateFlow<List<SavedPreset>>(emptyList())
     val presets: StateFlow<List<SavedPreset>> = _presets.asStateFlow()
+
+    /** Presets actually loaded/saved recently, newest first — see [RecentPresetsRepository]. */
+    private val _recentPresets = MutableStateFlow<List<RecentPresetItem>>(emptyList())
+    val recentPresets: StateFlow<List<RecentPresetItem>> = _recentPresets.asStateFlow()
 
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
@@ -335,6 +342,13 @@ class BoardViewModel(
         }
     }
 
+    /** Refreshes [recentPresets] from disk; call before showing the title bar's quick-switch dropdown. */
+    fun refreshRecentPresets() {
+        viewModelScope.launch {
+            _recentPresets.value = withContext(ioDispatcher) { recentPresetsRepo.recent().mapNotNull { it.toItem() } }
+        }
+    }
+
     /**
      * Snapshots the current board as a brand-new saved preset and renames the
      * live board to match — same-device version history, not a portable
@@ -344,9 +358,10 @@ class BoardViewModel(
     fun saveAsPreset(name: String) {
         val renamed = _board.value.copy(name = name.ifBlank { _board.value.name })
         viewModelScope.launch {
-            withContext(ioDispatcher) { presetRepo.save(renamed) }
+            val id = withContext(ioDispatcher) { presetRepo.save(renamed) }
             commit(renamed)
             refreshPresets()
+            recordRecentlyUsed(RecentPresetEntry(kind = "saved", id = id, label = renamed.name, usedAt = System.currentTimeMillis()))
             _message.value = "Saved preset \"${renamed.name}\""
         }
     }
@@ -364,14 +379,34 @@ class BoardViewModel(
                     player.clear()
                     commit(loaded)
                     withContext(ioDispatcher) { loadSounds(loaded) }
+                    recordRecentlyUsed(RecentPresetEntry(kind = "saved", id = ref.id, label = loaded.name, usedAt = System.currentTimeMillis()))
                     _message.value = "Loaded \"${loaded.name}\""
                 }
                 is PresetRef.Factory -> {
                     val ok = withContext(ioDispatcher) { repo.importFromAsset(ref.assetName) }
+                    if (ok) {
+                        recordRecentlyUsed(RecentPresetEntry(kind = "factory", assetName = ref.assetName, label = ref.label, usedAt = System.currentTimeMillis()))
+                    }
                     replaceBoardAfterImport(ok, "Loaded \"${ref.label}\"", "Couldn't load preset")
                 }
             }
         }
+    }
+
+    private suspend fun recordRecentlyUsed(entry: RecentPresetEntry) {
+        _recentPresets.value = withContext(ioDispatcher) {
+            recentPresetsRepo.recordUsed(entry)
+            recentPresetsRepo.recent()
+        }.mapNotNull { it.toItem() }
+    }
+
+    private fun RecentPresetEntry.toItem(): RecentPresetItem? {
+        val ref = when (kind) {
+            "saved" -> id?.let { PresetRef.Saved(it) }
+            "factory" -> assetName?.let { PresetRef.Factory(it, label) }
+            else -> null
+        } ?: return null
+        return RecentPresetItem(ref, label, usedAt)
     }
 
     /** Factory presets bundled with this build — Jeremy's ships in every build; Steve's only where its asset is actually packaged (debug builds). */
@@ -450,7 +485,8 @@ class BoardViewModel(
                 AudioRecorder(app),
                 PresetRepository(app),
                 TtsSpeaker(app),
-                DevicePreferences(app)
+                DevicePreferences(app),
+                RecentPresetsRepository(app)
             ) as T
         }
     }
@@ -472,3 +508,6 @@ sealed interface PresetRef {
     data class Saved(val id: String) : PresetRef
     data class Factory(val assetName: String, val label: String) : PresetRef
 }
+
+/** One entry in the title bar's quick-switch dropdown — see [BoardViewModel.recentPresets]. */
+data class RecentPresetItem(val ref: PresetRef, val label: String, val usedAt: Long)

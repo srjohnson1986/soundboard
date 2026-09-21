@@ -8,6 +8,7 @@ import com.example.soundboard.audio.FakeSpeaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.PresetRepository
+import com.example.soundboard.data.RecentPresetsRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.ThemeMode
@@ -40,9 +41,10 @@ class BoardViewModelTest {
     private lateinit var presetRepo: PresetRepository
     private lateinit var speaker: FakeSpeaker
     private lateinit var devicePrefs: DevicePreferences
+    private lateinit var recentPresetsRepo: RecentPresetsRepository
 
     private fun newViewModel() =
-        BoardViewModel(repo, player, recorder, presetRepo, speaker, devicePrefs, ioDispatcher = UnconfinedTestDispatcher())
+        BoardViewModel(repo, player, recorder, presetRepo, speaker, devicePrefs, recentPresetsRepo, ioDispatcher = UnconfinedTestDispatcher())
 
     @Before
     fun setUp() {
@@ -52,6 +54,7 @@ class BoardViewModelTest {
         recorder = FakeRecorder()
         presetRepo = PresetRepository(context)
         speaker = FakeSpeaker()
+        recentPresetsRepo = RecentPresetsRepository(context)
         devicePrefs = DevicePreferences(context)
     }
 
@@ -739,6 +742,29 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `applyPreset with a factory ref records it in recentPresets`() {
+        val vm = newViewModel()
+
+        vm.applyPreset(PresetRef.Factory("jeremy-care-board.zip", "Jeremy Draft Care Board"))
+
+        assertEquals(listOf("Jeremy Draft Care Board"), vm.recentPresets.value.map { it.label })
+        assertEquals(PresetRef.Factory("jeremy-care-board.zip", "Jeremy Draft Care Board"), vm.recentPresets.value.first().ref)
+    }
+
+    @Test
+    fun `applying the same preset twice moves it to the front instead of duplicating it`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        vm.applyPreset(PresetRef.Factory("jeremy-care-board.zip", "Jeremy Draft Care Board"))
+        vm.saveAsPreset("Other Board")
+        vm.applyPreset(PresetRef.Factory("jeremy-care-board.zip", "Jeremy Draft Care Board"))
+
+        assertEquals(2, vm.recentPresets.value.size)
+        assertEquals("Jeremy Draft Care Board", vm.recentPresets.value.first().label)
+    }
+
+    @Test
     fun `saveAsPreset renames the board and appears in presets`() {
         repo.save(boardWith(Tile(id = "a", label = "old")))
         val vm = newViewModel()
@@ -747,6 +773,17 @@ class BoardViewModelTest {
 
         assertEquals("My Layout", vm.board.value.name)
         assertEquals(listOf("My Layout"), vm.presets.value.map { it.name })
+    }
+
+    @Test
+    fun `saveAsPreset records the new preset in recentPresets`() {
+        repo.save(boardWith(Tile(id = "a", label = "old")))
+        val vm = newViewModel()
+
+        vm.saveAsPreset("My Layout")
+
+        assertEquals(listOf("My Layout"), vm.recentPresets.value.map { it.label })
+        assertTrue(vm.recentPresets.value.first().ref is PresetRef.Saved)
     }
 
     @Test

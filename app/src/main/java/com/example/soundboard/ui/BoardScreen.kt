@@ -39,6 +39,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
@@ -180,9 +181,12 @@ fun BoardScreen(
     val message by vm.message.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
     val presets by vm.presets.collectAsStateWithLifecycle()
+    val recentPresets by vm.recentPresets.collectAsStateWithLifecycle()
     val performanceModeEnabled by vm.performanceModeEnabled.collectAsStateWithLifecycle()
     var editingTarget by remember { mutableStateOf<EditTarget?>(null) }
     var gridDialogIndex by remember { mutableStateOf<Int?>(null) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showRecentPresetsMenu by remember { mutableStateOf(false) }
     var showSavePresetDialog by remember { mutableStateOf(false) }
     var showPresetPickerDialog by remember { mutableStateOf(false) }
     var pendingPresetApply by remember { mutableStateOf<Pair<PresetRef, String>?>(null) }
@@ -311,12 +315,69 @@ fun BoardScreen(
                     title = {
                         Column {
                             Text("Soundboard", style = MaterialTheme.typography.labelSmall)
-                            Text(
-                                board.name,
-                                style = MaterialTheme.typography.titleLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    board.name,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier
+                                        .weight(1f, fill = false)
+                                        .clickable { showRenameDialog = true }
+                                )
+                                Box {
+                                    IconButton(
+                                        onClick = {
+                                            vm.refreshRecentPresets()
+                                            vm.refreshPresets()
+                                            showRecentPresetsMenu = true
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Filled.ArrowDropDown, contentDescription = "Recent boards")
+                                    }
+                                    DropdownMenu(
+                                        expanded = showRecentPresetsMenu,
+                                        onDismissRequest = { showRecentPresetsMenu = false },
+                                        modifier = Modifier.widthIn(min = 240.dp)
+                                    ) {
+                                        if (recentPresets.isEmpty()) {
+                                            DropdownMenuItem(
+                                                text = { Text("No recent boards yet") },
+                                                enabled = false,
+                                                onClick = {}
+                                            )
+                                        } else {
+                                            recentPresets.forEach { item ->
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Column {
+                                                            Text(item.label)
+                                                            Text(
+                                                                "${if (item.ref is PresetRef.Factory) "Factory" else "Saved"} · ${relativeSavedAt(item.usedAt)}",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
+                                                    },
+                                                    onClick = {
+                                                        showRecentPresetsMenu = false
+                                                        requestApplyPreset(item.ref, item.label)
+                                                    }
+                                                )
+                                            }
+                                        }
+                                        HorizontalDivider()
+                                        DropdownMenuItem(
+                                            text = { Text("See all presets...") },
+                                            onClick = {
+                                                showRecentPresetsMenu = false
+                                                showPresetPickerDialog = true
+                                            }
+                                        )
+                                    }
+                                }
+                            }
                         }
                     },
                     actions = {
@@ -700,6 +761,19 @@ fun BoardScreen(
             defaultPageColumns = board.defaultPageColumns,
             onDefaultPageColumnsChange = vm::setDefaultPageColumns,
             onDismiss = { showSettingsDialog = false }
+        )
+    }
+
+    if (showRenameDialog) {
+        TextInputDialog(
+            title = "Rename board",
+            label = "Board name",
+            initial = board.name,
+            onConfirm = {
+                vm.renameBoard(it.trim())
+                showRenameDialog = false
+            },
+            onDismiss = { showRenameDialog = false }
         )
     }
 

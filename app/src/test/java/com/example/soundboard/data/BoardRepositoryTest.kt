@@ -74,16 +74,18 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `save then load round-trips pinned tiles, home page, page color and tile aspect ratio`() {
+    fun `save then load round-trips sticky home row, home page, page color and tile aspect ratio`() {
         repo.soundFile("hey.mp3").apply { parentFile?.mkdirs() }.writeText("hey")
         val board = Board(
             pages = listOf(
                 Page(name = "Trouble", color = 0xFFB74D, tileAspectRatio = 4f / 3f),
-                Page(name = "Needs", isHome = true)
+                Page(
+                    name = "Needs",
+                    isHome = true,
+                    tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3", colorArgb = 0xE57373))
+                )
             ),
-            pinnedTiles = listOf(
-                Tile(id = "hey", label = "Hey", fileName = "hey.mp3", colorArgb = 0xE57373)
-            )
+            stickyHomeRowEnabled = true
         )
 
         repo.save(board)
@@ -91,6 +93,7 @@ class BoardRepositoryTest {
 
         assertEquals(board, loaded)
         assertEquals(1, loaded.homePageIndex)
+        assertTrue(loaded.stickyHomeRowEnabled)
     }
 
     @Test
@@ -122,8 +125,8 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a board saved by today's schema still loads when it predates pinned tiles, home page and page color`() {
-        // What repo.save() itself would have written before pinnedTiles/homePageIndex/
+    fun `a board saved by today's schema still loads when it predates sticky home row, home page and page color`() {
+        // What repo.save() itself would have written before stickyHomeRowEnabled/homePageIndex/
         // Page.color/Page.tileAspectRatio existed: "pages" is present (so no legacy-shape
         // migration kicks in), just missing the newer fields entirely.
         boardFile.parentFile?.mkdirs()
@@ -141,7 +144,7 @@ class BoardRepositoryTest {
 
         val loaded = repo.load()
 
-        assertEquals(emptyList<Tile>(), loaded.pinnedTiles)
+        assertEquals(false, loaded.stickyHomeRowEnabled)
         assertEquals(null, loaded.homePageIndex)
         assertEquals(null, loaded.pages[0].color)
         assertEquals(1f, loaded.pages[0].tileAspectRatio)
@@ -176,12 +179,12 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a pinned tile whose fileName has no backing file also loads as empty`() {
-        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", label = "Hey", fileName = "missing.mp3"))))
+    fun `a home page tile whose fileName has no backing file also loads as empty`() {
+        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "missing.mp3")), isHome = true))))
 
         val loaded = repo.load()
 
-        val tile = loaded.pinnedTiles.first { it.id == "hey" }
+        val tile = loaded.homePage!!.tiles.first { it.id == "hey" }
         assertNull(tile.fileName)
         assertEquals("Hey", tile.label)
     }
@@ -299,14 +302,20 @@ class BoardRepositoryTest {
         assertEquals("Jeremy Draft Care Board", board.name)
         assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
         assertEquals(1, board.homePageIndex)
-        assertEquals(4, board.pinnedTiles.size)
-        board.pages.forEach { page ->
-            assertEquals(24, page.tiles.size)
-            assertEquals(6, page.rows)
+        assertTrue(board.stickyHomeRowEnabled)
+        // The home page carries an extra sticky first row (4 tiles), so it's one row taller.
+        board.pages.forEachIndexed { index, page ->
+            if (index == board.homePageIndex) {
+                assertEquals(28, page.tiles.size)
+                assertEquals(7, page.rows)
+            } else {
+                assertEquals(24, page.tiles.size)
+                assertEquals(6, page.rows)
+            }
             assertEquals(4, page.columns)
         }
         // Every referenced sound file actually landed in app storage.
-        val allTiles = board.pages.flatMap { it.tiles } + board.pinnedTiles
+        val allTiles = board.pages.flatMap { it.tiles }
         allTiles.mapNotNull { it.fileName }.forEach { name ->
             assertTrue("missing sound file $name", repo.soundFile(name).exists())
         }
@@ -330,13 +339,18 @@ class BoardRepositoryTest {
 
         assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
         assertEquals(1, board.homePageIndex)
-        assertEquals(4, board.pinnedTiles.size)
-        board.pages.forEach { page ->
-            assertEquals(24, page.tiles.size)
-            assertEquals(6, page.rows)
+        assertTrue(board.stickyHomeRowEnabled)
+        board.pages.forEachIndexed { index, page ->
+            if (index == board.homePageIndex) {
+                assertEquals(28, page.tiles.size)
+                assertEquals(7, page.rows)
+            } else {
+                assertEquals(24, page.tiles.size)
+                assertEquals(6, page.rows)
+            }
             assertEquals(4, page.columns)
         }
-        val allTiles = board.pages.flatMap { it.tiles } + board.pinnedTiles
+        val allTiles = board.pages.flatMap { it.tiles }
         allTiles.mapNotNull { it.fileName }.forEach { name ->
             assertTrue("missing sound file $name", repo.soundFile(name).exists())
         }

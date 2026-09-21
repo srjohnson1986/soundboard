@@ -76,8 +76,10 @@ class PresetRepositoryTest {
         presetRepo.save(
             Board(
                 name = "B",
-                pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "2", fileName = "two.mp3")))),
-                pinnedTiles = listOf(Tile(id = "hey", fileName = "hey.mp3"))
+                pages = listOf(
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "2", fileName = "two.mp3"))),
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", fileName = "hey.mp3")), isHome = true)
+                )
             )
         )
 

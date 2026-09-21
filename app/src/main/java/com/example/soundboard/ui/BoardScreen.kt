@@ -51,7 +51,6 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
@@ -161,10 +160,10 @@ private const val APP_VERSION = "v0.1.0"
 private const val RELEASES_BASE_URL = "https://github.com/srjohnson1986/soundboard/releases"
 private const val RELEASE_URL = "$RELEASES_BASE_URL/tag/$APP_VERSION"
 
-/** Which tile an open [EditTileDialog] is showing — a page tile or one from the shared pinned row. */
+/** Which tile an open [EditTileDialog] is showing — a page tile or one from the home page's sticky row. */
 private sealed interface EditTarget {
     data class PageTile(val id: String) : EditTarget
-    data class PinnedTile(val id: String) : EditTarget
+    data class HomeRowTile(val id: String) : EditTarget
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -191,7 +190,6 @@ fun BoardScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showSpeakDialog by remember { mutableStateOf(false) }
-    var showRemovePinnedRowConfirm by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
     var isDragActive by remember { mutableStateOf(false) }
@@ -213,16 +211,6 @@ fun BoardScreen(
         }
     }
 
-    // Same reasoning as requestDeletePage, but for the pinned row as a whole —
-    // checks every stored pinned tile, including ones currently hidden by a narrower width.
-    fun requestRemovePinnedRow() {
-        if (board.pinnedTiles.any { !it.isEmpty }) {
-            showRemovePinnedRowConfirm = true
-        } else {
-            vm.removePinnedRow()
-        }
-    }
-
     // Applying a preset over a board with any sound needs an explicit confirm — same
     // reasoning as page deletion, just board-wide instead of one page.
     fun requestApplyPreset(ref: PresetRef, label: String) {
@@ -241,9 +229,10 @@ fun BoardScreen(
     }
 
     // A page-tile dialog left open while switching pages would otherwise resolve
-    // against a tile id that belongs to the page the user just left. A pinned-tile
-    // dialog is unaffected — pinned tiles are the same regardless of page. Auto-return
-    // (below) can trigger this while a recording is in progress, so cancel it too.
+    // against a tile id that belongs to the page the user just left. A home-row-tile
+    // dialog is unaffected — it always resolves against the home page regardless of
+    // which page is current. Auto-return (below) can trigger this while a recording
+    // is in progress, so cancel it too.
     LaunchedEffect(board.currentPageIndex) {
         if (editingTarget is EditTarget.PageTile) {
             editingTarget = null
@@ -379,27 +368,6 @@ fun BoardScreen(
                                         pageOptionsIndex = board.currentPageIndex
                                     }
                                 )
-                                HorizontalDivider()
-                                MenuSectionHeader("Pinned row")
-                                if (board.pinnedTiles.isEmpty()) {
-                                    DropdownMenuItem(
-                                        text = { Text("Add pinned row") },
-                                        leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
-                                        onClick = {
-                                            showMenu = false
-                                            vm.addPinnedRow()
-                                        }
-                                    )
-                                } else {
-                                    DropdownMenuItem(
-                                        text = { Text("Remove pinned row") },
-                                        leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
-                                        onClick = {
-                                            showMenu = false
-                                            requestRemovePinnedRow()
-                                        }
-                                    )
-                                }
                                 HorizontalDivider()
                                 // Presets — lightweight, same-device version history (see PresetRepository)
                                 MenuSectionHeader("Presets")
@@ -545,16 +513,17 @@ fun BoardScreen(
                 .fillMaxSize()
                 .padding(insets)
         ) {
-            if (board.pinnedTiles.isNotEmpty()) {
+            val homePage = board.homePage
+            if (board.stickyHomeRowEnabled && homePage != null && board.currentPageIndex != board.homePageIndex) {
                 PinnedRow(
-                    tiles = board.pinnedVisibleTiles,
+                    tiles = homePage.tiles.take(homePage.columns),
                     editMode = editMode,
                     aspectRatio = board.currentPage.tileAspectRatio,
                     hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                     onTap = { tile ->
                         touch()
                         if (tile.isEmpty || editMode) {
-                            editingTarget = EditTarget.PinnedTile(tile.id)
+                            editingTarget = EditTarget.HomeRowTile(tile.id)
                         } else {
                             vm.play(tile)
                         }
@@ -621,21 +590,21 @@ fun BoardScreen(
                 )
             }
         }
-        is EditTarget.PinnedTile -> {
-            val editing = board.pinnedTiles.firstOrNull { it.id == target.id }
+        is EditTarget.HomeRowTile -> {
+            val editing = board.homePage?.tiles?.firstOrNull { it.id == target.id }
             if (editing != null) {
                 EditTileDialog(
                     tile = editing,
                     isRecording = isRecording,
-                    onLabelChange = { vm.setPinnedLabel(editing.id, it) },
-                    onSoundPicked = { vm.assignPinnedSound(editing.id, it) },
-                    onClear = { vm.clearPinnedTile(editing.id) },
-                    onVolumeChange = { vm.setPinnedVolume(editing.id, it) },
-                    onColorChange = { vm.setPinnedColor(editing.id, it) },
-                    onSpeakLabelChange = { vm.setPinnedSpeakLabel(editing.id, it) },
+                    onLabelChange = { vm.setHomeRowLabel(editing.id, it) },
+                    onSoundPicked = { vm.assignHomeRowSound(editing.id, it) },
+                    onClear = { vm.clearHomeRowTile(editing.id) },
+                    onVolumeChange = { vm.setHomeRowVolume(editing.id, it) },
+                    onColorChange = { vm.setHomeRowColor(editing.id, it) },
+                    onSpeakLabelChange = { vm.setHomeRowSpeakLabel(editing.id, it) },
                     onPlay = vm::play,
                     onStartRecording = vm::startRecording,
-                    onStopRecording = { vm.stopPinnedRecording(editing.id) },
+                    onStopRecording = { vm.stopHomeRowRecording(editing.id) },
                     onDismiss = {
                         vm.cancelRecording()
                         editingTarget = null
@@ -693,9 +662,9 @@ fun BoardScreen(
             onKeepScreenAwakeChange = vm::setKeepScreenAwake,
             hapticFeedbackEnabled = board.hapticFeedbackEnabled,
             onHapticFeedbackEnabledChange = vm::setHapticFeedbackEnabled,
-            pinnedRowSize = board.pinnedRowSize,
-            hasPinnedRow = board.pinnedTiles.isNotEmpty(),
-            onPinnedRowSizeChange = vm::setPinnedRowSize,
+            stickyHomeRowEnabled = board.stickyHomeRowEnabled,
+            hasHomePage = board.homePageIndex != null,
+            onStickyHomeRowEnabledChange = vm::setStickyHomeRowEnabled,
             defaultPageRows = board.defaultPageRows,
             onDefaultPageRowsChange = vm::setDefaultPageRows,
             defaultPageColumns = board.defaultPageColumns,
@@ -846,31 +815,9 @@ fun BoardScreen(
         }
     }
 
-    if (showRemovePinnedRowConfirm) {
-        val soundCount = board.pinnedTiles.count { !it.isEmpty }
-        AlertDialog(
-            onDismissRequest = { showRemovePinnedRowConfirm = false },
-            title = { Text("Remove pinned row?") },
-            text = {
-                Text(
-                    "The pinned row has $soundCount tile${if (soundCount == 1) "" else "s"} " +
-                        "with sound or speech set up. Removing it can't be undone."
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    vm.removePinnedRow()
-                    showRemovePinnedRowConfirm = false
-                }) { Text("Remove") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRemovePinnedRowConfirm = false }) { Text("Cancel") }
-            }
-        )
-    }
 }
 
-/** The fixed row shown above every page's grid, identical regardless of which page is active. */
+/** The fixed row shown above every non-home page, mirroring the home page's own first row. */
 @Composable
 private fun PinnedRow(
     tiles: List<Tile>,
@@ -1449,9 +1396,9 @@ private fun SettingsDialog(
     onKeepScreenAwakeChange: (Boolean) -> Unit,
     hapticFeedbackEnabled: Boolean,
     onHapticFeedbackEnabledChange: (Boolean) -> Unit,
-    pinnedRowSize: Int,
-    hasPinnedRow: Boolean,
-    onPinnedRowSizeChange: (Int) -> Unit,
+    stickyHomeRowEnabled: Boolean,
+    hasHomePage: Boolean,
+    onStickyHomeRowEnabledChange: (Boolean) -> Unit,
     defaultPageRows: Int,
     onDefaultPageRowsChange: (Int) -> Unit,
     defaultPageColumns: Int,
@@ -1574,13 +1521,24 @@ private fun SettingsDialog(
                     Switch(checked = hapticFeedbackEnabled, onCheckedChange = onHapticFeedbackEnabledChange)
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Stepper("Pinned row width", pinnedRowSize, onPinnedRowSizeChange)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Sticky home row", modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = stickyHomeRowEnabled,
+                        onCheckedChange = onStickyHomeRowEnabledChange,
+                        enabled = hasHomePage
+                    )
+                }
                 Text(
-                    if (hasPinnedRow) {
-                        "Shrinking just hides the last tiles — their sound or speech " +
-                            "stays put and comes back if you grow it again."
+                    if (hasHomePage) {
+                        "Shows your home page's first row fixed at the top of every other " +
+                            "page. Nothing is deleted — other pages' content just moves down a row."
                     } else {
-                        "Width the pinned row starts at once you add one."
+                        "Set a home page (Page options) to use this."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

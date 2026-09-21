@@ -164,65 +164,52 @@ class BoardViewModel(
         return file.name
     }
 
-    // Pinned tiles live outside any page (Board.pinnedTiles), so they need their
-    // own mutators mirroring the page-tile ones above instead of routing through
-    // updatingCurrentPage.
+    /** Whether the home page's first row shows fixed above every other page. */
+    fun setStickyHomeRowEnabled(value: Boolean) {
+        commit(_board.value.copy(stickyHomeRowEnabled = value))
+    }
 
-    fun setPinnedLabel(tileId: String, label: String) = updatePinnedTiles { tiles ->
+    // The sticky home row shown on other pages is just the home page's own first
+    // row of tiles — these mutators edit it via Board.updatingPage(homeIndex, ...)
+    // rather than updatingCurrentPage, since the home page usually isn't the page
+    // being viewed when its sticky banner is tapped.
+
+    fun setHomeRowLabel(tileId: String, label: String) = updateHomeRowTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(label = label) else it }
     }
 
-    fun setPinnedVolume(tileId: String, volume: Float) = updatePinnedTiles { tiles ->
+    fun setHomeRowVolume(tileId: String, volume: Float) = updateHomeRowTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(volume = volume.coerceIn(0f, 1f)) else it }
     }
 
-    fun setPinnedColor(tileId: String, colorArgb: Int?) = updatePinnedTiles { tiles ->
+    fun setHomeRowColor(tileId: String, colorArgb: Int?) = updateHomeRowTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
     }
 
-    fun setPinnedSpeakLabel(tileId: String, value: Boolean) = updatePinnedTiles { tiles ->
+    fun setHomeRowSpeakLabel(tileId: String, value: Boolean) = updateHomeRowTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(speakLabel = value) else it }
     }
 
-    fun assignPinnedSound(tileId: String, uri: Uri) {
+    fun assignHomeRowSound(tileId: String, uri: Uri) {
         viewModelScope.launch {
             val name = withContext(ioDispatcher) { repo.importSound(uri) } ?: return@launch
             withContext(ioDispatcher) { player.load(name, repo.soundFile(name)) }
-            updatePinnedTiles { tiles ->
+            updateHomeRowTiles { tiles ->
                 tiles.map { if (it.id == tileId) it.copy(fileName = name) else it }
             }
         }
     }
 
-    fun clearPinnedTile(tileId: String) = updatePinnedTiles { tiles ->
+    fun clearHomeRowTile(tileId: String) = updateHomeRowTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null, speakLabel = false) else it }
     }
 
-    /** Same as [stopRecording], for a pinned tile. */
-    fun stopPinnedRecording(tileId: String) {
+    /** Same as [stopRecording], for a home-row tile edited via the sticky banner. */
+    fun stopHomeRowRecording(tileId: String) {
         viewModelScope.launch {
             val name = finishRecording() ?: return@launch
-            updatePinnedTiles { tiles -> tiles.map { if (it.id == tileId) it.copy(fileName = name) else it } }
+            updateHomeRowTiles { tiles -> tiles.map { if (it.id == tileId) it.copy(fileName = name) else it } }
         }
-    }
-
-    /**
-     * Materializes an empty pinned row at [Board.pinnedRowSize]; a no-op once one exists.
-     * Deliberately independent of any page's column count (#15) — every board's pinned
-     * row is the same size regardless of how wide its pages are.
-     */
-    fun addPinnedRow() {
-        commit(_board.value.addingPinnedRow())
-    }
-
-    /** Removes the pinned row entirely; call only after confirming with the user if it has any content. */
-    fun removePinnedRow() {
-        commit(_board.value.removingPinnedRow())
-    }
-
-    /** Live-resizes an existing pinned row's width, or just sets the starting width if none exists yet. */
-    fun setPinnedRowSize(value: Int) {
-        commit(_board.value.resizedPinnedRow(value))
     }
 
     fun setDefaultPageRows(value: Int) {
@@ -409,12 +396,13 @@ class BoardViewModel(
         commit(_board.value.updatingCurrentPage { it.copy(tiles = transform(it.tiles)) })
     }
 
-    private fun updatePinnedTiles(transform: (List<Tile>) -> List<Tile>) {
-        commit(_board.value.copy(pinnedTiles = transform(_board.value.pinnedTiles)))
+    private fun updateHomeRowTiles(transform: (List<Tile>) -> List<Tile>) {
+        val homeIndex = _board.value.homePageIndex ?: return
+        commit(_board.value.updatingPage(homeIndex) { it.copy(tiles = transform(it.tiles)) })
     }
 
-    /** Every tile a sound file can be referenced from: every page, plus the pinned row. */
-    private fun allTiles(board: Board): List<Tile> = board.pages.flatMap { it.tiles } + board.pinnedTiles
+    /** Every tile a sound file can be referenced from: every page (the home row is just its first row). */
+    private fun allTiles(board: Board): List<Tile> = board.pages.flatMap { it.tiles }
 
     /** Single write path: update state, drop orphaned audio, persist. */
     private fun commit(board: Board) {

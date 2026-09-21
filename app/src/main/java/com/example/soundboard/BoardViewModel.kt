@@ -10,6 +10,8 @@ import com.example.soundboard.audio.AudioRecorder
 import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.Recorder
 import com.example.soundboard.audio.SoundPlayer
+import com.example.soundboard.audio.Speaker
+import com.example.soundboard.audio.TtsSpeaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.data.SavedPreset
@@ -30,6 +32,7 @@ class BoardViewModel(
     private val player: Player,
     private val recorder: Recorder,
     private val presetRepo: PresetRepository,
+    private val speaker: Speaker,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -68,8 +71,17 @@ class BoardViewModel(
     }
 
     fun play(tile: Tile) {
-        val name = tile.fileName ?: return
-        player.play(name, tile.volume)
+        val name = tile.fileName
+        if (name != null) {
+            player.play(name, tile.volume)
+        } else if (tile.speakLabel && tile.label.isNotBlank()) {
+            speaker.speak(tile.label)
+        }
+    }
+
+    /** Speaks arbitrary text not tied to any tile — for a one-off phrase no pad covers. */
+    fun speakAdHoc(text: String) {
+        speaker.speak(text)
     }
 
     fun setLabel(tileId: String, label: String) = updateTiles { tiles ->
@@ -84,6 +96,10 @@ class BoardViewModel(
         tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
     }
 
+    fun setSpeakLabel(tileId: String, value: Boolean) = updateTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(speakLabel = value) else it }
+    }
+
     fun assignSound(tileId: String, uri: Uri) {
         viewModelScope.launch {
             val name = withContext(ioDispatcher) { repo.importSound(uri) } ?: return@launch
@@ -95,7 +111,7 @@ class BoardViewModel(
     }
 
     fun clearTile(tileId: String) = updateTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null) else it }
+        tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null, speakLabel = false) else it }
     }
 
     /** Starts recording into a fresh file; call [stopRecording] or [cancelRecording] to end it. */
@@ -164,6 +180,10 @@ class BoardViewModel(
         tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
     }
 
+    fun setPinnedSpeakLabel(tileId: String, value: Boolean) = updatePinnedTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(speakLabel = value) else it }
+    }
+
     fun assignPinnedSound(tileId: String, uri: Uri) {
         viewModelScope.launch {
             val name = withContext(ioDispatcher) { repo.importSound(uri) } ?: return@launch
@@ -175,7 +195,7 @@ class BoardViewModel(
     }
 
     fun clearPinnedTile(tileId: String) = updatePinnedTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null) else it }
+        tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null, speakLabel = false) else it }
     }
 
     /** Same as [stopRecording], for a pinned tile. */
@@ -413,6 +433,7 @@ class BoardViewModel(
         recorder.cancel()
         pendingRecordingFile?.delete()
         player.release()
+        speaker.shutdown()
         super.onCleared()
     }
 
@@ -423,7 +444,8 @@ class BoardViewModel(
                 BoardRepository(app),
                 SoundPlayer(),
                 AudioRecorder(app),
-                PresetRepository(app)
+                PresetRepository(app),
+                TtsSpeaker(app)
             ) as T
         }
     }

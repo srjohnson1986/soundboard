@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
@@ -176,6 +177,7 @@ fun BoardScreen(
     var pageColorDialogIndex by remember { mutableStateOf<Int?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showSpeakDialog by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
     var isDragActive by remember { mutableStateOf(false) }
@@ -324,6 +326,15 @@ fun BoardScreen(
                                         onCheckedChange = { editMode = it }
                                     )
                                 }
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("Speak...") },
+                                    leadingIcon = { Icon(Icons.Filled.RecordVoiceOver, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        showSpeakDialog = true
+                                    }
+                                )
                                 HorizontalDivider()
                                 // Settings — see SettingsDialog
                                 DropdownMenuItem(
@@ -547,6 +558,7 @@ fun BoardScreen(
                     onClear = { vm.clearTile(editing.id) },
                     onVolumeChange = { vm.setVolume(editing.id, it) },
                     onColorChange = { vm.setColor(editing.id, it) },
+                    onSpeakLabelChange = { vm.setSpeakLabel(editing.id, it) },
                     onPlay = { vm.play(editing) },
                     onStartRecording = vm::startRecording,
                     onStopRecording = { vm.stopRecording(editing.id) },
@@ -568,6 +580,7 @@ fun BoardScreen(
                     onClear = { vm.clearPinnedTile(editing.id) },
                     onVolumeChange = { vm.setPinnedVolume(editing.id, it) },
                     onColorChange = { vm.setPinnedColor(editing.id, it) },
+                    onSpeakLabelChange = { vm.setPinnedSpeakLabel(editing.id, it) },
                     onPlay = { vm.play(editing) },
                     onStartRecording = vm::startRecording,
                     onStopRecording = { vm.stopPinnedRecording(editing.id) },
@@ -579,6 +592,13 @@ fun BoardScreen(
             }
         }
         null -> Unit
+    }
+
+    if (showSpeakDialog) {
+        SpeakDialog(
+            onSpeak = vm::speakAdHoc,
+            onDismiss = { showSpeakDialog = false }
+        )
     }
 
     gridDialogIndex?.let { index ->
@@ -757,7 +777,7 @@ fun BoardScreen(
                 text = {
                     Text(
                         "This page has $soundCount tile${if (soundCount == 1) "" else "s"} " +
-                            "with sounds. Deleting it can't be undone."
+                            "with sound or speech set up. Deleting it can't be undone."
                     )
                 },
                 confirmButton = {
@@ -997,6 +1017,34 @@ private fun textColorFor(background: Color): Color {
     return if (contrastWithBlack >= contrastWithWhite) Color.Black else Color.White
 }
 
+/** Free-text speech for a one-off phrase no pad covers — bypasses [Tile] entirely. */
+@Composable
+private fun SpeakDialog(onSpeak: (String) -> Unit, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Speak") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                placeholder = { Text("Type what you want to say...") },
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSpeak(text) },
+                enabled = text.isNotBlank()
+            ) { Text("Speak") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
 @Composable
 private fun EditTileDialog(
     tile: Tile,
@@ -1006,6 +1054,7 @@ private fun EditTileDialog(
     onClear: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onColorChange: (Int?) -> Unit,
+    onSpeakLabelChange: (Boolean) -> Unit,
     onPlay: () -> Unit,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
@@ -1059,7 +1108,24 @@ private fun EditTileDialog(
                     enabled = !isRecording,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (tile.isEmpty) "Choose sound" else "Replace sound")
+                    Text(if (tile.fileName == null) "Choose sound" else "Replace sound")
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Speak the label instead", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "Used when there's no sound file",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(checked = tile.speakLabel, onCheckedChange = onSpeakLabelChange)
                 }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1070,7 +1136,7 @@ private fun EditTileDialog(
                         enabled = !tile.isEmpty && !isRecording,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Play clip")
+                        Text(if (tile.fileName == null) "Preview speech" else "Play clip")
                     }
                     OutlinedButton(
                         onClick = {

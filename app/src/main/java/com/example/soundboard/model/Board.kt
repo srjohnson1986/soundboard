@@ -17,9 +17,11 @@ data class Tile(
     val label: String = "",
     val fileName: String? = null,
     val volume: Float = 1f,
-    val colorArgb: Int? = null
+    val colorArgb: Int? = null,
+    /** Speak [label] aloud via on-device text-to-speech when there's no [fileName]. */
+    val speakLabel: Boolean = false
 ) {
-    val isEmpty: Boolean get() = fileName == null
+    val isEmpty: Boolean get() = fileName == null && !speakLabel
 }
 
 /** One grid of tiles within a [Board]; a board can have several, switched via tabs. */
@@ -101,7 +103,7 @@ data class Board(
     /** Index of the page auto-return snaps back to; null if no page is marked home. */
     val homePageIndex: Int? get() = pages.indexOfFirst { it.isHome }.takeIf { it >= 0 }
 
-    /** Whether any tile — pinned or on any page — has a sound assigned, for gating destructive replace actions. */
+    /** Whether any tile — pinned or on any page — has a sound or speech set up, for gating destructive replace actions. */
     val hasAnySound: Boolean get() =
         pages.any { page -> page.tiles.any { !it.isEmpty } } || pinnedTiles.any { !it.isEmpty }
 

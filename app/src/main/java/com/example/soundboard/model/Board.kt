@@ -92,7 +92,10 @@ data class Board(
     val keepScreenAwake: Boolean = false,
     /** Whether long-press haptics (page-tab options, tile drag-reorder arm) fire. */
     val hapticFeedbackEnabled: Boolean = true,
-    /** Width of a newly-created pinned row — only takes effect before one exists (see BoardViewModel.addPinnedRow). */
+    /**
+     * Width of the pinned row: its starting size if none exists yet (see [addingPinnedRow]),
+     * or its live visible width once one does (see [pinnedVisibleTiles], [resizedPinnedRow]).
+     */
     val pinnedRowSize: Int = 4,
     /** Grid size a newly-added page starts at — it can still be resized individually afterward. */
     val defaultPageRows: Int = 4,
@@ -102,6 +105,9 @@ data class Board(
 
     /** Index of the page auto-return snaps back to; null if no page is marked home. */
     val homePageIndex: Int? get() = pages.indexOfFirst { it.isHome }.takeIf { it >= 0 }
+
+    /** Pinned tiles currently shown above the grid; empty until [addingPinnedRow] creates one. */
+    val pinnedVisibleTiles: List<Tile> get() = pinnedTiles.take(pinnedRowSize)
 
     /** Whether any tile — pinned or on any page — has a sound or speech set up, for gating destructive replace actions. */
     val hasAnySound: Boolean get() =
@@ -162,6 +168,32 @@ data class Board(
 
     /** Clears the home page, disabling auto-return. */
     fun clearingHomePage(): Board = copy(pages = pages.map { it.copy(isHome = false) })
+
+    /** Materializes an empty pinned row at [pinnedRowSize]; a no-op once one exists. */
+    fun addingPinnedRow(): Board {
+        if (pinnedTiles.isNotEmpty()) return this
+        return copy(pinnedTiles = List(pinnedRowSize) { Tile() })
+    }
+
+    /**
+     * Changes the pinned row's visible width without ever dropping a tile — same
+     * "shrink hides, doesn't lose" philosophy as [Page.resized]. A no-op on the
+     * tile list while no row exists yet; [newSize] is still remembered as the
+     * width [addingPinnedRow] will use.
+     */
+    fun resizedPinnedRow(newSize: Int): Board {
+        val target = newSize.coerceAtLeast(1)
+        if (pinnedTiles.isEmpty()) return copy(pinnedRowSize = target)
+        val next = if (pinnedTiles.size < target) {
+            pinnedTiles + List(target - pinnedTiles.size) { Tile() }
+        } else {
+            pinnedTiles
+        }
+        return copy(pinnedRowSize = target, pinnedTiles = next)
+    }
+
+    /** Removes the pinned row entirely; [pinnedRowSize] is kept as the width a future one starts at. */
+    fun removingPinnedRow(): Board = copy(pinnedTiles = emptyList())
 
     /** Reorders pages by moving [fromIndex] to [toIndex]; the current and home page follow their page. */
     fun movedPage(fromIndex: Int, toIndex: Int): Board {

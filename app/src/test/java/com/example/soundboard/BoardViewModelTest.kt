@@ -664,6 +664,59 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `setPinnedRowSize on an existing row grows it live`() {
+        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", label = "Hey")), pinnedRowSize = 1))
+        val vm = newViewModel()
+
+        vm.setPinnedRowSize(3)
+
+        assertEquals(3, vm.board.value.pinnedVisibleTiles.size)
+        assertEquals("hey", vm.board.value.pinnedVisibleTiles[0].id)
+    }
+
+    @Test
+    fun `setPinnedRowSize shrinking an existing row hides tiles without unloading their sound`() {
+        repo.save(
+            Board(
+                pinnedTiles = listOf(Tile(id = "hey", fileName = "hey.mp3"), Tile(id = "sos", fileName = "sos.mp3")),
+                pinnedRowSize = 2
+            )
+        )
+        repo.soundFile("sos.mp3").apply { parentFile?.mkdirs() }.writeText("sos")
+        val vm = newViewModel()
+
+        vm.setPinnedRowSize(1)
+
+        assertEquals(listOf("hey"), vm.board.value.pinnedVisibleTiles.map { it.id })
+        assertFalse(player.unloaded.contains("sos.mp3"))
+        assertTrue(repo.soundFile("sos.mp3").exists())
+    }
+
+    @Test
+    fun `removePinnedRow clears the row and unloads its sounds`() {
+        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", fileName = "hey.mp3"))))
+        repo.soundFile("hey.mp3").apply { parentFile?.mkdirs() }.writeText("hey")
+        val vm = newViewModel()
+
+        vm.removePinnedRow()
+
+        assertTrue(vm.board.value.pinnedTiles.isEmpty())
+        assertTrue(player.unloaded.contains("hey.mp3"))
+        assertFalse(repo.soundFile("hey.mp3").exists())
+    }
+
+    @Test
+    fun `removePinnedRow persists across a fresh view model`() {
+        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey"))))
+        val vm = newViewModel()
+
+        vm.removePinnedRow()
+
+        val second = newViewModel()
+        assertTrue(second.board.value.pinnedTiles.isEmpty())
+    }
+
+    @Test
     fun `resize does not touch the pinned row`() {
         repo.save(
             Board(

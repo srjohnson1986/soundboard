@@ -18,6 +18,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.soundboard.BoardViewModel
 import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.Recorder
+import com.example.soundboard.audio.Speaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.model.Board
@@ -47,6 +48,15 @@ private class FakeRecorder : Recorder {
     override fun cancel() {}
 }
 
+private class FakeSpeaker : Speaker {
+    val spoken = mutableListOf<String>()
+    override fun speak(text: String) {
+        spoken += text
+    }
+    override fun stop() {}
+    override fun shutdown() {}
+}
+
 @RunWith(AndroidJUnit4::class)
 class BoardScreenTest {
 
@@ -55,6 +65,7 @@ class BoardScreenTest {
 
     private lateinit var repo: BoardRepository
     private lateinit var player: FakePlayer
+    private lateinit var speaker: FakeSpeaker
     private lateinit var vm: BoardViewModel
 
     private fun launchWith(board: Board) {
@@ -62,7 +73,8 @@ class BoardScreenTest {
         repo = BoardRepository(context)
         repo.save(board)
         player = FakePlayer()
-        vm = BoardViewModel(repo, player, FakeRecorder(), PresetRepository(context))
+        speaker = FakeSpeaker()
+        vm = BoardViewModel(repo, player, FakeRecorder(), PresetRepository(context), speaker)
 
         composeRule.setContent {
             BoardScreen(vm = vm)

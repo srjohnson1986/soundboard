@@ -5,6 +5,13 @@
          recording a tile's sound directly needs the microphone. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Package-visibility (API 30+): lets TextToSpeech find an installed TTS engine. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.example.soundboard.audio.FakePlayer
 import com.example.soundboard.audio.FakeRecorder
+import com.example.soundboard.audio.FakeSpeaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.model.Board
@@ -36,9 +37,10 @@ class BoardViewModelTest {
     private lateinit var player: FakePlayer
     private lateinit var recorder: FakeRecorder
     private lateinit var presetRepo: PresetRepository
+    private lateinit var speaker: FakeSpeaker
 
     private fun newViewModel() =
-        BoardViewModel(repo, player, recorder, presetRepo, ioDispatcher = UnconfinedTestDispatcher())
+        BoardViewModel(repo, player, recorder, presetRepo, speaker, ioDispatcher = UnconfinedTestDispatcher())
 
     @Before
     fun setUp() {
@@ -47,6 +49,7 @@ class BoardViewModelTest {
         player = FakePlayer()
         recorder = FakeRecorder()
         presetRepo = PresetRepository(context)
+        speaker = FakeSpeaker()
     }
 
     private fun boardWith(vararg tiles: Tile) = Board(
@@ -71,6 +74,107 @@ class BoardViewModelTest {
         vm.play(tile)
 
         assertTrue(player.played.isEmpty())
+        assertTrue(speaker.spoken.isEmpty())
+    }
+
+    @Test
+    fun `play on a tile with speakLabel set but no sound speaks its label`() {
+        val vm = newViewModel()
+        val tile = Tile(id = "a", label = "I need water", speakLabel = true)
+
+        vm.play(tile)
+
+        assertEquals(listOf("I need water"), speaker.spoken)
+        assertTrue(player.played.isEmpty())
+    }
+
+    @Test
+    fun `play prefers a sound file over speaking even when speakLabel is set`() {
+        val vm = newViewModel()
+        val tile = Tile(id = "a", label = "Air horn", fileName = "a.mp3", speakLabel = true)
+
+        vm.play(tile)
+
+        assertEquals(listOf("a.mp3" to 1f), player.played)
+        assertTrue(speaker.spoken.isEmpty())
+    }
+
+    @Test
+    fun `play on a speakLabel tile with a blank label does nothing`() {
+        val vm = newViewModel()
+        val tile = Tile(id = "a", label = "", speakLabel = true)
+
+        vm.play(tile)
+
+        assertTrue(speaker.spoken.isEmpty())
+    }
+
+    @Test
+    fun `a speakLabel tile is not empty`() {
+        assertFalse(Tile(speakLabel = true).isEmpty)
+    }
+
+    @Test
+    fun `setSpeakLabel updates only the target tile`() {
+        repo.save(boardWith(Tile(id = "a"), Tile(id = "b")))
+        val vm = newViewModel()
+
+        vm.setSpeakLabel("a", true)
+
+        assertTrue(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakLabel)
+        assertFalse(vm.board.value.currentPage.tiles.first { it.id == "b" }.speakLabel)
+    }
+
+    @Test
+    fun `setPinnedSpeakLabel updates a pinned tile and leaves page tiles alone`() {
+        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a")))), pinnedTiles = listOf(Tile(id = "hey"))))
+        val vm = newViewModel()
+
+        vm.setPinnedSpeakLabel("hey", true)
+
+        assertTrue(vm.board.value.pinnedTiles.first { it.id == "hey" }.speakLabel)
+        assertFalse(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakLabel)
+    }
+
+    @Test
+    fun `clearTile also turns off speakLabel`() {
+        repo.save(boardWith(Tile(id = "a", label = "Water", speakLabel = true)))
+        val vm = newViewModel()
+
+        vm.clearTile("a")
+
+        assertFalse(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakLabel)
+    }
+
+    @Test
+    fun `clearPinnedTile also turns off speakLabel`() {
+        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", label = "Hey", speakLabel = true))))
+        val vm = newViewModel()
+
+        vm.clearPinnedTile("hey")
+
+        assertFalse(vm.board.value.pinnedTiles.first { it.id == "hey" }.speakLabel)
+    }
+
+    @Test
+    fun `speakAdHoc speaks arbitrary text without touching any tile`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        vm.speakAdHoc("I'll be there in five minutes")
+
+        assertEquals(listOf("I'll be there in five minutes"), speaker.spoken)
+    }
+
+    @Test
+    fun `setSpeakLabel persists across a fresh view model`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        vm.setSpeakLabel("a", true)
+
+        val second = newViewModel()
+        assertTrue(second.board.value.currentPage.tiles.first { it.id == "a" }.speakLabel)
     }
 
     @Test

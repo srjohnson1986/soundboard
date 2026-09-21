@@ -13,6 +13,7 @@ import com.example.soundboard.audio.SoundPlayer
 import com.example.soundboard.audio.Speaker
 import com.example.soundboard.audio.TtsSpeaker
 import com.example.soundboard.data.BoardRepository
+import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Board
@@ -33,6 +34,7 @@ class BoardViewModel(
     private val recorder: Recorder,
     private val presetRepo: PresetRepository,
     private val speaker: Speaker,
+    private val devicePrefs: DevicePreferences,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -42,6 +44,10 @@ class BoardViewModel(
     /** One-off status text for the UI to show (e.g. in a Snackbar), then clear. */
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+
+    /** Device-local, not part of [Board] — see [DevicePreferences]. */
+    private val _performanceModeEnabled = MutableStateFlow(devicePrefs.performanceModeEnabled)
+    val performanceModeEnabled: StateFlow<Boolean> = _performanceModeEnabled.asStateFlow()
 
     private val _presets = MutableStateFlow<List<SavedPreset>>(emptyList())
     val presets: StateFlow<List<SavedPreset>> = _presets.asStateFlow()
@@ -167,6 +173,12 @@ class BoardViewModel(
     /** Whether the home page's first row shows fixed above every other page. */
     fun setStickyHomeRowEnabled(value: Boolean) {
         commit(_board.value.copy(stickyHomeRowEnabled = value))
+    }
+
+    /** Disables tile shadows to help scrolling stay smooth on slower devices. */
+    fun setPerformanceModeEnabled(value: Boolean) {
+        devicePrefs.performanceModeEnabled = value
+        _performanceModeEnabled.value = value
     }
 
     // The sticky home row shown on other pages is just the home page's own first
@@ -437,7 +449,8 @@ class BoardViewModel(
                 SoundPlayer(),
                 AudioRecorder(app),
                 PresetRepository(app),
-                TtsSpeaker(app)
+                TtsSpeaker(app),
+                DevicePreferences(app)
             ) as T
         }
     }

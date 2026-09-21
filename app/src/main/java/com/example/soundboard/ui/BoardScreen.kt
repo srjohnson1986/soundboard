@@ -178,6 +178,7 @@ fun BoardScreen(
     val message by vm.message.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
     val presets by vm.presets.collectAsStateWithLifecycle()
+    val performanceModeEnabled by vm.performanceModeEnabled.collectAsStateWithLifecycle()
     var editingTarget by remember { mutableStateOf<EditTarget?>(null) }
     var gridDialogIndex by remember { mutableStateOf<Int?>(null) }
     var showSavePresetDialog by remember { mutableStateOf(false) }
@@ -533,6 +534,7 @@ fun BoardScreen(
                     editMode = editMode,
                     aspectRatio = board.currentPage.tileAspectRatio,
                     hapticFeedbackEnabled = board.hapticFeedbackEnabled,
+                    performanceModeEnabled = performanceModeEnabled,
                     onTap = { tile ->
                         touch()
                         if (tile.isEmpty || editMode) {
@@ -567,6 +569,7 @@ fun BoardScreen(
                         editMode = editMode,
                         isActive = pageIndex == board.currentPageIndex,
                         hapticFeedbackEnabled = board.hapticFeedbackEnabled,
+                        performanceModeEnabled = performanceModeEnabled,
                         onTap = { tile ->
                             touch()
                             if (tile.isEmpty || editMode) {
@@ -683,6 +686,8 @@ fun BoardScreen(
             onKeepScreenAwakeChange = vm::setKeepScreenAwake,
             hapticFeedbackEnabled = board.hapticFeedbackEnabled,
             onHapticFeedbackEnabledChange = vm::setHapticFeedbackEnabled,
+            performanceModeEnabled = performanceModeEnabled,
+            onPerformanceModeEnabledChange = vm::setPerformanceModeEnabled,
             stickyHomeRowEnabled = board.stickyHomeRowEnabled,
             hasHomePage = board.homePageIndex != null,
             onStickyHomeRowEnabledChange = vm::setStickyHomeRowEnabled,
@@ -845,6 +850,7 @@ private fun PinnedRow(
     editMode: Boolean,
     aspectRatio: Float,
     hapticFeedbackEnabled: Boolean,
+    performanceModeEnabled: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewSound: (Tile) -> Unit
 ) {
@@ -861,6 +867,7 @@ private fun PinnedRow(
                 editMode = editMode,
                 aspectRatio = aspectRatio,
                 pageColor = null,
+                performanceModeEnabled = performanceModeEnabled,
                 modifier = Modifier.weight(1f),
                 onTap = { onTap(tile) },
                 // Long-press previews what a pad will say without "using" it for real,
@@ -886,6 +893,7 @@ private fun PageGrid(
     editMode: Boolean,
     isActive: Boolean,
     hapticFeedbackEnabled: Boolean,
+    performanceModeEnabled: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewSound: (Tile) -> Unit,
     onPreviewMove: (Int, Int) -> Unit,
@@ -920,13 +928,14 @@ private fun PageGrid(
                 editMode = editMode,
                 aspectRatio = page.tileAspectRatio,
                 pageColor = page.color?.let { Color(it) },
+                performanceModeEnabled = performanceModeEnabled,
                 modifier = Modifier
                     .then(if (isDragged) Modifier else Modifier.animateItem())
                     .graphicsLayer {
                         if (isDragged) {
                             translationX = dragOffset.x
                             translationY = dragOffset.y
-                            shadowElevation = 8f
+                            if (!performanceModeEnabled) shadowElevation = 8f
                             scaleX = 1.05f
                             scaleY = 1.05f
                         }
@@ -992,6 +1001,7 @@ private fun TileCard(
     editMode: Boolean,
     aspectRatio: Float,
     pageColor: Color?,
+    performanceModeEnabled: Boolean,
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
     onLongClick: (() -> Unit)? = null
@@ -1019,7 +1029,9 @@ private fun TileCard(
             .aspectRatio(aspectRatio)
             .combinedClickable(onClick = onTap, onLongClick = onLongClick),
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (filled) 2.dp else 0.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (filled && !performanceModeEnabled) 2.dp else 0.dp
+        ),
         border = if (filled) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Box(
@@ -1417,6 +1429,8 @@ private fun SettingsDialog(
     onKeepScreenAwakeChange: (Boolean) -> Unit,
     hapticFeedbackEnabled: Boolean,
     onHapticFeedbackEnabledChange: (Boolean) -> Unit,
+    performanceModeEnabled: Boolean,
+    onPerformanceModeEnabledChange: (Boolean) -> Unit,
     stickyHomeRowEnabled: Boolean,
     hasHomePage: Boolean,
     onStickyHomeRowEnabledChange: (Boolean) -> Unit,
@@ -1541,6 +1555,20 @@ private fun SettingsDialog(
                     Text("Haptic feedback")
                     Switch(checked = hapticFeedbackEnabled, onCheckedChange = onHapticFeedbackEnabledChange)
                 }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Performance mode", modifier = Modifier.weight(1f))
+                    Switch(checked = performanceModeEnabled, onCheckedChange = onPerformanceModeEnabledChange)
+                }
+                Text(
+                    "Turns off tile shadows to help scrolling stay smooth on older devices.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),

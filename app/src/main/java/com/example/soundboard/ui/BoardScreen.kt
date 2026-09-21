@@ -262,16 +262,18 @@ fun BoardScreen(
     }
 
     val pagerState = rememberPagerState(initialPage = board.currentPageIndex) { board.pages.size }
+    // Guards the loop between the two effects below: true only while WE are
+    // driving a programmatic multi-page jump (a tab tap or the idle timer),
+    // so the swipe effect can ignore the intermediate pages that jump flies
+    // over instead of feeding them back and cancelling it early (#72).
+    var isProgrammaticPageScroll by remember { mutableStateOf(false) }
 
-    // Swipe -> ViewModel: a settled swipe becomes the active page. Watches
-    // settledPage, not currentPage — currentPage ticks through every page a
-    // multi-page animateScrollToPage() passes over (e.g. tapping the far tab
-    // from the opposite end), and reacting to those intermediate values here
-    // would fight the "ViewModel -> pager" effect below, cancelling its
-    // animation one page short of the actual target.
+    // Swipe -> ViewModel: tracks currentPage, not settledPage, so the tab
+    // indicator flips the instant a real swipe crosses the page boundary
+    // instead of waiting for the whole settle animation to finish.
     LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.settledPage }.collect { page ->
-            if (page != board.currentPageIndex) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            if (!isProgrammaticPageScroll && page != board.currentPageIndex) {
                 touch()
                 vm.switchPage(page)
             }
@@ -281,7 +283,12 @@ fun BoardScreen(
     // ViewModel -> pager: a tab tap or the idle timer scrolls the pager to match.
     LaunchedEffect(board.currentPageIndex) {
         if (pagerState.currentPage != board.currentPageIndex) {
-            pagerState.animateScrollToPage(board.currentPageIndex)
+            isProgrammaticPageScroll = true
+            try {
+                pagerState.animateScrollToPage(board.currentPageIndex)
+            } finally {
+                isProgrammaticPageScroll = false
+            }
         }
     }
 

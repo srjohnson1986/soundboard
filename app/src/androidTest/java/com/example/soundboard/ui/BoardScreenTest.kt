@@ -227,6 +227,75 @@ class BoardScreenTest {
     }
 
     @Test
+    fun longPressWithoutMovingAGridTilePreviewsItWithoutReordering() {
+        // A hold that clears the long-press timeout but never crosses into a drag
+        // (#4) shares the same gesture detector as longPressDragReordersTiles above —
+        // it should preview the tile in place instead of reordering it.
+        launchWith(
+            Board(
+                pages = listOf(
+                    Page(
+                        rows = 1,
+                        columns = 2,
+                        tiles = listOf(
+                            Tile(id = "a", label = "A", fileName = "a.mp3"),
+                            Tile(id = "b", label = "B", fileName = "b.mp3")
+                        )
+                    )
+                )
+            )
+        )
+
+        composeRule.onNodeWithText("A").performTouchInput {
+            down(center)
+            advanceEventTime(600)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.waitUntil(timeoutMillis = 2_000) { player.played.contains("a.mp3") }
+        assertEquals(listOf("A", "B"), vm.board.value.currentPage.tiles.map { it.label })
+    }
+
+    @Test
+    fun longPressPreviewIsDisabledInEditMode() {
+        launchWith(
+            Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Air horn", fileName = "a.mp3")))))
+        )
+        composeRule.onNodeWithContentDescription("Menu").performClick()
+        composeRule.onNodeWithText("Edit mode").performClick()
+
+        composeRule.onNodeWithText("Air horn").performTouchInput {
+            down(center)
+            advanceEventTime(600)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        assertTrue(player.played.isEmpty())
+    }
+
+    @Test
+    fun longPressWithoutMovingAPinnedTilePreviewsItWithoutOpeningTheEditor() {
+        launchWith(
+            Board(
+                pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a")))),
+                pinnedTiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3"))
+            )
+        )
+
+        composeRule.onNodeWithText("Hey").performTouchInput {
+            down(center)
+            advanceEventTime(600)
+            up()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.waitUntil(timeoutMillis = 2_000) { player.played.contains("hey.mp3") }
+        composeRule.onNodeWithText("Edit tile").assertDoesNotExist()
+    }
+
+    @Test
     fun tappingAPageTabSwitchesTheVisibleGrid() {
         launchWith(
             Board(

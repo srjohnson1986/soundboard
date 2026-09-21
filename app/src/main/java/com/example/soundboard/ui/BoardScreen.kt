@@ -550,6 +550,14 @@ fun BoardScreen(
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = !isDragActive,
+                // Keeps one neighboring page's grid composed on each side at all
+                // times, instead of the default 0 (which only builds a page's
+                // content the moment a swipe first reveals it). That first-time
+                // composition of a whole grid of tiles happening mid-gesture is
+                // the main source of dropped frames on slower devices; this moves
+                // the cost to idle time so the swipe itself just slides already-
+                // built content.
+                beyondViewportPageCount = 1,
                 modifier = Modifier.weight(1f)
             ) { pageIndex ->
                 val page = board.pages.getOrNull(pageIndex)

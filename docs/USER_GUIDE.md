@@ -105,19 +105,20 @@ Switching pages doesn't affect anything else: Edit mode stays as you left it,
 and any page-tile dialog you had open closes rather than applying to the
 wrong page.
 
-### A pinned row that stays on every page
+### A sticky row that stays on every other page
 
-**Add pinned row** (in the **☰** menu, shown until you've added one) creates
-a row of tiles that sits above the grid and stays fixed while you scroll or
-switch pages — the same tiles, in the same place, no matter which page
-you're on. It's meant for anything you need reachable no matter where the
-board happens to be — a call for help, "something's wrong," a way to summon
-someone. Editing a pinned tile from any page updates it everywhere, since
-it's really one shared row, not a per-page copy.
+**Sticky home row** (a switch in **Settings**) shows your home page's own
+first row of tiles fixed above whichever other page you're looking at — the
+same tiles, in the same place, no matter which page you're on. It's meant
+for anything you need reachable no matter where the board happens to be — a
+call for help, "something's wrong," a way to summon someone. There's nothing
+extra to set up: it's just the top row of tiles you already have on your
+home page, so editing one of those tiles from any page updates the real
+tile, not a separate copy. It's hidden while you're actually on the home
+page, since that row is already right there.
 
-The pinned row is always 4 tiles, on its own, independent of how wide any
-page's grid is — resizing a page's grid never grows or shrinks it. A future
-version may make that width adjustable; for now it's fixed.
+Turning it on or off never deletes anything — pages just show (or stop
+showing) that row above their own content.
 
 ### Returning to a home page automatically
 

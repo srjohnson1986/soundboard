@@ -22,8 +22,9 @@ section in `docs/USER_GUIDE.md`.
 ## `steve-care-board.zip` — "Steve Draft Care Board"
 
 Four pages — **Trouble**, **Needs** (home), **Talking**, **Well Wishes** —
-plus a pinned row (Hey / Something's wrong / Call the doctor / 911, in red)
-fixed above every page's own 6-row x 4-column grid. Tiles are "Wide"
+plus a sticky home row (Hey / Something's wrong / Call the doctor / 911, in
+red — the home page's own first row) fixed above every other page's 6-row x
+4-column grid. Tiles are "Wide"
 (4:3) rather than square, and each page carries its own color identity
 (Trouble amber, Needs blue, Talking neutral, Well Wishes green) so which
 page is active is visible at a glance. This is the layout described in the
@@ -34,8 +35,8 @@ recordings from an earlier flat draft, redistributed onto the new page
 structure. A second pass pulled from the full ~92-clip recording batch (the
 complete script, not just the 50 that had originally been tiled) and filled
 in nearly everything that pass had to leave blank — **69 of the ~92
-recorded clips are on a tile somewhere in this board.** Trouble, Needs, and
-the pinned row are now **fully recorded** (every non-blank tile has real
+recorded clips are on a tile somewhere in this board.** Trouble and Needs
+(including its sticky first row) are now **fully recorded** (every non-blank tile has real
 audio); Talking is recorded except for "Not that", which has no matching
 clip yet.
 
@@ -82,7 +83,7 @@ any other backup.
 ## `jeremy-care-board.zip` — "Jeremy Draft Care Board"
 
 Same layout and tile-for-tile mapping as `steve-care-board.zip` above (same
-four pages, same pinned row, same colors, same "Wide" tiles, Needs as home)
+four pages, same sticky home row, same colors, same "Wide" tiles, Needs as home)
 built from a separate recording batch in Jeremy's own voice — same 92-clip
 script as Steve's, filename-for-filename identical except for two extras
 (see below).
@@ -101,7 +102,7 @@ already been saved is the **☰** menu's **Load preset**, which lists it as a
 "Factory" entry ("Jeremy Draft Care Board") — no `adb push` or file picker
 needed. Loading it over a board that has sounds asks for confirmation first.
 
-Trouble, Needs, and the pinned row are fully recorded; Talking is missing
+Trouble and Needs (including its sticky first row) are fully recorded; Talking is missing
 only "Not that", same gap as Steve's board. The same clips are deferred for
 the same reasons (see the list above) — this batch is otherwise identical.
 

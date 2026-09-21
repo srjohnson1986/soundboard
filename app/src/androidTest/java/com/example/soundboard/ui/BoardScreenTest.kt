@@ -1,6 +1,7 @@
 package com.example.soundboard.ui
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -294,11 +295,14 @@ class BoardScreenTest {
     }
 
     @Test
-    fun longPressWithoutMovingAPinnedTilePreviewsItWithoutOpeningTheEditor() {
+    fun longPressWithoutMovingAStickyHomeRowTilePreviewsItWithoutOpeningTheEditor() {
         launchWith(
             Board(
-                pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a")))),
-                pinnedTiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3"))
+                pages = listOf(
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))),
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3")), isHome = true)
+                ),
+                stickyHomeRowEnabled = true
             )
         )
 
@@ -345,26 +349,23 @@ class BoardScreenTest {
     }
 
     @Test
-    fun addingAPinnedRowShowsItIdenticallyOnEveryPage() {
+    fun stickyHomeRowShowsHomePagesFirstRowOnOtherPagesButNotOnHomeItself() {
         launchWith(
             Board(
                 pages = listOf(
                     Page(name = "First", rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Alpha", fileName = "a.mp3"))),
+                    Page(name = "Home", rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3")), isHome = true),
                     Page(name = "Second", rows = 1, columns = 1, tiles = listOf(Tile(id = "b", label = "Beta", fileName = "b.mp3")))
                 )
             )
         )
 
-        composeRule.onNodeWithContentDescription("Menu").performClick()
-        composeRule.onNodeWithText("Add pinned row").performClick()
+        composeRule.onNodeWithText("Hey").assertDoesNotExist()
 
-        // The pinned row is a fixed 4 empty tiles regardless of the page's own
-        // 1-column width (#15) — every "+" on screen belongs to it, since both
-        // pages' own tiles are filled. Name the first one so it's easy to find
-        // again on the other page.
-        composeRule.onAllNodesWithText("+")[0].performClick()
-        composeRule.onNodeWithText("Name").performTextInput("Hey")
-        composeRule.onNodeWithText("Save").performClick()
+        composeRule.onNodeWithContentDescription("Menu").performClick()
+        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithText("Sticky home row").performClick()
+        composeRule.onNodeWithText("Done").performClick()
 
         composeRule.onNodeWithText("Hey").assertIsDisplayed()
         composeRule.onNodeWithText("Alpha").assertIsDisplayed()
@@ -373,6 +374,11 @@ class BoardScreenTest {
 
         composeRule.onNodeWithText("Hey").assertIsDisplayed()
         composeRule.onNodeWithText("Beta").assertIsDisplayed()
+
+        composeRule.onNodeWithText("Home").performClick()
+
+        // Shown once, as ordinary page content — not duplicated by the sticky banner.
+        composeRule.onAllNodesWithText("Hey").assertCountEquals(1)
     }
 
     @Test

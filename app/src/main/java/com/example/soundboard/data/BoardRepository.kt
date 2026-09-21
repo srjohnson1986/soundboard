@@ -83,8 +83,7 @@ class BoardRepository(private val context: Context) {
         fun fix(tile: Tile): Tile =
             if (tile.fileName != null && !soundFile(tile.fileName).exists()) tile.copy(fileName = null) else tile
         return board.copy(
-            pages = board.pages.map { page -> page.copy(tiles = page.tiles.map(::fix)) },
-            pinnedTiles = board.pinnedTiles.map(::fix)
+            pages = board.pages.map { page -> page.copy(tiles = page.tiles.map(::fix)) }
         )
     }
 

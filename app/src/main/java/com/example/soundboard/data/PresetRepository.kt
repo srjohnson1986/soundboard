@@ -50,7 +50,7 @@ class PresetRepository(context: Context) {
     fun allReferencedFileNames(): Set<String> =
         presetFiles()
             .mapNotNull(::decode)
-            .flatMap { board -> (board.pages.flatMap { it.tiles } + board.pinnedTiles).mapNotNull { it.fileName } }
+            .flatMap { board -> board.pages.flatMap { it.tiles }.mapNotNull { it.fileName } }
             .toSet()
 
     private fun presetFiles(): List<File> =

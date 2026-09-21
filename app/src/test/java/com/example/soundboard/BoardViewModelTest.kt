@@ -126,13 +126,21 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setPinnedSpeakLabel updates a pinned tile and leaves page tiles alone`() {
-        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a")))), pinnedTiles = listOf(Tile(id = "hey"))))
+    fun `setHomeRowSpeakLabel updates the home page tile and leaves the current page alone`() {
+        repo.save(
+            Board(
+                pages = listOf(
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))),
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey")), isHome = true)
+                ),
+                currentPageIndex = 0
+            )
+        )
         val vm = newViewModel()
 
-        vm.setPinnedSpeakLabel("hey", true)
+        vm.setHomeRowSpeakLabel("hey", true)
 
-        assertTrue(vm.board.value.pinnedTiles.first { it.id == "hey" }.speakLabel)
+        assertTrue(vm.board.value.homePage!!.tiles.first { it.id == "hey" }.speakLabel)
         assertFalse(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakLabel)
     }
 
@@ -147,13 +155,13 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `clearPinnedTile also turns off speakLabel`() {
-        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", label = "Hey", speakLabel = true))))
+    fun `clearHomeRowTile also turns off speakLabel`() {
+        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", speakLabel = true)), isHome = true))))
         val vm = newViewModel()
 
-        vm.clearPinnedTile("hey")
+        vm.clearHomeRowTile("hey")
 
-        assertFalse(vm.board.value.pinnedTiles.first { it.id == "hey" }.speakLabel)
+        assertFalse(vm.board.value.homePage!!.tiles.first { it.id == "hey" }.speakLabel)
     }
 
     @Test
@@ -255,16 +263,16 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `stopPinnedRecording points a pinned tile at the recorded file`() {
-        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", label = "Hey"))))
+    fun `stopHomeRowRecording points the home page tile at the recorded file`() {
+        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey")), isHome = true))))
         val vm = newViewModel()
 
         vm.startRecording()
         val recordedFile = recorder.startedFile!!
 
-        vm.stopPinnedRecording("hey")
+        vm.stopHomeRowRecording("hey")
 
-        val tile = vm.board.value.pinnedTiles.first { it.id == "hey" }
+        val tile = vm.board.value.homePage!!.tiles.first { it.id == "hey" }
         assertEquals(recordedFile.name, tile.fileName)
     }
 
@@ -574,7 +582,7 @@ class BoardViewModelTest {
         vm.setThemeMode(ThemeMode.DARK)
         vm.setKeepScreenAwake(true)
         vm.setHapticFeedbackEnabled(false)
-        vm.setPinnedRowSize(6)
+        vm.setStickyHomeRowEnabled(true)
         vm.setDefaultPageRows(2)
         vm.setDefaultPageColumns(6)
 
@@ -586,7 +594,7 @@ class BoardViewModelTest {
         vm.setThemeMode(ThemeMode.SYSTEM)
         vm.setKeepScreenAwake(false)
         vm.setHapticFeedbackEnabled(true)
-        vm.setPinnedRowSize(4)
+        vm.setStickyHomeRowEnabled(false)
         vm.setDefaultPageRows(4)
         vm.setDefaultPageColumns(4)
 
@@ -598,45 +606,20 @@ class BoardViewModelTest {
         assertEquals(ThemeMode.DARK, vm.board.value.themeMode)
         assertTrue(vm.board.value.keepScreenAwake)
         assertFalse(vm.board.value.hapticFeedbackEnabled)
-        assertEquals(6, vm.board.value.pinnedRowSize)
+        assertTrue(vm.board.value.stickyHomeRowEnabled)
         assertEquals(2, vm.board.value.defaultPageRows)
         assertEquals(6, vm.board.value.defaultPageColumns)
     }
 
     @Test
-    fun `addPinnedRow materializes a fixed-width empty row regardless of the current page and persists`() {
-        // Fixed at 4 regardless of the page's own column count (3 here) — the
-        // pinned row is deliberately decoupled from page grid width (#15).
-        repo.save(boardWith(Tile(id = "a"), Tile(id = "b"), Tile(id = "c")))
+    fun `setStickyHomeRowEnabled persists across a fresh view model`() {
         val vm = newViewModel()
 
-        vm.addPinnedRow()
+        vm.setStickyHomeRowEnabled(true)
 
-        assertEquals(4, vm.board.value.pinnedTiles.size)
-        assertTrue(vm.board.value.pinnedTiles.all { it.isEmpty })
+        assertTrue(vm.board.value.stickyHomeRowEnabled)
         val second = newViewModel()
-        assertEquals(4, second.board.value.pinnedTiles.size)
-    }
-
-    @Test
-    fun `addPinnedRow uses the board's configured pinnedRowSize`() {
-        repo.save(boardWith(Tile(id = "a")).copy(pinnedRowSize = 6))
-        val vm = newViewModel()
-
-        vm.addPinnedRow()
-
-        assertEquals(6, vm.board.value.pinnedTiles.size)
-    }
-
-    @Test
-    fun `setPinnedRowSize persists across a fresh view model`() {
-        val vm = newViewModel()
-
-        vm.setPinnedRowSize(6)
-
-        assertEquals(6, vm.board.value.pinnedRowSize)
-        val second = newViewModel()
-        assertEquals(6, second.board.value.pinnedRowSize)
+        assertTrue(second.board.value.stickyHomeRowEnabled)
     }
 
     @Test
@@ -651,84 +634,6 @@ class BoardViewModelTest {
         val second = newViewModel()
         assertEquals(2, second.board.value.defaultPageRows)
         assertEquals(6, second.board.value.defaultPageColumns)
-    }
-
-    @Test
-    fun `addPinnedRow is a no-op once a pinned row already exists`() {
-        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", label = "Hey"))))
-        val vm = newViewModel()
-
-        vm.addPinnedRow()
-
-        assertEquals(listOf("hey"), vm.board.value.pinnedTiles.map { it.id })
-    }
-
-    @Test
-    fun `setPinnedRowSize on an existing row grows it live`() {
-        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", label = "Hey")), pinnedRowSize = 1))
-        val vm = newViewModel()
-
-        vm.setPinnedRowSize(3)
-
-        assertEquals(3, vm.board.value.pinnedVisibleTiles.size)
-        assertEquals("hey", vm.board.value.pinnedVisibleTiles[0].id)
-    }
-
-    @Test
-    fun `setPinnedRowSize shrinking an existing row hides tiles without unloading their sound`() {
-        repo.save(
-            Board(
-                pinnedTiles = listOf(Tile(id = "hey", fileName = "hey.mp3"), Tile(id = "sos", fileName = "sos.mp3")),
-                pinnedRowSize = 2
-            )
-        )
-        repo.soundFile("sos.mp3").apply { parentFile?.mkdirs() }.writeText("sos")
-        val vm = newViewModel()
-
-        vm.setPinnedRowSize(1)
-
-        assertEquals(listOf("hey"), vm.board.value.pinnedVisibleTiles.map { it.id })
-        assertFalse(player.unloaded.contains("sos.mp3"))
-        assertTrue(repo.soundFile("sos.mp3").exists())
-    }
-
-    @Test
-    fun `removePinnedRow clears the row and unloads its sounds`() {
-        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", fileName = "hey.mp3"))))
-        repo.soundFile("hey.mp3").apply { parentFile?.mkdirs() }.writeText("hey")
-        val vm = newViewModel()
-
-        vm.removePinnedRow()
-
-        assertTrue(vm.board.value.pinnedTiles.isEmpty())
-        assertTrue(player.unloaded.contains("hey.mp3"))
-        assertFalse(repo.soundFile("hey.mp3").exists())
-    }
-
-    @Test
-    fun `removePinnedRow persists across a fresh view model`() {
-        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey"))))
-        val vm = newViewModel()
-
-        vm.removePinnedRow()
-
-        val second = newViewModel()
-        assertTrue(second.board.value.pinnedTiles.isEmpty())
-    }
-
-    @Test
-    fun `resize does not touch the pinned row`() {
-        repo.save(
-            Board(
-                pages = listOf(Page(rows = 1, columns = 2)),
-                pinnedTiles = listOf(Tile(id = "hey", label = "Hey"), Tile(id = "sos", label = "911"))
-            )
-        )
-        val vm = newViewModel()
-
-        vm.resize(0, 1, 4)
-
-        assertEquals(listOf("hey", "sos"), vm.board.value.pinnedTiles.map { it.id })
     }
 
     @Test
@@ -756,48 +661,37 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setPinnedLabel updates a pinned tile and leaves page tiles alone`() {
-        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "old")))), pinnedTiles = listOf(Tile(id = "hey", label = "old"))))
+    fun `setHomeRowLabel updates the home page tile regardless of the current page`() {
+        repo.save(
+            Board(
+                pages = listOf(
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "old"))),
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "old")), isHome = true)
+                ),
+                currentPageIndex = 0
+            )
+        )
         val vm = newViewModel()
 
-        vm.setPinnedLabel("hey", "Hey!")
+        vm.setHomeRowLabel("hey", "Hey!")
 
-        assertEquals("Hey!", vm.board.value.pinnedTiles.first { it.id == "hey" }.label)
+        assertEquals("Hey!", vm.board.value.homePage!!.tiles.first { it.id == "hey" }.label)
         assertEquals("old", vm.board.value.currentPage.tiles.first { it.id == "a" }.label)
     }
 
     @Test
-    fun `clearing a pinned tile unloads and deletes its sound`() {
-        repo.save(Board(pinnedTiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3"))))
+    fun `clearing a home row tile unloads and deletes its sound`() {
+        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3")), isHome = true))))
         repo.soundFile("hey.mp3").apply { parentFile?.mkdirs() }.writeText("hey")
         val vm = newViewModel()
 
-        vm.clearPinnedTile("hey")
+        vm.clearHomeRowTile("hey")
 
-        val tile = vm.board.value.pinnedTiles.first { it.id == "hey" }
+        val tile = vm.board.value.homePage!!.tiles.first { it.id == "hey" }
         assertEquals("", tile.label)
         assertNull(tile.fileName)
         assertTrue(player.unloaded.contains("hey.mp3"))
         assertFalse(repo.soundFile("hey.mp3").exists())
-    }
-
-    @Test
-    fun `a sound referenced only by a pinned tile is preloaded and survives pruning`() {
-        repo.save(
-            Board(
-                pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", fileName = "a.mp3")))),
-                pinnedTiles = listOf(Tile(id = "hey", fileName = "hey.mp3"))
-            )
-        )
-        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
-        repo.soundFile("hey.mp3").apply { parentFile?.mkdirs() }.writeText("hey")
-        val vm = newViewModel()
-
-        assertTrue(player.loaded.contains("hey.mp3"))
-
-        vm.setLabel("a", "renamed")
-
-        assertTrue(repo.soundFile("hey.mp3").exists())
     }
 
     @Test

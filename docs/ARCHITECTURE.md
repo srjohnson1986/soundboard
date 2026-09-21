@@ -15,7 +15,7 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 | `audio/Recorder.kt` | Interface (`start`/`stop`/`cancel`) that `BoardViewModel` depends on for recording — same fake-in-tests seam as `Player`. |
 | `audio/AudioRecorder.kt` | Real `Recorder` implementation: owns a `MediaRecorder`, encoding straight to a file `BoardRepository` hands it. |
 | `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other layers together, single write path. Takes `BoardRepository`/`Player`/`Recorder`/`PresetRepository`/dispatcher as constructor params (see below) rather than constructing them. |
-| `ui/BoardScreen.kt` | Compose UI: pinned row, per-page swipeable grid (`HorizontalPager`), drag-to-reorder, edit dialog, grid-size/preset/page/color dialogs, top bar showing the active board's name, and a tab row for switching pages. |
+| `ui/BoardScreen.kt` | Compose UI: sticky home row banner, per-page swipeable grid (`HorizontalPager`), drag-to-reorder, edit dialog, grid-size/preset/page/color dialogs, top bar showing the active board's name, and a tab row for switching pages. |
 | `MainActivity.kt` | Just sets content to `SoundboardTheme { BoardScreen() }`. |
 
 Data flows one way: UI calls a `BoardViewModel` function → it updates
@@ -49,10 +49,11 @@ data class Board(
     val name: String = "New Board",
     val pages: List<Page> = listOf(Page()),
     val currentPageIndex: Int = 0,
-    val pinnedTiles: List<Tile> = emptyList()  // shown above every page, identical everywhere
+    val stickyHomeRowEnabled: Boolean = false  // shows the home page's first row above every OTHER page
 ) {
     val homePageIndex: Int?   // computed — derived from pages, not stored; see "Why isHome is per-page" below
-    val hasAnySound: Boolean  // computed — any tile, pinned or on any page, has a sound
+    val homePage: Page?       // computed — pages[homePageIndex], or null
+    val hasAnySound: Boolean  // computed — any tile on any page has a sound
 }
 ```
 
@@ -60,16 +61,17 @@ A board is one or more `Page`s, each an independent grid, switched via tabs
 in the UI. `Board.name` identifies the whole board (shown in the title bar);
 each `Page.name` identifies just that tab; `Page.color` is that tab's own
 identity accent, distinct from `Tile.colorArgb` (a tile's own color always
-wins). `name`, `currentPageIndex`, and `pinnedTiles` are the board-level state
-that isn't grid geometry or page tiles — `BoardViewModel.renameBoard()`/`switchPage()`/
-pinned-tile mutators are their write paths, and none of them need a dedicated
-persistence concept since they're just more fields in `board.json`.
-`Board.currentPage` resolves the active `Page` (clamping `currentPageIndex`
-defensively); `Board.updatingCurrentPage { transform }` is how every tile/grid
-mutation reaches it without the caller handling the page list itself.
-`addPage()`, `removePage()` (a no-op on the last remaining page),
-`renamePage()`, and `switchTo()` round out page management, all returning a
-new `Board` like every other mutator here.
+wins). `name`, `currentPageIndex`, and `stickyHomeRowEnabled` are the
+board-level state that isn't grid geometry or page tiles —
+`BoardViewModel.renameBoard()`/`switchPage()`/`setStickyHomeRowEnabled()` are
+their write paths, and none of them need a dedicated persistence concept
+since they're just more fields in `board.json`. `Board.currentPage` resolves
+the active `Page` (clamping `currentPageIndex` defensively);
+`Board.updatingCurrentPage { transform }` is how every tile/grid mutation
+reaches it without the caller handling the page list itself. `addPage()`,
+`removePage()` (a no-op on the last remaining page), `renamePage()`, and
+`switchTo()` round out page management, all returning a new `Board` like
+every other mutator here.
 
 **Why `isHome` is per-page, not a board-level index.** It used to be a single
 `Board.homePageIndex: Int?`, which meant `removePage()`/`movedPage()` both had
@@ -84,25 +86,23 @@ need to change at all. `withHomePage(index)`/`clearingHomePage()` are still
 the write paths, just implemented as `pages.map { it.copy(isHome = ...) }`
 now instead of setting a single field.
 
-**`pinnedTiles` is deliberately on `Board`, not `Page`.** The whole point is
-a row identical on every page — putting it on `Page` would mean N independent
-copies to keep in sync by hand. `BoardViewModel` mirrors the five page-tile
-mutators (`setLabel`/`setVolume`/`setColor`/`assignSound`/`clearTile`) as
-pinned-scoped equivalents (`setPinnedLabel`, etc.) operating on
-`Board.pinnedTiles` directly instead of `updatingCurrentPage`.
-`addPinnedRow()` materializes the row at a fixed width (`PINNED_ROW_SIZE`,
-currently 4) the first time it's called — a no-op once one exists.
-
-**The pinned row's width is deliberately independent of any page's column
-count (#15).** It used to grow to match whichever page's grid was widest
-(`BoardViewModel.resize()` used to pad `pinnedTiles` up to the new column
-count on every resize); that coupling was removed so a board's pages can
-have arbitrary, independent grid sizes without dragging the pinned row's
-width around with whichever page happens to be resized. `resize()` now only
-ever touches the current page — `PinnedRow` in `BoardScreen.kt` renders the
-full `board.pinnedTiles` list unconditionally rather than truncating it to
-`currentPage.columns`. A future version may make the pinned row's width
-user-configurable; for now it's a fixed constant.
+**The sticky home row isn't its own data — it's just the home page's first
+row, read a second time.** An earlier version had a wholly separate
+`Board.pinnedTiles`/`pinnedRowSize`, an independently-edited tile list shown
+above every page (see git history / older revisions of this doc if you need
+the details). That meant keeping two copies of "the tiles you use most" in
+sync by hand — one in the pinned row, one wherever they'd naturally live on a
+page. `stickyHomeRowEnabled` replaced it: when on, `BoardScreen` renders
+`board.homePage.tiles.take(homePage.columns)` fixed above whichever page
+isn't the home page (hidden on the home page itself, since it's already
+showing there as ordinary content). Editing a tile from that banner writes
+straight into the home page's tile list via `BoardViewModel`'s `setHomeRow*`/
+`assignHomeRowSound`/`clearHomeRowTile`/`stopHomeRowRecording` functions —
+the same shape as the page-tile mutators, just targeting
+`Board.updatingPage(homePageIndex)` instead of `updatingCurrentPage`, since
+the home page usually isn't the page you're looking at when you tap its
+banner. There's no separate width setting either — the banner is simply as
+wide as the home page's own `columns`.
 
 **Invariant: `tiles.size` is always `>= rows * columns`, per page.**
 `Page.resized()` only ever grows the list; shrinking the grid just lowers
@@ -141,8 +141,8 @@ to pre-validate. `Board`'s own mutators (`addPage`, `removePage`, `renamePage`,
   wrap it into a single `Page`. This is why `steve-care-board.zip` (the
   bundled fallback preset, itself old-format when this migration was added)
   never needed regenerating — the migration runs on every `load()`, so it
-  applies the moment the asset is imported. By contrast, `pinnedTiles`,
-  `Page.color`, and `Page.tileAspectRatio` needed **no** new branching logic
+  applies the moment the asset is imported. By contrast,
+  `stickyHomeRowEnabled`, `Page.color`, and `Page.tileAspectRatio` needed **no** new branching logic
   in `load()` at all — they're additive fields onto an already-`pages`-shaped
   `Board`, so the ordinary `ignoreUnknownKeys` + defaults path handles them
   exactly like `volume`/`colorArgb` did originally.
@@ -163,8 +163,9 @@ to pre-validate. `Board`'s own mutators (`addPage`, `removePage`, `renamePage`,
   actually exists. A generic preset can legitimately ship with some or all
   clips unrecorded, and any zip import in general could be missing a file for
   other reasons. Rather than let a tile render as "filled" while silently
-  doing nothing when tapped, `sanitizeMissingSounds` walks every tile (pages
-  and pinned) and resets `fileName` to `null` wherever `soundFile(fileName)`
+  doing nothing when tapped, `sanitizeMissingSounds` walks every page's tiles
+  (the home page's, sticky-row-eligible or not, included — there's no
+  separate list anymore) and resets `fileName` to `null` wherever `soundFile(fileName)`
   doesn't exist — same label, now honestly `isEmpty`. This runs unconditionally
   on every load, not just right after an import, so it also self-heals a
   board whose sound file went missing some other way. It does not rewrite
@@ -237,7 +238,7 @@ entry simply doesn't appear when its asset isn't packaged (debug builds
 only), the same practical availability the old `BuildConfig.DEBUG`-gated menu
 item had, without importing `BuildConfig` into the ViewModel.
 
-`Board.hasAnySound` (any tile, pinned or on any page, with a `fileName`)
+`Board.hasAnySound` (any tile on any page with a `fileName`)
 gates the UI's confirm dialog before applying a preset over a board that has
 real content — same reasoning, and same shape, as the page-delete confirm
 (`requestDeletePage`) already uses.
@@ -291,8 +292,8 @@ The flow, split between `EditTileDialog` (permission + button state) and
    writes into — then `recorder.start(file)`. The file is tracked as
    `pendingRecordingFile` and `_isRecording` flips true, which is what turns
    the dialog's button into `Stop (Ns)`.
-3. Tapping **Stop** calls `vm.stopRecording(tileId)` (or `stopPinnedRecording`
-   for the pinned row), which stops the recorder, `player.load()`s the
+3. Tapping **Stop** calls `vm.stopRecording(tileId)` (or `stopHomeRowRecording`
+   for a tile edited via the sticky home row banner), which stops the recorder, `player.load()`s the
    resulting file, and writes `fileName` onto the tile through the normal
    `updateTiles`/`commit()` path — recording is assigned exactly as
    immediately as picking a file is, not gated behind the dialog's Save
@@ -341,7 +342,7 @@ Every mutation — rename, assign sound, clear, resize, reorder, volume,
 color — ends up calling `BoardViewModel.commit(board)`:
 
 ```kotlin
-private fun allTiles(board: Board): List<Tile> = board.pages.flatMap { it.tiles } + board.pinnedTiles
+private fun allTiles(board: Board): List<Tile> = board.pages.flatMap { it.tiles }
 
 private fun commit(board: Board) {
     val before = allTiles(_board.value).mapNotNull { it.fileName }.toSet()
@@ -357,11 +358,11 @@ private fun commit(board: Board) {
 }
 ```
 
-It diffs referenced file names before/after **across every page plus the
-pinned row, not just the current page** — a sound assigned on a page you're
-not viewing (or on a pinned tile) must still survive pruning — unloads
-anything that fell out of the referenced set, updates the in-memory state
-immediately (so the UI never waits on disk I/O), then persists on
+It diffs referenced file names before/after **across every page, not just the
+current page** — a sound assigned on a page you're not viewing (including the
+home page's sticky-row-eligible first row) must still survive pruning —
+unloads anything that fell out of the referenced set, updates the in-memory
+state immediately (so the UI never waits on disk I/O), then persists on
 `ioDispatcher`. The keep-set folds in `presetRepo.allReferencedFileNames()`
 too — see "Presets" above for why a saved preset's audio needs the same
 protection a live tile's does. `loadSounds()` (called on initial load and
@@ -370,9 +371,9 @@ the same `allTiles()` helper to preload everything for the same reason:
 `SoundPool` needs a clip decoded before it can play regardless of which page
 is visible when the app starts. Adding a new mutation to a single page means
 building the next `Board` via `_board.value.updatingCurrentPage { ... }` and
-calling `commit()`; a pinned-tile mutation does the same against
-`_board.value.copy(pinnedTiles = ...)` — either way, not inventing a new
-write path.
+calling `commit()`; a sticky-home-row-banner edit does the same against
+`_board.value.updatingPage(homePageIndex) { ... }` — either way, not inventing
+a new write path.
 
 **Drag-reorder is the one deliberate exception.** Calling `commit()` on every
 pointer-move frame during a drag would mean dozens of disk writes per
@@ -414,9 +415,8 @@ gesture.
   bottom, the menu holds: **Edit mode**, a manual `Row` (`Icon` + label +
   `Switch`) rather than a `DropdownMenuItem` since a switch doesn't fit that
   composable's trailing-content slot cleanly; **Settings**, which opens
-  `SettingsDialog` (below) rather than exposing its contents as more menu
-  rows; **Add pinned row**, which only appears while `board.pinnedTiles` is
-  empty, since `vm.addPinnedRow()` is a no-op afterward anyway; **Presets**
+  `SettingsDialog` (below), including the **Sticky home row** switch, rather
+  than exposing its contents as more menu rows; **Presets**
   (**Save as preset**/**Load preset**); **Backup** (**Export backup**/
   **Import backup**); and the app-version link at the bottom. Page-level
   actions — add, rename, delete, grid size, page color, and home-page
@@ -455,7 +455,7 @@ gesture.
   shown even for a single page, plus a `HorizontalPager` driving the actual
   grid.** Both the app bar and tab row live inside one `Column` passed to
   `Scaffold`'s `topBar` slot; the pager fills the content area below the
-  (optional) pinned row. Three navigation paths all have to agree on
+  (optional) sticky home row banner. Three navigation paths all have to agree on
   `board.currentPageIndex`: tapping a `Tab` calls `vm.switchPage(index)`
   directly; swiping the pager is picked up by a
   `LaunchedEffect(pagerState) { snapshotFlow { pagerState.currentPage }.collect { vm.switchPage(it) } }`;
@@ -496,21 +496,22 @@ gesture.
   `setTileAspectRatio()`, and `setPageColor()` all take an explicit page
   `index` and go through `Board.updatingPage(index)` rather than
   `updatingCurrentPage()`.
-- **The pinned row lives above the pager, rendered once — not once per
-  page.** Since `Board.pinnedTiles` is the same list regardless of which page
-  is showing, there is exactly one `PinnedRow` composable instance; it never
-  needs to re-render on a page switch, only when the tiles themselves change.
-  It's shown at `pinnedTiles.take(board.currentPage.columns)` width, the same
-  "trailing entries hidden, not lost" idea `Page.visibleTiles` already uses.
-- **`editingTarget: EditTarget?`** (a `PageTile(id)` or `PinnedTile(id)`
+- **The sticky home row lives above the pager, rendered once — not once per
+  page.** It only shows while `board.stickyHomeRowEnabled` is true, a home
+  page exists, and the current page isn't the home page itself. It renders
+  `homePage.tiles.take(homePage.columns)` — the home page's own first row —
+  via the same `PinnedRow` composable the old board-wide pinned row used, the
+  same "trailing entries hidden, not lost" idea `Page.visibleTiles` already
+  uses for width.
+- **`editingTarget: EditTarget?`** (a `PageTile(id)` or `HomeRowTile(id)`
   sealed type) replaces a plain tile-id string precisely so the edit dialog
-  knows which list to look the tile up in and which mutator group
-  (`vm.setLabel`/... vs. `vm.setPinnedLabel`/...) to call. It's plain Compose
+  knows which page to look the tile up in and which mutator group
+  (`vm.setLabel`/... vs. `vm.setHomeRowLabel`/...) to call. It's plain Compose
   state, not part of `Board`. A `LaunchedEffect(board.currentPageIndex)`
   resets it to `null` on every page switch, but **only when it's a
-  `PageTile`** — a `PinnedTile` dialog left open survives a page switch
-  cleanly, since pinned tiles don't belong to any one page in the first
-  place.
+  `PageTile`** — a `HomeRowTile` dialog left open survives a page switch
+  cleanly, since it always resolves against the home page regardless of which
+  page is on screen.
 - **Auto-return to home page.** `lastInteractionAt` is bumped by a local
   `touch()` call from every meaningful interaction (tile tap, tab tap, a
   settled swipe) rather than from a low-level raw-pointer listener,  so only
@@ -598,8 +599,8 @@ gesture.
 | `Board` page management (`addPage`/`removePage`/`renamePage`/`switchTo`/`withHomePage`) and `hasAnySound` | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
 | `BoardRepository`, incl. the legacy-schema and `homePageIndex` migrations and additive-field defaults in `load()` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
 | `PresetRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/PresetRepositoryTest.kt` | Robolectric |
-| `BoardViewModel`, incl. pinned-tile mutators, cross-page/pinned/preset orphan pruning, record/stop/cancel, and saveAsPreset/applyPreset | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
-| `BoardScreen`, incl. the pinned row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
+| `BoardViewModel`, incl. home-row mutators, cross-page/preset orphan pruning, record/stop/cancel, and saveAsPreset/applyPreset | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
+| `BoardScreen`, incl. the sticky home row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 
 `./gradlew test` runs the first four; `./gradlew connectedAndroidTest` runs
 the Compose layer against a connected device or emulator.

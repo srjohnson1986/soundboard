@@ -9,11 +9,13 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.soundboard.BoardViewModel
@@ -380,6 +382,49 @@ class BoardScreenTest {
 
         // Shown once, as ordinary page content — not duplicated by the sticky banner.
         composeRule.onAllNodesWithText("Hey").assertCountEquals(1)
+    }
+
+    @Test
+    fun stickyHomeRowPinsTheHomePagesFirstRowWhileScrollingTheHomePageItself() {
+        val tiles = (0 until 20).map { i -> Tile(id = "t$i", label = "T$i", fileName = "$i.mp3") }
+        launchWith(
+            Board(
+                stickyHomeRowEnabled = true,
+                pages = listOf(Page(rows = 10, columns = 2, tiles = tiles, isHome = true))
+            )
+        )
+
+        repeat(6) {
+            composeRule.onRoot().performTouchInput { swipeUp() }
+            composeRule.waitForIdle()
+        }
+
+        // The pinned first row stays visible even after scrolling the rest of the
+        // home page's own grid far enough to reach its last row.
+        composeRule.onNodeWithText("T0").assertIsDisplayed()
+        composeRule.onNodeWithText("T1").assertIsDisplayed()
+        composeRule.onNodeWithText("T19").assertIsDisplayed()
+    }
+
+    @Test
+    fun withoutStickyHomeRowEnabledTheHomePageIsOneOrdinaryScrollingGrid() {
+        val tiles = (0 until 20).map { i -> Tile(id = "t$i", label = "T$i", fileName = "$i.mp3") }
+        launchWith(
+            Board(
+                stickyHomeRowEnabled = false,
+                pages = listOf(Page(rows = 10, columns = 2, tiles = tiles, isHome = true))
+            )
+        )
+
+        repeat(6) {
+            composeRule.onRoot().performTouchInput { swipeUp() }
+            composeRule.waitForIdle()
+        }
+
+        // With the toggle off, the first row scrolls away like any other row instead
+        // of staying pinned.
+        composeRule.onNodeWithText("T0").assertDoesNotExist()
+        composeRule.onNodeWithText("T19").assertIsDisplayed()
     }
 
     @Test

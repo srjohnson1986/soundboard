@@ -571,6 +571,7 @@ fun BoardScreen(
                         isActive = pageIndex == board.currentPageIndex,
                         hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                         performanceModeEnabled = performanceModeEnabled,
+                        pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
                         onTap = { tile ->
                             touch()
                             if (tile.isEmpty || editMode) {
@@ -888,7 +889,17 @@ private fun PinnedRow(
     }
 }
 
-/** One page's scrollable grid. Drag-to-reorder only attaches when [isActive] — the page actually on screen. */
+/**
+ * One page's scrollable grid. Drag-to-reorder only attaches when [isActive] — the page
+ * actually on screen. When [pinFirstRow] and the page has more than one row, its first
+ * row renders fixed above a scrolling grid for the rest, instead of one plain grid —
+ * see [Page.isHome]/`Board.stickyHomeRowEnabled`. Reordering across that boundary just
+ * works: a tile is "pinned" purely by occupying one of the first [Page.columns] slots
+ * in [Page.visibleTiles], the same flat list [Page.moved] already reorders by index —
+ * no separate pinned-tile concept needed. The one visible seam is that
+ * [Modifier.animateItem] only applies within the scrolling grid's own item scope, so a
+ * reorder crossing the pinned/scrolling boundary pops instead of sliding.
+ */
 @Composable
 private fun PageGrid(
     page: Page,
@@ -896,6 +907,7 @@ private fun PageGrid(
     isActive: Boolean,
     hapticFeedbackEnabled: Boolean,
     performanceModeEnabled: Boolean,
+    pinFirstRow: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewSound: (Tile) -> Unit,
     onPreviewMove: (Int, Int) -> Unit,
@@ -914,84 +926,120 @@ private fun PageGrid(
         (gridWidthPx - spacingPx * (columns - 1)) / columns + spacingPx
     } else 0f
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .onSizeChanged { gridWidthPx = it.width },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        itemsIndexed(page.visibleTiles, key = { _, tile -> tile.id }) { index, tile ->
-            val isDragged = index == draggedIndex
-            TileCard(
-                tile = tile,
-                editMode = editMode,
-                aspectRatio = page.tileAspectRatio,
-                pageColor = page.color?.let { Color(it) },
-                performanceModeEnabled = performanceModeEnabled,
-                modifier = Modifier
-                    .then(if (isDragged) Modifier else Modifier.animateItem())
-                    .graphicsLayer {
-                        if (isDragged) {
-                            translationX = dragOffset.x
-                            translationY = dragOffset.y
-                            if (!performanceModeEnabled) shadowElevation = 8f
-                            scaleX = 1.05f
-                            scaleY = 1.05f
+    fun tileDragModifier(index: Int, tile: Tile): Modifier {
+        val isDragged = index == draggedIndex
+        return Modifier
+            .graphicsLayer {
+                if (isDragged) {
+                    translationX = dragOffset.x
+                    translationY = dragOffset.y
+                    if (!performanceModeEnabled) shadowElevation = 8f
+                    scaleX = 1.05f
+                    scaleY = 1.05f
+                }
+            }
+            .zIndex(if (isDragged) 1f else 0f)
+            .pointerInput(tile.id, columns, isActive, hapticFeedbackEnabled) {
+                if (!isActive) return@pointerInput
+                detectDragGesturesAfterLongPress(
+                    onDragStart = {
+                        if (hapticFeedbackEnabled) {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                        draggedIndex = index
+                        dragOffset = Offset.Zero
+                        onDragActiveChanged(true)
+                    },
+                    onDragEnd = {
+                        // A hold that never moved the tile to a different index wasn't a
+                        // reorder at all — treat it as a request to preview what the tile
+                        // says/plays without "using" it for real (#4), same as PinnedRow's
+                        // dedicated onLongClick (which has no competing drag gesture to share it with).
+                        if (!editMode && draggedIndex == index && !tile.isEmpty) {
+                            onPreviewSound(tile)
+                        }
+                        draggedIndex = null
+                        dragOffset = Offset.Zero
+                        onDragActiveChanged(false)
+                        onCommitOrder()
+                    },
+                    onDragCancel = {
+                        draggedIndex = null
+                        dragOffset = Offset.Zero
+                        onDragActiveChanged(false)
+                    },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        dragOffset += amount
+                        val current = draggedIndex ?: return@detectDragGesturesAfterLongPress
+                        if (cellStepPx <= 0f) return@detectDragGesturesAfterLongPress
+                        val colDelta = (dragOffset.x / cellStepPx).roundToInt()
+                        val rowDelta = (dragOffset.y / cellStepPx).roundToInt()
+                        if (colDelta == 0 && rowDelta == 0) return@detectDragGesturesAfterLongPress
+                        val target = (current + rowDelta * columns + colDelta)
+                            .coerceIn(0, page.visibleTiles.lastIndex)
+                        if (target != current) {
+                            onPreviewMove(current, target)
+                            draggedIndex = target
+                            dragOffset -= Offset(colDelta * cellStepPx, rowDelta * cellStepPx)
                         }
                     }
-                    .zIndex(if (isDragged) 1f else 0f)
-                    .pointerInput(tile.id, columns, isActive, hapticFeedbackEnabled) {
-                        if (!isActive) return@pointerInput
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = {
-                                if (hapticFeedbackEnabled) {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }
-                                draggedIndex = index
-                                dragOffset = Offset.Zero
-                                onDragActiveChanged(true)
-                            },
-                            onDragEnd = {
-                                // A hold that never moved the tile to a different index wasn't a
-                                // reorder at all — treat it as a request to preview what the tile
-                                // says/plays without "using" it for real (#4), same as PinnedRow's
-                                // dedicated onLongClick (which has no competing drag gesture to share it with).
-                                if (!editMode && draggedIndex == index && !tile.isEmpty) {
-                                    onPreviewSound(tile)
-                                }
-                                draggedIndex = null
-                                dragOffset = Offset.Zero
-                                onDragActiveChanged(false)
-                                onCommitOrder()
-                            },
-                            onDragCancel = {
-                                draggedIndex = null
-                                dragOffset = Offset.Zero
-                                onDragActiveChanged(false)
-                            },
-                            onDrag = { change, amount ->
-                                change.consume()
-                                dragOffset += amount
-                                val current = draggedIndex ?: return@detectDragGesturesAfterLongPress
-                                if (cellStepPx <= 0f) return@detectDragGesturesAfterLongPress
-                                val colDelta = (dragOffset.x / cellStepPx).roundToInt()
-                                val rowDelta = (dragOffset.y / cellStepPx).roundToInt()
-                                if (colDelta == 0 && rowDelta == 0) return@detectDragGesturesAfterLongPress
-                                val target = (current + rowDelta * columns + colDelta)
-                                    .coerceIn(0, page.visibleTiles.lastIndex)
-                                if (target != current) {
-                                    onPreviewMove(current, target)
-                                    draggedIndex = target
-                                    dragOffset -= Offset(colDelta * cellStepPx, rowDelta * cellStepPx)
-                                }
-                            }
-                        )
-                    },
-                onTap = { onTap(tile) }
-            )
+                )
+            }
+    }
+
+    val split = pinFirstRow && page.visibleTiles.size > columns
+    val pageColor = page.color?.let { Color(it) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp)
+            .onSizeChanged { gridWidthPx = it.width }
+    ) {
+        if (split) {
+            Row(
+                modifier = Modifier.padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                page.visibleTiles.take(columns).forEachIndexed { index, tile ->
+                    TileCard(
+                        tile = tile,
+                        editMode = editMode,
+                        aspectRatio = page.tileAspectRatio,
+                        pageColor = pageColor,
+                        performanceModeEnabled = performanceModeEnabled,
+                        modifier = Modifier.weight(1f).then(tileDragModifier(index, tile)),
+                        onTap = { onTap(tile) }
+                    )
+                }
+            }
+        }
+        val remainder = if (split) page.visibleTiles.drop(columns) else page.visibleTiles
+        val remainderStart = if (split) columns else 0
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(columns),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            itemsIndexed(remainder, key = { _, tile -> tile.id }) { i, tile ->
+                val index = remainderStart + i
+                val isDragged = index == draggedIndex
+                TileCard(
+                    tile = tile,
+                    editMode = editMode,
+                    aspectRatio = page.tileAspectRatio,
+                    pageColor = pageColor,
+                    performanceModeEnabled = performanceModeEnabled,
+                    modifier = Modifier
+                        .then(if (isDragged) Modifier else Modifier.animateItem())
+                        .then(tileDragModifier(index, tile)),
+                    onTap = { onTap(tile) }
+                )
+            }
         }
     }
 }

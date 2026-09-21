@@ -574,6 +574,21 @@ gesture.
   so the dragged tile keeps tracking the finger smoothly across multiple
   cell-crossings in one gesture. Non-dragged items get `Modifier.animateItem()`
   so they slide into their new slot instead of jump-cutting.
+- **The home page's own first row can render split from the rest of its
+  grid.** When `pinFirstRow` (`page.isHome && board.stickyHomeRowEnabled`)
+  and the page has more than one row, `PageGrid` renders a plain `Row` for
+  `visibleTiles.take(columns)` above a `LazyVerticalGrid` for the rest,
+  instead of one grid for everything — so the first row stays fixed while the
+  remainder scrolls beneath it, matching what the sticky banner already shows
+  on every other page (#83). This needed no change to reordering itself:
+  `draggedIndex`/`dragOffset` are shared closure state at the top of
+  `PageGrid`, and the drag math above is pure index arithmetic with no idea
+  which visual container a tile is in — a tile is "pinned" purely by
+  occupying one of the first `columns` slots in `visibleTiles`, so dragging
+  one across the row/grid boundary just works. The one seam:
+  `Modifier.animateItem()` only exists inside a `LazyGridItemScope`, so it
+  can't apply to the fixed `Row` — a reorder crossing that boundary pops
+  instead of sliding, while one that stays within either zone still animates.
 - **Arming a drag is announced, not just shown.** `onDragStart` fires
   `LocalHapticFeedback.current.performHapticFeedback(HapticFeedbackType.LongPress)`
   alongside the visual lift (scale + shadow) — a hesitant press that

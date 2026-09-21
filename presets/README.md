@@ -3,11 +3,11 @@
 The app has two kinds of preset (see `docs/ARCHITECTURE.md`'s "Presets"
 section): lightweight, on-device saves made in-app via **Save as preset**
 (just a small JSON snapshot, no audio of its own), and **factory presets** —
-the two zips in this folder. A factory preset is a full backup-shaped zip
+the zips in this folder. A factory preset is a full backup-shaped zip
 (`board.json` at the root plus every referenced sound under `sounds/`, the
 same format `BoardRepository.exportTo()`/`importFrom()` produce) bundled as
 an app asset, so it's self-contained and works on a device that has never
-recorded anything. Both zips here show up in the **☰** menu's **Load preset**
+recorded anything. All three zips here show up in the **☰** menu's **Load preset**
 picker automatically, labeled "Factory," alongside whatever you've saved
 yourself.
 
@@ -121,3 +121,18 @@ Three things differ from Steve's board:
 - **`pain_worse_ALT_retake.wav`** is an alternate take of "Pain worse."
   The plain `pain_worse.wav` is what's on the tile; the alt take is left
   unused/spare, same treatment as Steve's ambiguous multi-take clips.
+
+## `tts-care-board.zip` — "TTS Care Board"
+
+Same four pages, layout, colors, and labels as `jeremy-care-board.zip`, but
+built for zero recording: every tile with a label speaks it via on-device
+text-to-speech (`speakLabel = true`, `fileName = null`) instead of playing a
+clip. There's no `sounds/` directory in this zip at all — nothing to copy —
+so it's a few KB instead of several megabytes.
+
+Bundled in every build (not debug-only), so it always shows up in **Load
+preset** as a way to try the full layout, or hand someone a working board,
+without waiting on any recording. One accepted quirk: Well Wishes' "Mom"/
+"Dad" placeholder tiles (meant for a family member's own recorded message —
+see above) speak the literal word "Mom"/"Dad" here, same as every other
+labeled tile — no special-casing.

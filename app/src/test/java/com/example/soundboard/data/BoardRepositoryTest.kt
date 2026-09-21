@@ -322,6 +322,34 @@ class BoardRepositoryTest {
     }
 
     @Test
+    fun `the bundled tts-care-board preset imports with speech instead of recordings`() {
+        // Same layout as jeremy-care-board.zip, but every labeled tile speaks
+        // instead of playing a recording — no sounds/ directory at all.
+        val imported = repo.importFromAsset("tts-care-board.zip")
+
+        assertTrue(imported)
+        val board = repo.load()
+
+        assertEquals("TTS Care Board", board.name)
+        assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
+        assertEquals(1, board.homePageIndex)
+        assertTrue(board.stickyHomeRowEnabled)
+
+        val allTiles = board.pages.flatMap { it.tiles }
+        val labeled = allTiles.filter { it.label.isNotBlank() }
+        val blank = allTiles.filter { it.label.isBlank() }
+
+        assertTrue("expected some labeled tiles", labeled.isNotEmpty())
+        labeled.forEach { tile ->
+            assertNull("expected no fileName on \"${tile.label}\"", tile.fileName)
+            assertTrue("expected speakLabel on \"${tile.label}\"", tile.speakLabel)
+        }
+        blank.forEach { tile ->
+            assertTrue("expected blank tile ${tile.id} to be empty", tile.isEmpty)
+        }
+    }
+
+    @Test
     fun `the steve-care-board preset imports and loads as a valid four-page board`() {
         // presets/steve-care-board.zip is debug-only now (app/src/debug/assets/), not
         // auto-loaded like jeremy-care-board.zip, so this exercises the same import

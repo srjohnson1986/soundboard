@@ -75,7 +75,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -146,6 +145,12 @@ private fun idleTimeoutLabel(minutes: Int) = if (minutes == 0) "Off" else "$minu
  * care board someone else operates.
  */
 private val LONG_PRESS_DURATION_OPTIONS_MILLIS = listOf(500, 800, 1200)
+
+private fun longPressDurationLabel(millis: Int) = when (millis) {
+    500 -> "Default"
+    800 -> "Long"
+    else -> "Longer"
+}
 
 /** Fixed accent for the Preview/Play clip icon in [EditTileDialog]; not theme-derived since Material3 has no "success" role. */
 private val PlayGreen = Color(0xFF2E7D32)
@@ -1501,27 +1506,34 @@ private fun SettingsDialog(
                     }
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text("Long-press duration", style = MaterialTheme.typography.bodyMedium)
-                LONG_PRESS_DURATION_OPTIONS_MILLIS.forEach { millis ->
-                    Row(
+                var longPressExpanded by remember { mutableStateOf(false) }
+                ExposedDropdownMenuBox(
+                    expanded = longPressExpanded,
+                    onExpandedChange = { longPressExpanded = it }
+                ) {
+                    OutlinedTextField(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onLongPressDurationMillisChange(millis) }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                        value = longPressDurationLabel(longPressDurationMillis),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Long-press duration") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = longPressExpanded) }
+                    )
+                    ExposedDropdownMenu(
+                        expanded = longPressExpanded,
+                        onDismissRequest = { longPressExpanded = false }
                     ) {
-                        RadioButton(
-                            selected = millis == longPressDurationMillis,
-                            onClick = { onLongPressDurationMillisChange(millis) }
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            when (millis) {
-                                500 -> "Default"
-                                800 -> "Long"
-                                else -> "Longer"
-                            }
-                        )
+                        LONG_PRESS_DURATION_OPTIONS_MILLIS.forEach { millis ->
+                            DropdownMenuItem(
+                                text = { Text(longPressDurationLabel(millis)) },
+                                onClick = {
+                                    onLongPressDurationMillisChange(millis)
+                                    longPressExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))

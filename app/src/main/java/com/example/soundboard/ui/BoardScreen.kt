@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
@@ -49,13 +50,16 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -142,6 +146,9 @@ private fun idleTimeoutLabel(minutes: Int) = if (minutes == 0) "Off" else "$minu
  * care board someone else operates.
  */
 private val LONG_PRESS_DURATION_OPTIONS_MILLIS = listOf(500, 800, 1200)
+
+/** Fixed accent for the Preview/Play clip icon in [EditTileDialog]; not theme-derived since Material3 has no "success" role. */
+private val PlayGreen = Color(0xFF2E7D32)
 
 /** Update alongside each tagged release — [RELEASE_URL] points at this tag's own notes. */
 private const val APP_VERSION = "v0.1.0"
@@ -1223,6 +1230,13 @@ private fun EditTileDialog(
                         enabled = !tile.isEmpty && !isRecording,
                         modifier = Modifier.weight(1f)
                     ) {
+                        Icon(
+                            Icons.Filled.PlayArrow,
+                            contentDescription = null,
+                            tint = PlayGreen,
+                            modifier = Modifier.size(ButtonDefaults.IconSize)
+                        )
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                         Text(if (tile.fileName == null) "Preview" else "Play clip")
                     }
                     OutlinedButton(
@@ -1244,6 +1258,13 @@ private fun EditTileDialog(
                         },
                         modifier = Modifier.weight(1f)
                     ) {
+                        Icon(
+                            if (isRecording) Icons.Filled.Stop else Icons.Filled.FiberManualRecord,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(ButtonDefaults.IconSize)
+                        )
+                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
                         Text(if (isRecording) "Stop (${recordingSeconds}s)" else "Record")
                     }
                 }

@@ -6,7 +6,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -933,9 +935,11 @@ private fun PageGrid(
                 if (isDragged) {
                     translationX = dragOffset.x
                     translationY = dragOffset.y
-                    if (!performanceModeEnabled) shadowElevation = 8f
-                    scaleX = 1.05f
-                    scaleY = 1.05f
+                    if (!performanceModeEnabled) {
+                        shadowElevation = 8f
+                        scaleX = 1.05f
+                        scaleY = 1.05f
+                    }
                 }
             }
             .zIndex(if (isDragged) 1f else 0f)
@@ -1074,10 +1078,16 @@ private fun TileCard(
         MaterialTheme.colorScheme.onSurfaceVariant
     }
 
+    val interactionSource = remember { MutableInteractionSource() }
     Card(
         modifier = modifier
             .aspectRatio(aspectRatio)
-            .combinedClickable(onClick = onTap, onLongClick = onLongClick),
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = if (performanceModeEnabled) null else LocalIndication.current,
+                onClick = onTap,
+                onLongClick = onLongClick
+            ),
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (filled && !performanceModeEnabled) 2.dp else 0.dp
@@ -1615,7 +1625,8 @@ private fun SettingsDialog(
                     Switch(checked = performanceModeEnabled, onCheckedChange = onPerformanceModeEnabledChange)
                 }
                 Text(
-                    "Turns off tile shadows to help scrolling stay smooth on older devices.",
+                    "Turns off tile shadows, tap ripples, and the drag-reorder scale " +
+                        "effect to help the board stay smooth on older devices.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

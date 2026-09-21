@@ -181,13 +181,14 @@ to pre-validate. `Board`'s own mutators (`addPage`, `removePage`, `renamePage`,
 **`DevicePreferences` is the one setting deliberately *not* on `Board`.**
 Everything else in Settings travels with the board on purpose (loading a
 different preset switches those too — see the settings-on-board comment atop
-`Board`'s fields). Performance mode (disables tile shadows, see "The UI
-layer" below) describes the device the app happens to be running on, not the
-board's content, so it lives in ordinary `SharedPreferences`
-(`DevicePreferences`, a small `Context`-backed wrapper) instead — loading a
-different preset must not silently turn it back off. `BoardViewModel` reads
-it once at construction into its own `performanceModeEnabled: StateFlow<Boolean>`,
-separate from `board`.
+`Board`'s fields). Performance mode (disables tile shadows, tap ripples, and
+the drag-reorder scale effect, see "The UI layer" below) describes the
+device the app happens to be running on, not the board's content, so it
+lives in ordinary `SharedPreferences` (`DevicePreferences`, a small
+`Context`-backed wrapper) instead — loading a different preset must not
+silently turn it back off. `BoardViewModel` reads it once at construction
+into its own `performanceModeEnabled: StateFlow<Boolean>`, separate from
+`board`.
 
 **Backup** (`exportTo/importFrom`) is just those two things zipped: `board.json`
 at the zip root, every file under `sounds/` mirrored into a `sounds/` entry.
@@ -591,10 +592,11 @@ gesture.
   instead of sliding, while one that stays within either zone still animates.
 - **Arming a drag is announced, not just shown.** `onDragStart` fires
   `LocalHapticFeedback.current.performHapticFeedback(HapticFeedbackType.LongPress)`
-  alongside the visual lift (scale + shadow) — a hesitant press that
-  accidentally armed reorder is obvious immediately rather than only once the
-  tile visibly moves. The page-tab long-press that opens `PageOptionsDialog`
-  fires the same feedback constant when it arms, for the same reason.
+  alongside the visual lift (scale + shadow, skipped when Performance mode is
+  on) — a hesitant press that accidentally armed reorder is obvious
+  immediately rather than only once the tile visibly moves. The page-tab
+  long-press that opens `PageOptionsDialog` fires the same feedback constant
+  when it arms, for the same reason.
 - **Color and contrast.** A custom `colorArgb`, or failing that a filled
   tile's page color, overrides the card's container color. Text/icon color
   for either comes from `textColorFor()`, a local helper that picks black or

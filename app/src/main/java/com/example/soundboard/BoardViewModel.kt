@@ -212,13 +212,17 @@ class BoardViewModel(
      * row is the same size regardless of how wide its pages are.
      */
     fun addPinnedRow() {
-        val board = _board.value
-        if (board.pinnedTiles.isNotEmpty()) return
-        commit(board.copy(pinnedTiles = List(board.pinnedRowSize) { Tile() }))
+        commit(_board.value.addingPinnedRow())
     }
 
+    /** Removes the pinned row entirely; call only after confirming with the user if it has any content. */
+    fun removePinnedRow() {
+        commit(_board.value.removingPinnedRow())
+    }
+
+    /** Live-resizes an existing pinned row's width, or just sets the starting width if none exists yet. */
     fun setPinnedRowSize(value: Int) {
-        commit(_board.value.copy(pinnedRowSize = value))
+        commit(_board.value.resizedPinnedRow(value))
     }
 
     fun setDefaultPageRows(value: Int) {

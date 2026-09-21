@@ -178,6 +178,7 @@ fun BoardScreen(
     var showMenu by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showSpeakDialog by remember { mutableStateOf(false) }
+    var showRemovePinnedRowConfirm by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
     var isDragActive by remember { mutableStateOf(false) }
@@ -196,6 +197,16 @@ fun BoardScreen(
             deletePageIndex = index
         } else {
             vm.deletePage(index)
+        }
+    }
+
+    // Same reasoning as requestDeletePage, but for the pinned row as a whole —
+    // checks every stored pinned tile, including ones currently hidden by a narrower width.
+    fun requestRemovePinnedRow() {
+        if (board.pinnedTiles.any { !it.isEmpty }) {
+            showRemovePinnedRowConfirm = true
+        } else {
+            vm.removePinnedRow()
         }
     }
 
@@ -346,8 +357,8 @@ fun BoardScreen(
                                     }
                                 )
                                 HorizontalDivider()
+                                MenuSectionHeader("Pinned row")
                                 if (board.pinnedTiles.isEmpty()) {
-                                    MenuSectionHeader("Pages")
                                     DropdownMenuItem(
                                         text = { Text("Add pinned row") },
                                         leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
@@ -356,8 +367,17 @@ fun BoardScreen(
                                             vm.addPinnedRow()
                                         }
                                     )
-                                    HorizontalDivider()
+                                } else {
+                                    DropdownMenuItem(
+                                        text = { Text("Remove pinned row") },
+                                        leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
+                                        onClick = {
+                                            showMenu = false
+                                            requestRemovePinnedRow()
+                                        }
+                                    )
                                 }
+                                HorizontalDivider()
                                 // Presets — lightweight, same-device version history (see PresetRepository)
                                 MenuSectionHeader("Presets")
                                 DropdownMenuItem(
@@ -504,7 +524,7 @@ fun BoardScreen(
         ) {
             if (board.pinnedTiles.isNotEmpty()) {
                 PinnedRow(
-                    tiles = board.pinnedTiles,
+                    tiles = board.pinnedVisibleTiles,
                     editMode = editMode,
                     aspectRatio = board.currentPage.tileAspectRatio,
                     onTap = { tile ->
@@ -642,6 +662,7 @@ fun BoardScreen(
             hapticFeedbackEnabled = board.hapticFeedbackEnabled,
             onHapticFeedbackEnabledChange = vm::setHapticFeedbackEnabled,
             pinnedRowSize = board.pinnedRowSize,
+            hasPinnedRow = board.pinnedTiles.isNotEmpty(),
             onPinnedRowSizeChange = vm::setPinnedRowSize,
             defaultPageRows = board.defaultPageRows,
             onDefaultPageRowsChange = vm::setDefaultPageRows,
@@ -791,6 +812,29 @@ fun BoardScreen(
                 }
             )
         }
+    }
+
+    if (showRemovePinnedRowConfirm) {
+        val soundCount = board.pinnedTiles.count { !it.isEmpty }
+        AlertDialog(
+            onDismissRequest = { showRemovePinnedRowConfirm = false },
+            title = { Text("Remove pinned row?") },
+            text = {
+                Text(
+                    "The pinned row has $soundCount tile${if (soundCount == 1) "" else "s"} " +
+                        "with sound or speech set up. Removing it can't be undone."
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    vm.removePinnedRow()
+                    showRemovePinnedRowConfirm = false
+                }) { Text("Remove") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemovePinnedRowConfirm = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -1337,6 +1381,7 @@ private fun SettingsDialog(
     hapticFeedbackEnabled: Boolean,
     onHapticFeedbackEnabledChange: (Boolean) -> Unit,
     pinnedRowSize: Int,
+    hasPinnedRow: Boolean,
     onPinnedRowSizeChange: (Int) -> Unit,
     defaultPageRows: Int,
     onDefaultPageRowsChange: (Int) -> Unit,
@@ -1454,6 +1499,16 @@ private fun SettingsDialog(
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Stepper("Pinned row width", pinnedRowSize, onPinnedRowSizeChange)
+                Text(
+                    if (hasPinnedRow) {
+                        "Shrinking just hides the last tiles — their sound or speech " +
+                            "stays put and comes back if you grow it again."
+                    } else {
+                        "Width the pinned row starts at once you add one."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text("Default grid size for new pages", style = MaterialTheme.typography.bodyMedium)
                 Stepper("Rows", defaultPageRows, onDefaultPageRowsChange)

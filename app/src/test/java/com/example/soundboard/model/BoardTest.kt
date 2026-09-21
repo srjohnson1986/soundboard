@@ -245,4 +245,90 @@ class BoardTest {
 
         assertEquals(true, board.hasAnySound)
     }
+
+    @Test
+    fun `addingPinnedRow materializes an empty row at pinnedRowSize`() {
+        val board = Board(pinnedRowSize = 3)
+
+        val result = board.addingPinnedRow()
+
+        assertEquals(3, result.pinnedTiles.size)
+        assertEquals(true, result.pinnedTiles.all { it.isEmpty })
+    }
+
+    @Test
+    fun `addingPinnedRow is a no-op once a row already exists`() {
+        val board = Board(pinnedTiles = listOf(Tile(id = "hey")))
+
+        val result = board.addingPinnedRow()
+
+        assertEquals(board, result)
+    }
+
+    @Test
+    fun `resizedPinnedRow on an empty row just remembers the starting width`() {
+        val board = Board()
+
+        val result = board.resizedPinnedRow(6)
+
+        assertEquals(6, result.pinnedRowSize)
+        assertEquals(emptyList<Tile>(), result.pinnedTiles)
+    }
+
+    @Test
+    fun `resizedPinnedRow growing an existing row appends empty tiles without touching the rest`() {
+        val board = Board(pinnedTiles = listOf(Tile(id = "hey", label = "Hey")), pinnedRowSize = 1)
+
+        val result = board.resizedPinnedRow(3)
+
+        assertEquals(3, result.pinnedRowSize)
+        assertEquals(3, result.pinnedTiles.size)
+        assertEquals("Hey", result.pinnedTiles[0].label)
+    }
+
+    @Test
+    fun `resizedPinnedRow shrinking hides trailing tiles without dropping them`() {
+        val board = Board(
+            pinnedTiles = listOf(Tile(id = "hey", fileName = "hey.mp3"), Tile(id = "sos", fileName = "sos.mp3")),
+            pinnedRowSize = 2
+        )
+
+        val result = board.resizedPinnedRow(1)
+
+        assertEquals(1, result.pinnedRowSize)
+        assertEquals(listOf("hey", "sos"), result.pinnedTiles.map { it.id })
+        assertEquals(listOf("hey"), result.pinnedVisibleTiles.map { it.id })
+    }
+
+    @Test
+    fun `resizedPinnedRow growing again reveals a previously hidden tile`() {
+        val board = Board(
+            pinnedTiles = listOf(Tile(id = "hey", fileName = "hey.mp3"), Tile(id = "sos", fileName = "sos.mp3")),
+            pinnedRowSize = 1
+        )
+
+        val result = board.resizedPinnedRow(2)
+
+        assertEquals(listOf("hey", "sos"), result.pinnedVisibleTiles.map { it.id })
+    }
+
+    @Test
+    fun `removingPinnedRow clears the row but keeps pinnedRowSize`() {
+        val board = Board(pinnedTiles = listOf(Tile(id = "hey")), pinnedRowSize = 5)
+
+        val result = board.removingPinnedRow()
+
+        assertEquals(emptyList<Tile>(), result.pinnedTiles)
+        assertEquals(5, result.pinnedRowSize)
+    }
+
+    @Test
+    fun `pinnedVisibleTiles truncates to pinnedRowSize`() {
+        val board = Board(
+            pinnedTiles = listOf(Tile(id = "a"), Tile(id = "b"), Tile(id = "c")),
+            pinnedRowSize = 2
+        )
+
+        assertEquals(listOf("a", "b"), board.pinnedVisibleTiles.map { it.id })
+    }
 }

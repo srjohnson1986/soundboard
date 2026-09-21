@@ -532,7 +532,8 @@ fun BoardScreen(
                 PinnedRow(
                     tiles = homePage.tiles.take(homePage.columns),
                     editMode = editMode,
-                    aspectRatio = board.currentPage.tileAspectRatio,
+                    aspectRatio = homePage.tileAspectRatio,
+                    pageColor = homePage.color?.let { Color(it) },
                     hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                     performanceModeEnabled = performanceModeEnabled,
                     onTap = { tile ->
@@ -849,6 +850,7 @@ private fun PinnedRow(
     tiles: List<Tile>,
     editMode: Boolean,
     aspectRatio: Float,
+    pageColor: Color?,
     hapticFeedbackEnabled: Boolean,
     performanceModeEnabled: Boolean,
     onTap: (Tile) -> Unit,
@@ -866,7 +868,7 @@ private fun PinnedRow(
                 tile = tile,
                 editMode = editMode,
                 aspectRatio = aspectRatio,
-                pageColor = null,
+                pageColor = pageColor,
                 performanceModeEnabled = performanceModeEnabled,
                 modifier = Modifier.weight(1f),
                 onTap = { onTap(tile) },

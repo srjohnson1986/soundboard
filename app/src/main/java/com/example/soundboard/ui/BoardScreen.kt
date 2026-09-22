@@ -40,6 +40,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.BorderStyle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
@@ -130,6 +131,8 @@ import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
+import com.example.soundboard.model.TileBorder
+import com.example.soundboard.model.resolvedColor
 import com.example.soundboard.ui.theme.presetColors
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -196,6 +199,7 @@ fun BoardScreen(
     var renamePageIndex by remember { mutableStateOf<Int?>(null) }
     var pageOptionsIndex by remember { mutableStateOf<Int?>(null) }
     var pageColorDialogIndex by remember { mutableStateOf<Int?>(null) }
+    var pageBorderDialogIndex by remember { mutableStateOf<Int?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showStrayCleanupDialog by remember { mutableStateOf(false) }
@@ -613,6 +617,8 @@ fun BoardScreen(
                     editMode = editMode,
                     aspectRatio = homePage.tileAspectRatio,
                     pageColor = homePage.color?.let { Color(it) },
+                    pageBorder = homePage.border,
+                    globalTileBorder = if (performanceModeEnabled) TileBorder() else board.tileBorder,
                     hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                     performanceModeEnabled = performanceModeEnabled,
                     speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
@@ -654,6 +660,7 @@ fun BoardScreen(
                         performanceModeEnabled = performanceModeEnabled,
                         speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                         hideBlankTilesEnabled = board.hideBlankTilesEnabled,
+                        globalTileBorder = if (performanceModeEnabled) TileBorder() else board.tileBorder,
                         pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
                         onTap = { tile ->
                             touch()
@@ -691,6 +698,7 @@ fun BoardScreen(
                     onRemoveSound = { vm.removeSound(editing.id) },
                     onVolumeChange = { vm.setVolume(editing.id, it) },
                     onColorChange = { vm.setColor(editing.id, it) },
+                    onBorderChange = { vm.setBorder(editing.id, it) },
                     onSpeakLabelChange = { vm.setSpeakLabel(editing.id, it) },
                     onPlay = vm::play,
                     onStartRecording = vm::startRecording,
@@ -716,6 +724,7 @@ fun BoardScreen(
                     onRemoveSound = { vm.removeHomeRowSound(editing.id) },
                     onVolumeChange = { vm.setHomeRowVolume(editing.id, it) },
                     onColorChange = { vm.setHomeRowColor(editing.id, it) },
+                    onBorderChange = { vm.setHomeRowBorder(editing.id, it) },
                     onSpeakLabelChange = { vm.setHomeRowSpeakLabel(editing.id, it) },
                     onPlay = vm::play,
                     onStartRecording = vm::startRecording,
@@ -763,6 +772,16 @@ fun BoardScreen(
         }
     }
 
+    pageBorderDialogIndex?.let { index ->
+        board.pages.getOrNull(index)?.let { page ->
+            PageBorderDialog(
+                current = page.border,
+                onSelect = { vm.setPageBorder(index, it) },
+                onDismiss = { pageBorderDialogIndex = null }
+            )
+        }
+    }
+
     if (showSettingsDialog) {
         SettingsDialog(
             openOnHomePage = board.openOnHomePage,
@@ -786,6 +805,8 @@ fun BoardScreen(
             onStickyHomeRowEnabledChange = vm::setStickyHomeRowEnabled,
             hideBlankTilesEnabled = board.hideBlankTilesEnabled,
             onHideBlankTilesEnabledChange = vm::setHideBlankTilesEnabled,
+            tileBorder = board.tileBorder,
+            onTileBorderChange = vm::setTileBorder,
             defaultPageRows = board.defaultPageRows,
             onDefaultPageRowsChange = vm::setDefaultPageRows,
             defaultPageColumns = board.defaultPageColumns,
@@ -916,6 +937,10 @@ fun BoardScreen(
                     pageOptionsIndex = null
                     pageColorDialogIndex = index
                 },
+                onPageBorder = {
+                    pageOptionsIndex = null
+                    pageBorderDialogIndex = index
+                },
                 onMoveLeft = {
                     vm.movePage(index, index - 1)
                     pageOptionsIndex = null
@@ -971,6 +996,8 @@ private fun PinnedRow(
     editMode: Boolean,
     aspectRatio: Float,
     pageColor: Color?,
+    pageBorder: TileBorder?,
+    globalTileBorder: TileBorder,
     hapticFeedbackEnabled: Boolean,
     performanceModeEnabled: Boolean,
     speakUnrecordedTilesEnabled: Boolean,
@@ -991,6 +1018,7 @@ private fun PinnedRow(
                 editMode = editMode,
                 aspectRatio = aspectRatio,
                 pageColor = pageColor,
+                border = tile.border ?: pageBorder ?: globalTileBorder,
                 performanceModeEnabled = performanceModeEnabled,
                 hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                 modifier = Modifier.weight(1f),
@@ -1031,6 +1059,7 @@ private fun PageGrid(
     performanceModeEnabled: Boolean,
     speakUnrecordedTilesEnabled: Boolean,
     hideBlankTilesEnabled: Boolean,
+    globalTileBorder: TileBorder,
     pinFirstRow: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewSound: (Tile) -> Unit,
@@ -1134,6 +1163,7 @@ private fun PageGrid(
                         editMode = editMode,
                         aspectRatio = page.tileAspectRatio,
                         pageColor = pageColor,
+                        border = tile.border ?: page.border ?: globalTileBorder,
                         performanceModeEnabled = performanceModeEnabled,
                         hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                         modifier = Modifier.weight(1f).then(tileDragModifier(index, tile)),
@@ -1160,6 +1190,7 @@ private fun PageGrid(
                     editMode = editMode,
                     aspectRatio = page.tileAspectRatio,
                     pageColor = pageColor,
+                    border = tile.border ?: page.border ?: globalTileBorder,
                     performanceModeEnabled = performanceModeEnabled,
                     hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                     modifier = Modifier
@@ -1179,6 +1210,7 @@ private fun TileCard(
     editMode: Boolean,
     aspectRatio: Float,
     pageColor: Color?,
+    border: TileBorder,
     performanceModeEnabled: Boolean,
     hidden: Boolean = false,
     modifier: Modifier = Modifier,
@@ -1225,7 +1257,13 @@ private fun TileCard(
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (filled && !performanceModeEnabled) 2.dp else 0.dp
         ),
-        border = if (filled) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = if (border.enabled) {
+            BorderStroke(border.widthDp.dp, border.resolvedColor())
+        } else if (!filled) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        } else {
+            null
+        }
     ) {
         Box(
             modifier = Modifier
@@ -1329,6 +1367,7 @@ private fun EditTileDialog(
     onRemoveSound: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onColorChange: (Int?) -> Unit,
+    onBorderChange: (TileBorder?) -> Unit,
     onSpeakLabelChange: (Boolean) -> Unit,
     onPlay: (Tile) -> Unit,
     onStartRecording: () -> Unit,
@@ -1513,6 +1552,21 @@ private fun EditTileDialog(
                     }
                 }
 
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Override border", style = MaterialTheme.typography.labelMedium)
+                        Switch(
+                            checked = tile.border != null,
+                            onCheckedChange = { onBorderChange(if (it) TileBorder(enabled = true) else null) }
+                        )
+                    }
+                    tile.border?.let { border -> BorderControls(border, onBorderChange) }
+                }
+
                 if (!tile.isEmpty) {
                     TextButton(
                         onClick = {
@@ -1536,6 +1590,38 @@ private fun EditTileDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
+    )
+}
+
+/** Enabled/color/width controls for a [TileBorder], shared by the tile, page, and global surfaces. */
+@Composable
+private fun BorderControls(border: TileBorder, onChange: (TileBorder) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Show border", style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = border.enabled, onCheckedChange = { onChange(border.copy(enabled = it)) })
+    }
+    Text("Color (first = Recommended)", style = MaterialTheme.typography.bodySmall)
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        presetColors.forEach { color ->
+            ColorSwatch(
+                color = color,
+                selected = color?.toArgb() == border.colorArgb,
+                onClick = { onChange(border.copy(colorArgb = color?.toArgb())) }
+            )
+        }
+    }
+    Text("Width: ${"%.1f".format(border.widthDp)}dp", style = MaterialTheme.typography.bodySmall)
+    Slider(
+        value = border.widthDp,
+        onValueChange = { onChange(border.copy(widthDp = it)) },
+        valueRange = 0.5f..8f
     )
 }
 
@@ -1641,6 +1727,31 @@ private fun PageColorDialog(current: Int?, onSelect: (Int?) -> Unit, onDismiss: 
     )
 }
 
+@Composable
+private fun PageBorderDialog(current: TileBorder?, onSelect: (TileBorder?) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Page border") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Override the board's setting")
+                    Switch(
+                        checked = current != null,
+                        onCheckedChange = { onSelect(if (it) TileBorder(enabled = true) else null) }
+                    )
+                }
+                current?.let { border -> BorderControls(border, onSelect) }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
 /** App-level preferences that aren't page content — see [com.example.soundboard.data.SettingsRepository]. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1666,6 +1777,8 @@ private fun SettingsDialog(
     onStickyHomeRowEnabledChange: (Boolean) -> Unit,
     hideBlankTilesEnabled: Boolean,
     onHideBlankTilesEnabledChange: (Boolean) -> Unit,
+    tileBorder: TileBorder,
+    onTileBorderChange: (TileBorder) -> Unit,
     defaultPageRows: Int,
     onDefaultPageRowsChange: (Int) -> Unit,
     defaultPageColumns: Int,
@@ -1854,6 +1967,15 @@ private fun SettingsDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Tile border", style = MaterialTheme.typography.bodyMedium)
+                BorderControls(tileBorder, onTileBorderChange)
+                Text(
+                    "Overridable per page (Page options) and per tile (Edit tile). " +
+                        "Turned off automatically in Performance mode.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text("Default grid size for new pages", style = MaterialTheme.typography.bodyMedium)
                 Stepper("Rows", defaultPageRows, onDefaultPageRowsChange)
                 Stepper("Columns", defaultPageColumns, onDefaultPageColumnsChange)
@@ -1932,6 +2054,7 @@ private fun PageOptionsDialog(
     onSetHome: () -> Unit,
     onGridSize: () -> Unit,
     onPageColor: () -> Unit,
+    onPageBorder: () -> Unit,
     onMoveLeft: () -> Unit,
     onMoveRight: () -> Unit,
     onDelete: () -> Unit,
@@ -1977,6 +2100,11 @@ private fun PageOptionsDialog(
                     text = { Text("Page color") },
                     leadingIcon = { Icon(Icons.Filled.Palette, contentDescription = null) },
                     onClick = onPageColor
+                )
+                DropdownMenuItem(
+                    text = { Text("Page border") },
+                    leadingIcon = { Icon(Icons.Filled.BorderStyle, contentDescription = null) },
+                    onClick = onPageBorder
                 )
                 HorizontalDivider()
                 Row(

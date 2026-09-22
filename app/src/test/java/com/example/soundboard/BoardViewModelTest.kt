@@ -13,6 +13,7 @@ import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
+import com.example.soundboard.model.TileBorder
 import java.io.ByteArrayInputStream
 import java.io.File
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -809,6 +810,57 @@ class BoardViewModelTest {
         assertTrue(vm.board.value.hideBlankTilesEnabled)
         val second = newViewModel()
         assertTrue(second.board.value.hideBlankTilesEnabled)
+    }
+
+    @Test
+    fun `setTileBorder persists across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setTileBorder(TileBorder(enabled = true, colorArgb = 0xFF00FF00.toInt(), widthDp = 2f))
+
+        assertEquals(TileBorder(enabled = true, colorArgb = 0xFF00FF00.toInt(), widthDp = 2f), vm.board.value.tileBorder)
+        val second = newViewModel()
+        assertEquals(TileBorder(enabled = true, colorArgb = 0xFF00FF00.toInt(), widthDp = 2f), second.board.value.tileBorder)
+    }
+
+    @Test
+    fun `setPageBorder overrides only the targeted page`() {
+        repo.save(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
+        val vm = newViewModel()
+
+        vm.setPageBorder(1, TileBorder(enabled = true))
+
+        assertEquals(null, vm.board.value.pages[0].border)
+        assertEquals(TileBorder(enabled = true), vm.board.value.pages[1].border)
+    }
+
+    @Test
+    fun `setBorder overrides only the targeted tile`() {
+        repo.save(boardWith(Tile(id = "a"), Tile(id = "b")))
+        val vm = newViewModel()
+
+        vm.setBorder("a", TileBorder(enabled = true))
+
+        assertEquals(TileBorder(enabled = true), vm.board.value.currentPage.tiles.first { it.id == "a" }.border)
+        assertEquals(null, vm.board.value.currentPage.tiles.first { it.id == "b" }.border)
+    }
+
+    @Test
+    fun `setHomeRowBorder edits the home page's tile even from a different current page`() {
+        repo.save(
+            Board(
+                pages = listOf(
+                    Page(name = "Home", isHome = true, tiles = listOf(Tile(id = "a"))),
+                    Page(name = "Other")
+                ),
+                currentPageIndex = 1
+            )
+        )
+        val vm = newViewModel()
+
+        vm.setHomeRowBorder("a", TileBorder(enabled = true))
+
+        assertEquals(TileBorder(enabled = true), vm.board.value.homePage?.tiles?.first { it.id == "a" }?.border)
     }
 
     @Test

@@ -116,6 +116,8 @@ data class Board(
     val hapticFeedbackEnabled: Boolean = true,
     /** Whether a tile with no sound file speaks its label via TTS, even without [Tile.speakLabel] set. */
     val speakUnrecordedTilesEnabled: Boolean = true,
+    /** Whether blank tiles are hidden (and untappable) outside of edit mode, to avoid a stray tap opening the editor. */
+    val hideBlankTilesEnabled: Boolean = false,
     /** Grid size a newly-added page starts at — it can still be resized individually afterward. */
     val defaultPageRows: Int = 4,
     val defaultPageColumns: Int = 4,

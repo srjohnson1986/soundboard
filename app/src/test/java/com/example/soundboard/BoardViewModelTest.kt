@@ -801,6 +801,17 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `setHideBlankTilesEnabled persists across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setHideBlankTilesEnabled(true)
+
+        assertTrue(vm.board.value.hideBlankTilesEnabled)
+        val second = newViewModel()
+        assertTrue(second.board.value.hideBlankTilesEnabled)
+    }
+
+    @Test
     fun `setDefaultPageRows and setDefaultPageColumns persist across a fresh view model`() {
         val vm = newViewModel()
 

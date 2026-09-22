@@ -136,3 +136,17 @@ without waiting on any recording. One accepted quirk: Well Wishes' "Mom"/
 "Dad" placeholder tiles (meant for a family member's own recorded message —
 see above) speak the literal word "Mom"/"Dad" here, same as every other
 labeled tile — no special-casing.
+
+Most tiles also carry a `Tile.ttsScript` — the actual sentence recorded for
+that clip (e.g. "Water" speaks "Water, please.", "Meds not working" speaks
+"The medicine isn't working."), pulled from the same recording script used
+to record Jeremy's and Steve's audio, matched to each tile by the fileName
+`jeremy-care-board.zip`'s corresponding tile uses. A few tiles have no real
+sentence to assign and just speak their plain label instead: Trouble's
+"Chime" (a physical sound, not a phrase), Trouble's two "Get ___" name
+templates (the script leaves the name blank), Talking's "Ha!" (a real laugh,
+not a line), and Well Wishes' "For you" (the recording script calls that one
+"just an outline, not a script"). Because the script is matched by fileName
+rather than by re-deriving from the label, it also carries over the one
+labeling quirk noted above verbatim — Talking's "Thanks (quick)" speaks
+"Thank you." here too, since that's what `thank_you_2.wav` actually says.

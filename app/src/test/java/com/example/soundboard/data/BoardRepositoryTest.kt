@@ -415,6 +415,15 @@ class BoardRepositoryTest {
         blank.forEach { tile ->
             assertTrue("expected blank tile ${tile.id} to be empty", tile.isEmpty)
         }
+
+        // Most labeled tiles carry the actual sentence recorded for that clip, not
+        // just their short label — see presets/README.md's "TTS Care Board" section.
+        assertEquals("Water, please.", labeled.first { it.label == "Water" }.ttsScript)
+        assertEquals("The medicine isn't working.", labeled.first { it.label == "Meds not working" }.ttsScript)
+        // A few have no real sentence to assign and fall back to their plain label.
+        assertNull(labeled.first { it.label == "Chime" }.ttsScript)
+        assertNull(labeled.first { it.label == "Ha!" }.ttsScript)
+        assertNull(labeled.first { it.label == "For you" }.ttsScript)
     }
 
     @Test

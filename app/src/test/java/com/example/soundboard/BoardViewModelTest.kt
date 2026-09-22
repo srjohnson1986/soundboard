@@ -813,6 +813,46 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `setBackgroundColor persists and clears any background image`() {
+        val vm = newViewModel()
+        val uri = Uri.parse("content://fake/bg.jpg")
+        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("bg".toByteArray()))
+        vm.setBackgroundImage(uri)
+        assertTrue(vm.board.value.backgroundImageFileName != null)
+
+        vm.setBackgroundColor(0xFF00FF00.toInt())
+
+        assertEquals(0xFF00FF00.toInt(), vm.board.value.backgroundColorArgb)
+        assertEquals(null, vm.board.value.backgroundImageFileName)
+        val second = newViewModel()
+        assertEquals(0xFF00FF00.toInt(), second.board.value.backgroundColorArgb)
+    }
+
+    @Test
+    fun `setBackgroundImage imports the file and clears any background color`() {
+        val vm = newViewModel()
+        vm.setBackgroundColor(0xFF00FF00.toInt())
+        val uri = Uri.parse("content://fake/bg.jpg")
+        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("bg".toByteArray()))
+
+        vm.setBackgroundImage(uri)
+
+        assertTrue(vm.board.value.backgroundImageFileName != null)
+        assertEquals(null, vm.board.value.backgroundColorArgb)
+    }
+
+    @Test
+    fun `clearBackground resets both color and image`() {
+        val vm = newViewModel()
+        vm.setBackgroundColor(0xFF00FF00.toInt())
+
+        vm.clearBackground()
+
+        assertEquals(null, vm.board.value.backgroundColorArgb)
+        assertEquals(null, vm.board.value.backgroundImageFileName)
+    }
+
+    @Test
     fun `setTileOpacity persists across a fresh view model`() {
         val vm = newViewModel()
 

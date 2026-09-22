@@ -138,6 +138,10 @@ data class Board(
     val speakUnrecordedTilesEnabled: Boolean = true,
     /** Whether blank tiles are hidden (and untappable) outside of edit mode, to avoid a stray tap opening the editor. */
     val hideBlankTilesEnabled: Boolean = false,
+    /** Solid background color behind the whole board; cleared whenever [backgroundImageFileName] is set. */
+    val backgroundColorArgb: Int? = null,
+    /** Background image file name (in the app's private backgrounds directory); takes precedence over [backgroundColorArgb] if somehow both are set. */
+    val backgroundImageFileName: String? = null,
     /** Grid size a newly-added page starts at — it can still be resized individually afterward. */
     val defaultPageRows: Int = 4,
     val defaultPageColumns: Int = 4,

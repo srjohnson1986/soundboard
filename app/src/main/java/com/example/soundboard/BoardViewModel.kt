@@ -353,6 +353,39 @@ class BoardViewModel(
         commit(_board.value.copy(hideBlankTilesEnabled = value))
     }
 
+    /** Solid background color; setting one clears any background image. */
+    fun setBackgroundColor(argb: Int?) {
+        val previousImage = _board.value.backgroundImageFileName
+        commit(_board.value.copy(backgroundColorArgb = argb, backgroundImageFileName = null))
+        if (previousImage != null) {
+            viewModelScope.launch(ioDispatcher) { repo.backgroundFile(previousImage).delete() }
+        }
+    }
+
+    /** Background image picked from the gallery; replaces any solid background color. */
+    fun setBackgroundImage(uri: Uri) {
+        val previousImage = _board.value.backgroundImageFileName
+        viewModelScope.launch {
+            val name = withContext(ioDispatcher) { repo.importBackgroundImage(uri) } ?: return@launch
+            commit(_board.value.copy(backgroundColorArgb = null, backgroundImageFileName = name))
+            if (previousImage != null) {
+                withContext(ioDispatcher) { repo.backgroundFile(previousImage).delete() }
+            }
+        }
+    }
+
+    /** Clears the background back to the plain theme surface. */
+    fun clearBackground() {
+        val previousImage = _board.value.backgroundImageFileName
+        commit(_board.value.copy(backgroundColorArgb = null, backgroundImageFileName = null))
+        if (previousImage != null) {
+            viewModelScope.launch(ioDispatcher) { repo.backgroundFile(previousImage).delete() }
+        }
+    }
+
+    /** File backing [Board.backgroundImageFileName], for the UI to decode and render. */
+    fun backgroundImageFile(name: String): File = repo.backgroundFile(name)
+
     fun renameBoard(name: String) {
         commit(_board.value.copy(name = name.ifBlank { "New Board" }))
     }

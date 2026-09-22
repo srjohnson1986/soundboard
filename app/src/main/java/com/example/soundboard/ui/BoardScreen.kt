@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -79,6 +80,7 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -95,7 +97,9 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -653,15 +657,26 @@ fun BoardScreen(
             // the tabs already scroll horizontally (PrimaryScrollableTabRow) when they
             // don't fit, so there's no loss of access, just less height spent on chrome.
             if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Soundboard", style = MaterialTheme.typography.titleMedium)
-                    PageTabs(modifier = Modifier.weight(1f))
-                    HamburgerMenu()
+                CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            // Applied before windowInsetsPadding so the color extends the full
+                            // width AND behind the status bar, matching how TopAppBar's own
+                            // background reaches edge-to-edge in portrait — otherwise the
+                            // board's background (theme color or a custom image) shows through
+                            // behind the title/tabs/menu here, and text contrast isn't guaranteed.
+                            .background(MaterialTheme.colorScheme.surface)
+                            // TopAppBar gets this for free; a plain Row doesn't, so without it
+                            // the header renders under the status bar and steals its touch area.
+                            .windowInsetsPadding(TopAppBarDefaults.windowInsets)
+                            .padding(start = 16.dp, end = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Soundboard", style = MaterialTheme.typography.titleMedium)
+                        PageTabs(modifier = Modifier.weight(1f))
+                        HamburgerMenu()
+                    }
                 }
             } else {
                 Column {

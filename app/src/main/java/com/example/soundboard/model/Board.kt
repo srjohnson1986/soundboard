@@ -92,6 +92,8 @@ data class Board(
     val keepScreenAwake: Boolean = false,
     /** Whether long-press haptics (page-tab options, tile drag-reorder arm) fire. */
     val hapticFeedbackEnabled: Boolean = true,
+    /** Whether a tile with no sound file speaks its label via TTS, even without [Tile.speakLabel] set. */
+    val speakUnrecordedTilesEnabled: Boolean = true,
     /** Grid size a newly-added page starts at — it can still be resized individually afterward. */
     val defaultPageRows: Int = 4,
     val defaultPageColumns: Int = 4,

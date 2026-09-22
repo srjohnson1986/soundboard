@@ -55,6 +55,10 @@ class BoardViewModel(
     private val _presets = MutableStateFlow<List<SavedPreset>>(emptyList())
     val presets: StateFlow<List<SavedPreset>> = _presets.asStateFlow()
 
+    /** Sound files not referenced by any tile on the live board or any saved preset — see [refreshStrayClips]. */
+    private val _strayClips = MutableStateFlow<List<StrayClip>>(emptyList())
+    val strayClips: StateFlow<List<StrayClip>> = _strayClips.asStateFlow()
+
     /** Presets actually loaded/saved recently, newest first — see [RecentPresetsRepository]. */
     private val _recentPresets = MutableStateFlow<List<RecentPresetItem>>(emptyList())
     val recentPresets: StateFlow<List<RecentPresetItem>> = _recentPresets.asStateFlow()
@@ -87,7 +91,7 @@ class BoardViewModel(
         val name = tile.fileName
         if (name != null) {
             player.play(name, tile.volume)
-        } else if (tile.speakLabel && tile.label.isNotBlank()) {
+        } else if (tile.label.isNotBlank() && (tile.speakLabel || _board.value.speakUnrecordedTilesEnabled)) {
             speaker.speak(tile.label)
         }
     }
@@ -125,6 +129,11 @@ class BoardViewModel(
 
     fun clearTile(tileId: String) = updateTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null, speakLabel = false) else it }
+    }
+
+    /** Detaches a tile's sound without touching its label or [Tile.speakLabel]. */
+    fun removeSound(tileId: String) = updateTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(fileName = null) else it }
     }
 
     /** Starts recording into a fresh file; call [stopRecording] or [cancelRecording] to end it. */
@@ -223,6 +232,11 @@ class BoardViewModel(
         tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null, speakLabel = false) else it }
     }
 
+    /** Same as [removeSound], for a home-row tile edited via the sticky banner. */
+    fun removeHomeRowSound(tileId: String) = updateHomeRowTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(fileName = null) else it }
+    }
+
     /** Same as [stopRecording], for a home-row tile edited via the sticky banner. */
     fun stopHomeRowRecording(tileId: String) {
         viewModelScope.launch {
@@ -276,6 +290,11 @@ class BoardViewModel(
 
     fun setHapticFeedbackEnabled(value: Boolean) {
         commit(_board.value.copy(hapticFeedbackEnabled = value))
+    }
+
+    /** Whether a tile with no sound file speaks its label via TTS on tap, even without its own speak-label switch on. */
+    fun setSpeakUnrecordedTilesEnabled(value: Boolean) {
+        commit(_board.value.copy(speakUnrecordedTilesEnabled = value))
     }
 
     fun renameBoard(name: String) {
@@ -339,6 +358,41 @@ class BoardViewModel(
     fun refreshPresets() {
         viewModelScope.launch {
             _presets.value = withContext(ioDispatcher) { presetRepo.list() }
+        }
+    }
+
+    /** Refreshes [strayClips] from disk; call before showing the stray-clip cleanup dialog. */
+    fun refreshStrayClips() {
+        viewModelScope.launch {
+            _strayClips.value = withContext(ioDispatcher) {
+                val keep = allTiles(_board.value).mapNotNull { it.fileName }.toSet() + presetRepo.allReferencedFileNames()
+                repo.strayFiles(keep).map { StrayClip(it.name, it.length()) }
+            }
+        }
+    }
+
+    /** Zips [strayClips] to [uri] and, only if that succeeds, deletes them. */
+    fun exportAndDeleteStrayClips(uri: Uri) {
+        val fileNames = _strayClips.value.map { it.fileName }
+        viewModelScope.launch {
+            val ok = withContext(ioDispatcher) { repo.exportFiles(fileNames, uri) }
+            if (ok) {
+                withContext(ioDispatcher) { repo.deleteFiles(fileNames) }
+                _strayClips.value = emptyList()
+                _message.value = "Exported and deleted ${fileNames.size} unused clip(s)"
+            } else {
+                _message.value = "Export failed"
+            }
+        }
+    }
+
+    /** Deletes [strayClips] without exporting them first. */
+    fun deleteStrayClips() {
+        val fileNames = _strayClips.value.map { it.fileName }
+        viewModelScope.launch {
+            withContext(ioDispatcher) { repo.deleteFiles(fileNames) }
+            _strayClips.value = emptyList()
+            _message.value = "Deleted ${fileNames.size} unused clip(s)"
         }
     }
 
@@ -515,3 +569,6 @@ sealed interface PresetRef {
 
 /** One entry in the title bar's quick-switch dropdown — see [BoardViewModel.recentPresets]. */
 data class RecentPresetItem(val ref: PresetRef, val label: String, val usedAt: Long)
+
+/** One unused sound file found by [BoardViewModel.refreshStrayClips]. */
+data class StrayClip(val fileName: String, val sizeBytes: Long)

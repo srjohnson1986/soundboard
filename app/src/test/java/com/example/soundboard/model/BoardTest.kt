@@ -255,4 +255,25 @@ class BoardTest {
         assertEquals(true, board.hasAnySound)
     }
 
+    @Test
+    fun `speechText falls back to the label when ttsScript is null`() {
+        val tile = Tile(label = "Water")
+
+        assertEquals("Water", tile.speechText)
+    }
+
+    @Test
+    fun `speechText prefers ttsScript over the label when set`() {
+        val tile = Tile(label = "Water", ttsScript = "I would like a glass of water please")
+
+        assertEquals("I would like a glass of water please", tile.speechText)
+    }
+
+    @Test
+    fun `speechText falls back to the label when ttsScript is blank`() {
+        val tile = Tile(label = "Water", ttsScript = "   ")
+
+        assertEquals("Water", tile.speechText)
+    }
+
 }

@@ -369,212 +369,212 @@ fun BoardScreen(
         containerColor = if (hasCustomBackground) Color.Transparent else MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text("Soundboard", style = MaterialTheme.typography.titleLarge) },
-                    actions = {
-                        Box {
-                            IconButton(onClick = { showMenu = true }) {
-                                Icon(Icons.Filled.Menu, contentDescription = "Menu")
+            @Composable
+            fun HamburgerMenu() {
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Filled.Menu, contentDescription = "Menu")
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false },
+                        // The Edit mode row's fillMaxWidth() doesn't report an intrinsic
+                        // width, so without a floor the menu can size itself too narrow
+                        // and crowd the switch against the label text.
+                        modifier = Modifier.widthIn(min = 260.dp)
+                    ) {
+                        MenuSectionHeader("Boards")
+                        DropdownMenuItem(
+                            text = { Text("Rename board (${board.name})") },
+                            leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                showRenameDialog = true
                             }
+                        )
+                        Box {
+                            DropdownMenuItem(
+                                text = { Text("Recent boards") },
+                                leadingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
+                                onClick = {
+                                    vm.refreshRecentPresets()
+                                    vm.refreshPresets()
+                                    showRecentPresetsMenu = true
+                                }
+                            )
                             DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false },
-                                // The Edit mode row's fillMaxWidth() doesn't report an intrinsic
-                                // width, so without a floor the menu can size itself too narrow
-                                // and crowd the switch against the label text.
-                                modifier = Modifier.widthIn(min = 260.dp)
+                                expanded = showRecentPresetsMenu,
+                                onDismissRequest = { showRecentPresetsMenu = false },
+                                modifier = Modifier.widthIn(min = 240.dp)
                             ) {
-                                MenuSectionHeader("Boards")
-                                DropdownMenuItem(
-                                    text = { Text("Rename board (${board.name})") },
-                                    leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        showRenameDialog = true
-                                    }
-                                )
-                                Box {
+                                if (recentPresets.isEmpty()) {
                                     DropdownMenuItem(
-                                        text = { Text("Recent boards") },
-                                        leadingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
-                                        onClick = {
-                                            vm.refreshRecentPresets()
-                                            vm.refreshPresets()
-                                            showRecentPresetsMenu = true
-                                        }
+                                        text = { Text("No recent boards yet") },
+                                        enabled = false,
+                                        onClick = {}
                                     )
-                                    DropdownMenu(
-                                        expanded = showRecentPresetsMenu,
-                                        onDismissRequest = { showRecentPresetsMenu = false },
-                                        modifier = Modifier.widthIn(min = 240.dp)
-                                    ) {
-                                        if (recentPresets.isEmpty()) {
-                                            DropdownMenuItem(
-                                                text = { Text("No recent boards yet") },
-                                                enabled = false,
-                                                onClick = {}
-                                            )
-                                        } else {
-                                            recentPresets.forEach { item ->
-                                                DropdownMenuItem(
-                                                    text = {
-                                                        Column {
-                                                            Text(item.label)
-                                                            Text(
-                                                                "${if (item.ref is PresetRef.Factory) "Factory" else "Saved"} · ${relativeSavedAt(item.usedAt)}",
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                            )
-                                                        }
-                                                    },
-                                                    onClick = {
-                                                        showRecentPresetsMenu = false
-                                                        showMenu = false
-                                                        requestApplyPreset(item.ref, item.label)
-                                                    }
-                                                )
-                                            }
-                                        }
-                                        HorizontalDivider()
+                                } else {
+                                    recentPresets.forEach { item ->
                                         DropdownMenuItem(
-                                            text = { Text("See all presets...") },
+                                            text = {
+                                                Column {
+                                                    Text(item.label)
+                                                    Text(
+                                                        "${if (item.ref is PresetRef.Factory) "Factory" else "Saved"} · ${relativeSavedAt(item.usedAt)}",
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            },
                                             onClick = {
                                                 showRecentPresetsMenu = false
                                                 showMenu = false
-                                                showPresetPickerDialog = true
+                                                requestApplyPreset(item.ref, item.label)
                                             }
                                         )
                                     }
                                 }
                                 HorizontalDivider()
-                                // Mode
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            Icons.Filled.Edit,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        Spacer(Modifier.width(12.dp))
-                                        Text("Edit mode")
-                                    }
-                                    Switch(
-                                        checked = editMode,
-                                        onCheckedChange = { editMode = it }
-                                    )
-                                }
-                                HorizontalDivider()
                                 DropdownMenuItem(
-                                    text = { Text("Speak...") },
-                                    leadingIcon = { Icon(Icons.Filled.RecordVoiceOver, contentDescription = null) },
+                                    text = { Text("See all presets...") },
                                     onClick = {
+                                        showRecentPresetsMenu = false
                                         showMenu = false
-                                        showSpeakDialog = true
-                                    }
-                                )
-                                HorizontalDivider()
-                                // Settings — see SettingsDialog
-                                DropdownMenuItem(
-                                    text = { Text("Settings") },
-                                    leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        showSettingsDialog = true
-                                    }
-                                )
-                                HorizontalDivider()
-                                MenuSectionHeader("Page")
-                                DropdownMenuItem(
-                                    text = { Text("Page options (${board.currentPage.name})") },
-                                    leadingIcon = { Icon(Icons.Filled.MoreHoriz, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        pageOptionsIndex = board.currentPageIndex
-                                    }
-                                )
-                                HorizontalDivider()
-                                // Presets — lightweight, same-device version history (see PresetRepository)
-                                MenuSectionHeader("Presets")
-                                DropdownMenuItem(
-                                    text = { Text("Save as preset") },
-                                    leadingIcon = { Icon(Icons.Filled.Save, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        showSavePresetDialog = true
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Load preset") },
-                                    leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        vm.refreshPresets()
                                         showPresetPickerDialog = true
-                                    }
-                                )
-                                HorizontalDivider()
-                                // Backup — full, portable, self-contained (structure + audio)
-                                MenuSectionHeader("Backup")
-                                DropdownMenuItem(
-                                    text = { Text("Export backup") },
-                                    leadingIcon = { Icon(Icons.Filled.Upload, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        exportLauncher.launch("soundboard-backup.zip")
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Import backup") },
-                                    leadingIcon = { Icon(Icons.Filled.Download, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        importLauncher.launch(arrayOf("application/zip"))
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Clean up unused clips") },
-                                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                                    onClick = {
-                                        showMenu = false
-                                        vm.refreshStrayClips()
-                                        showStrayCleanupDialog = true
-                                    }
-                                )
-                                HorizontalDivider()
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            APP_VERSION,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Filled.Info,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    },
-                                    onClick = {
-                                        showMenu = false
-                                        context.startActivity(
-                                            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(RELEASE_URL))
-                                        )
                                     }
                                 )
                             }
                         }
+                        HorizontalDivider()
+                        // Mode
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Filled.Edit,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text("Edit mode")
+                            }
+                            Switch(
+                                checked = editMode,
+                                onCheckedChange = { editMode = it }
+                            )
+                        }
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Speak...") },
+                            leadingIcon = { Icon(Icons.Filled.RecordVoiceOver, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                showSpeakDialog = true
+                            }
+                        )
+                        HorizontalDivider()
+                        // Settings — see SettingsDialog
+                        DropdownMenuItem(
+                            text = { Text("Settings") },
+                            leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                showSettingsDialog = true
+                            }
+                        )
+                        HorizontalDivider()
+                        MenuSectionHeader("Page")
+                        DropdownMenuItem(
+                            text = { Text("Page options (${board.currentPage.name})") },
+                            leadingIcon = { Icon(Icons.Filled.MoreHoriz, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                pageOptionsIndex = board.currentPageIndex
+                            }
+                        )
+                        HorizontalDivider()
+                        // Presets — lightweight, same-device version history (see PresetRepository)
+                        MenuSectionHeader("Presets")
+                        DropdownMenuItem(
+                            text = { Text("Save as preset") },
+                            leadingIcon = { Icon(Icons.Filled.Save, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                showSavePresetDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Load preset") },
+                            leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                vm.refreshPresets()
+                                showPresetPickerDialog = true
+                            }
+                        )
+                        HorizontalDivider()
+                        // Backup — full, portable, self-contained (structure + audio)
+                        MenuSectionHeader("Backup")
+                        DropdownMenuItem(
+                            text = { Text("Export backup") },
+                            leadingIcon = { Icon(Icons.Filled.Upload, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                exportLauncher.launch("soundboard-backup.zip")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Import backup") },
+                            leadingIcon = { Icon(Icons.Filled.Download, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                importLauncher.launch(arrayOf("application/zip"))
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Clean up unused clips") },
+                            leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                vm.refreshStrayClips()
+                                showStrayCleanupDialog = true
+                            }
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    APP_VERSION,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Filled.Info,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            onClick = {
+                                showMenu = false
+                                context.startActivity(
+                                    android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(RELEASE_URL))
+                                )
+                            }
+                        )
                     }
-                )
-                PrimaryScrollableTabRow(selectedTabIndex = board.currentPageIndex) {
+                }
+            }
+
+            @Composable
+            fun PageTabs(modifier: Modifier) {
+                PrimaryScrollableTabRow(selectedTabIndex = board.currentPageIndex, modifier = modifier) {
                     val tabHaptics = LocalHapticFeedback.current
                     board.pages.forEachIndexed { index, page ->
                         Tab(
@@ -645,6 +645,31 @@ fun BoardScreen(
                         onClick = { showAddPageDialog = true },
                         icon = { Icon(Icons.Filled.Add, contentDescription = "Add page") }
                     )
+                }
+            }
+
+            // Landscape has little vertical room to spare, so the title, page tabs, and
+            // hamburger menu share one row instead of stacking title-bar-then-tab-row —
+            // the tabs already scroll horizontally (PrimaryScrollableTabRow) when they
+            // don't fit, so there's no loss of access, just less height spent on chrome.
+            if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Soundboard", style = MaterialTheme.typography.titleMedium)
+                    PageTabs(modifier = Modifier.weight(1f))
+                    HamburgerMenu()
+                }
+            } else {
+                Column {
+                    TopAppBar(
+                        title = { Text("Soundboard", style = MaterialTheme.typography.titleLarge) },
+                        actions = { HamburgerMenu() }
+                    )
+                    PageTabs(modifier = Modifier.fillMaxWidth())
                 }
             }
         }

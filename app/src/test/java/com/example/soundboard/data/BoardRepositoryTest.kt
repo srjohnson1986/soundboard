@@ -61,6 +61,33 @@ class BoardRepositoryTest {
     }
 
     @Test
+    fun `save then load round-trips a tile's ttsScript`() {
+        val board = Board(
+            pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Water", ttsScript = "I would like a glass of water please"))))
+        )
+
+        repo.save(board)
+        val loaded = repo.load()
+
+        assertEquals("I would like a glass of water please", loaded.currentPage.tiles.first { it.id == "a" }.ttsScript)
+    }
+
+    @Test
+    fun `a full backup export then import round-trips a tile's ttsScript`() {
+        val board = Board(
+            pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Water", ttsScript = "I would like a glass of water please"))))
+        )
+        repo.save(board)
+        val zip = File(context.filesDir, "backup.zip")
+
+        assertTrue(repo.exportTo(Uri.fromFile(zip)))
+        assertTrue(repo.importFrom(Uri.fromFile(zip)))
+        val loaded = repo.load()
+
+        assertEquals("I would like a glass of water please", loaded.currentPage.tiles.first { it.id == "a" }.ttsScript)
+    }
+
+    @Test
     fun `save then load round-trips multiple pages and the current page index`() {
         val board = Board(
             pages = listOf(Page(name = "Requests"), Page(name = "Feelings")),

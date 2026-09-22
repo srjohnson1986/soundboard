@@ -88,6 +88,21 @@ class BoardRepositoryTest {
     }
 
     @Test
+    fun `load appends a blank row when the saved board's last row is completely full`() {
+        repo.save(
+            Board(pages = listOf(Page(rows = 1, columns = 2, tiles = listOf(Tile(id = "a", fileName = "a.mp3"), Tile(id = "b", fileName = "b.mp3")))))
+        )
+        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        repo.soundFile("b.mp3").apply { parentFile?.mkdirs() }.writeText("b")
+
+        val loaded = repo.load()
+
+        assertEquals(2, loaded.currentPage.rows)
+        assertEquals(4, loaded.currentPage.tiles.size)
+        assertTrue(loaded.currentPage.tiles.drop(2).all { it.isEmpty })
+    }
+
+    @Test
     fun `save then load round-trips multiple pages and the current page index`() {
         val board = Board(
             pages = listOf(Page(name = "Requests"), Page(name = "Feelings")),

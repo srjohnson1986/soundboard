@@ -53,7 +53,8 @@ class BoardRepository(private val context: Context) {
                 pages = listOf(Page(rows = legacy.rows, columns = legacy.columns, tiles = legacy.tiles))
             )
         }
-        sanitizeMissingSounds(migrateHomePageIndex(board, root))
+        val sanitized = sanitizeMissingSounds(migrateHomePageIndex(board, root))
+        sanitized.copy(pages = sanitized.pages.map { it.withAutoGrownTrailingRow() })
     }.getOrElse { Board() }
 
     /**

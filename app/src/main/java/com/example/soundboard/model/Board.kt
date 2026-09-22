@@ -63,6 +63,23 @@ data class Page(
         return copy(rows = newRows, columns = newColumns, tiles = next)
     }
 
+    /**
+     * Appends a fresh blank row once every tile in the last visible row is filled, so
+     * there's always at least one blank tile to add a new pad to without opening Page
+     * options first. Never fires on a page that's currently shrunk with hidden trailing
+     * tiles ([tiles] longer than [rows] x [columns], see [resized]) — revealing those is
+     * what a manual resize is for; auto-grow only ever adds a genuinely new row.
+     */
+    fun withAutoGrownTrailingRow(): Page {
+        if (rows <= 0 || columns <= 0 || tiles.size > rows * columns) return this
+        val lastRow = visibleTiles.takeLast(columns)
+        return if (lastRow.size == columns && lastRow.none { it.isEmpty }) {
+            resized(rows + 1, columns)
+        } else {
+            this
+        }
+    }
+
     /** Reorders the visible tiles by moving [fromIndex] to [toIndex]; hidden tiles are untouched. */
     fun moved(fromIndex: Int, toIndex: Int): Page {
         val visibleCount = rows * columns

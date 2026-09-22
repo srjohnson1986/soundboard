@@ -34,6 +34,8 @@ data class Tile(
     val speakLabel: Boolean = false,
     /** Longer text to speak instead of [label] — most scripts read better than the short name shown on the tile. Null falls back to [label]. */
     val ttsScript: String? = null,
+    /** Per-tile opacity override, 0..1; null inherits the page's, then the board's. */
+    val opacity: Float? = null,
     /** Per-tile border override; null inherits the page's, then the board's. */
     val border: TileBorder? = null
 ) {
@@ -57,6 +59,8 @@ data class Page(
     val color: Int? = null,
     /** Auto-return snaps back to whichever page has this set; at most one page should. */
     val isHome: Boolean = false,
+    /** Per-page opacity override, 0..1; null inherits the board's global setting. Overridden per-tile by [Tile.opacity]. */
+    val opacity: Float? = null,
     /** Per-page border override; null inherits the board's global setting. Overridden per-tile by [Tile.border]. */
     val border: TileBorder? = null
 ) {
@@ -137,6 +141,8 @@ data class Board(
     /** Grid size a newly-added page starts at — it can still be resized individually afterward. */
     val defaultPageRows: Int = 4,
     val defaultPageColumns: Int = 4,
+    /** Global tile opacity, 0..1; overridden per-page by [Page.opacity] and per-tile by [Tile.opacity]. */
+    val tileOpacity: Float = 1f,
     /** Global tile border; overridden per-page by [Page.border] and per-tile by [Tile.border]. */
     val tileBorder: TileBorder = TileBorder(),
     /** Forward-looking marker for the on-disk schema shape; not branched on yet. */

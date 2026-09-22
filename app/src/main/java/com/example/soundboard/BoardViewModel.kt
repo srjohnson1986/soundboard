@@ -119,6 +119,11 @@ class BoardViewModel(
         tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
     }
 
+    /** Per-tile opacity override; null inherits the page's, then the board's. */
+    fun setOpacity(tileId: String, opacity: Float?) = updateTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(opacity = opacity?.coerceIn(0f, 1f)) else it }
+    }
+
     /** Per-tile border override; null inherits the page's, then the board's. */
     fun setBorder(tileId: String, border: TileBorder?) = updateTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(border = border) else it }
@@ -202,6 +207,11 @@ class BoardViewModel(
         commit(_board.value.copy(stickyHomeRowEnabled = value))
     }
 
+    /** Global tile opacity; overridden per-page by [setPageOpacity] and per-tile by [setOpacity]. */
+    fun setTileOpacity(value: Float) {
+        commit(_board.value.copy(tileOpacity = value.coerceIn(0f, 1f)))
+    }
+
     /** Global tile border; overridden per-page by [setPageBorder] and per-tile by [setBorder]. */
     fun setTileBorder(value: TileBorder) {
         commit(_board.value.copy(tileBorder = value))
@@ -233,6 +243,11 @@ class BoardViewModel(
 
     fun setHomeRowColor(tileId: String, colorArgb: Int?) = updateHomeRowTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
+    }
+
+    /** Same as [setOpacity], for a home-row tile edited via the sticky banner. */
+    fun setHomeRowOpacity(tileId: String, opacity: Float?) = updateHomeRowTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(opacity = opacity?.coerceIn(0f, 1f)) else it }
     }
 
     /** Same as [setBorder], for a home-row tile edited via the sticky banner. */
@@ -289,6 +304,11 @@ class BoardViewModel(
 
     fun setPageColor(index: Int, colorArgb: Int?) {
         commit(_board.value.updatingPage(index) { it.copy(color = colorArgb) })
+    }
+
+    /** Per-page opacity override; null inherits the board's global setting. */
+    fun setPageOpacity(index: Int, opacity: Float?) {
+        commit(_board.value.updatingPage(index) { it.copy(opacity = opacity?.coerceIn(0f, 1f)) })
     }
 
     /** Per-page border override; null inherits the board's global setting. */

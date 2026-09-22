@@ -683,6 +683,7 @@ fun BoardScreen(
                     isRecording = isRecording,
                     speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                     onLabelChange = { vm.setLabel(editing.id, it) },
+                    onTtsScriptChange = { vm.setTtsScript(editing.id, it) },
                     onSoundPicked = { vm.assignSound(editing.id, it) },
                     onClear = { vm.clearTile(editing.id) },
                     onRemoveSound = { vm.removeSound(editing.id) },
@@ -707,6 +708,7 @@ fun BoardScreen(
                     isRecording = isRecording,
                     speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                     onLabelChange = { vm.setHomeRowLabel(editing.id, it) },
+                    onTtsScriptChange = { vm.setHomeRowTtsScript(editing.id, it) },
                     onSoundPicked = { vm.assignHomeRowSound(editing.id, it) },
                     onClear = { vm.clearHomeRowTile(editing.id) },
                     onRemoveSound = { vm.removeHomeRowSound(editing.id) },
@@ -954,9 +956,9 @@ fun BoardScreen(
 
 }
 
-/** Whether tapping [tile] does anything — plays a clip, or (with the fallback setting) speaks its label. Mirrors [BoardViewModel.play]'s own condition. */
+/** Whether tapping [tile] does anything — plays a clip, or (with the fallback setting) speaks its [Tile.speechText]. Mirrors [BoardViewModel.play]'s own condition. */
 private fun isPlayable(tile: Tile, speakUnrecordedTilesEnabled: Boolean): Boolean =
-    tile.fileName != null || ((tile.speakLabel || speakUnrecordedTilesEnabled) && tile.label.isNotBlank())
+    tile.fileName != null || ((tile.speakLabel || speakUnrecordedTilesEnabled) && tile.speechText.isNotBlank())
 
 /** The fixed row shown above every non-home page, mirroring the home page's own first row. */
 @Composable
@@ -1303,6 +1305,7 @@ private fun EditTileDialog(
     isRecording: Boolean,
     speakUnrecordedTilesEnabled: Boolean,
     onLabelChange: (String) -> Unit,
+    onTtsScriptChange: (String) -> Unit,
     onSoundPicked: (android.net.Uri) -> Unit,
     onClear: () -> Unit,
     onRemoveSound: () -> Unit,
@@ -1315,6 +1318,7 @@ private fun EditTileDialog(
     onDismiss: () -> Unit
 ) {
     var label by remember(tile.id) { mutableStateOf(tile.label) }
+    var ttsScript by remember(tile.id) { mutableStateOf(tile.ttsScript.orEmpty()) }
     var volume by remember(tile.id) { mutableStateOf(tile.volume) }
     var micPermissionDenied by remember(tile.id) { mutableStateOf(false) }
     var recordingSeconds by remember(tile.id) { mutableIntStateOf(0) }
@@ -1403,13 +1407,21 @@ private fun EditTileDialog(
                     }
                     Switch(checked = tile.speakLabel, onCheckedChange = onSpeakLabelChange)
                 }
+                OutlinedTextField(
+                    value = ttsScript,
+                    onValueChange = { ttsScript = it },
+                    label = { Text("What to say") },
+                    placeholder = { Text("Defaults to the name above") },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     OutlinedButton(
-                        onClick = { onPlay(tile.copy(label = label)) },
-                        enabled = isPlayable(tile.copy(label = label), speakUnrecordedTilesEnabled) && !isRecording,
+                        onClick = { onPlay(tile.copy(label = label, ttsScript = ttsScript)) },
+                        enabled = isPlayable(tile.copy(label = label, ttsScript = ttsScript), speakUnrecordedTilesEnabled) && !isRecording,
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(
@@ -1499,6 +1511,7 @@ private fun EditTileDialog(
         confirmButton = {
             TextButton(onClick = {
                 onLabelChange(label.trim())
+                onTtsScriptChange(ttsScript.trim())
                 onDismiss()
             }) { Text("Save") }
         },

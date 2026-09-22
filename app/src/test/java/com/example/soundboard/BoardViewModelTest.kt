@@ -117,6 +117,26 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `play speaks ttsScript instead of the label when set`() {
+        val vm = newViewModel()
+        val tile = Tile(id = "a", label = "Water", ttsScript = "I would like a glass of water please", speakLabel = true)
+
+        vm.play(tile)
+
+        assertEquals(listOf("I would like a glass of water please"), speaker.spoken)
+    }
+
+    @Test
+    fun `play falls back to the label when ttsScript is null`() {
+        val vm = newViewModel()
+        val tile = Tile(id = "a", label = "Water", speakLabel = true)
+
+        vm.play(tile)
+
+        assertEquals(listOf("Water"), speaker.spoken)
+    }
+
+    @Test
     fun `a speakLabel tile is not empty`() {
         assertFalse(Tile(speakLabel = true).isEmpty)
     }
@@ -170,6 +190,46 @@ class BoardViewModelTest {
 
         assertTrue(vm.board.value.homePage!!.tiles.first { it.id == "hey" }.speakLabel)
         assertFalse(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakLabel)
+    }
+
+    @Test
+    fun `setTtsScript updates only the target tile`() {
+        repo.save(boardWith(Tile(id = "a"), Tile(id = "b")))
+        val vm = newViewModel()
+
+        vm.setTtsScript("a", "I would like a glass of water please")
+
+        assertEquals("I would like a glass of water please", vm.board.value.currentPage.tiles.first { it.id == "a" }.ttsScript)
+        assertNull(vm.board.value.currentPage.tiles.first { it.id == "b" }.ttsScript)
+    }
+
+    @Test
+    fun `setTtsScript stores null instead of a blank script`() {
+        repo.save(boardWith(Tile(id = "a", ttsScript = "old script")))
+        val vm = newViewModel()
+
+        vm.setTtsScript("a", "   ")
+
+        assertNull(vm.board.value.currentPage.tiles.first { it.id == "a" }.ttsScript)
+    }
+
+    @Test
+    fun `setHomeRowTtsScript updates the home page tile and leaves the current page alone`() {
+        repo.save(
+            Board(
+                pages = listOf(
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))),
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey")), isHome = true)
+                ),
+                currentPageIndex = 0
+            )
+        )
+        val vm = newViewModel()
+
+        vm.setHomeRowTtsScript("hey", "Come here please")
+
+        assertEquals("Come here please", vm.board.value.homePage!!.tiles.first { it.id == "hey" }.ttsScript)
+        assertNull(vm.board.value.currentPage.tiles.first { it.id == "a" }.ttsScript)
     }
 
     @Test

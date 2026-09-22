@@ -19,9 +19,14 @@ data class Tile(
     val volume: Float = 1f,
     val colorArgb: Int? = null,
     /** Speak [label] aloud via on-device text-to-speech when there's no [fileName]. */
-    val speakLabel: Boolean = false
+    val speakLabel: Boolean = false,
+    /** Longer text to speak instead of [label] — most scripts read better than the short name shown on the tile. Null falls back to [label]. */
+    val ttsScript: String? = null
 ) {
     val isEmpty: Boolean get() = fileName == null && !speakLabel
+
+    /** What TTS actually says for this tile: [ttsScript] when set, otherwise [label]. */
+    val speechText: String get() = ttsScript?.takeIf { it.isNotBlank() } ?: label
 }
 
 /** One grid of tiles within a [Board]; a board can have several, switched via tabs. */

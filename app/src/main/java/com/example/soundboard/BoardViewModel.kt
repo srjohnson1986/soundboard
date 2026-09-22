@@ -91,8 +91,8 @@ class BoardViewModel(
         val name = tile.fileName
         if (name != null) {
             player.play(name, tile.volume)
-        } else if (tile.label.isNotBlank() && (tile.speakLabel || _board.value.speakUnrecordedTilesEnabled)) {
-            speaker.speak(tile.label)
+        } else if (tile.speechText.isNotBlank() && (tile.speakLabel || _board.value.speakUnrecordedTilesEnabled)) {
+            speaker.speak(tile.speechText)
         }
     }
 
@@ -103,6 +103,11 @@ class BoardViewModel(
 
     fun setLabel(tileId: String, label: String) = updateTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(label = label) else it }
+    }
+
+    /** Sets the longer text spoken instead of the label; a blank value clears it back to null (falls back to the label). */
+    fun setTtsScript(tileId: String, script: String) = updateTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(ttsScript = script.ifBlank { null }) else it }
     }
 
     fun setVolume(tileId: String, volume: Float) = updateTiles { tiles ->
@@ -204,6 +209,11 @@ class BoardViewModel(
 
     fun setHomeRowLabel(tileId: String, label: String) = updateHomeRowTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(label = label) else it }
+    }
+
+    /** Same as [setTtsScript], for a home-row tile edited via the sticky banner. */
+    fun setHomeRowTtsScript(tileId: String, script: String) = updateHomeRowTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(ttsScript = script.ifBlank { null }) else it }
     }
 
     fun setHomeRowVolume(tileId: String, volume: Float) = updateHomeRowTiles { tiles ->

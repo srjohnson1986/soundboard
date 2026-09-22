@@ -1943,7 +1943,7 @@ private fun PageColorDialog(current: Int?, onSelect: (Int?) -> Unit, onDismiss: 
 private fun PageOpacityDialog(current: Float?, onSelect: (Float?) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Page opacity") },
+        title = { Text("Page tile opacity") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
@@ -1968,7 +1968,7 @@ private fun PageOpacityDialog(current: Float?, onSelect: (Float?) -> Unit, onDis
 private fun PageBorderDialog(current: TileBorder?, onSelect: (TileBorder?) -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Page border") },
+        title = { Text("Page tile border") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
@@ -2229,7 +2229,7 @@ private fun SettingsDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     OutlinedButton(onClick = onPickBackgroundImage, modifier = Modifier.weight(1f)) {
-                        Text("Choose image")
+                        Text("Set image")
                     }
                     OutlinedButton(
                         onClick = onClearBackground,
@@ -2385,12 +2385,12 @@ private fun PageOptionsDialog(
                     onClick = onPageColor
                 )
                 DropdownMenuItem(
-                    text = { Text("Page opacity") },
+                    text = { Text("Page tile opacity") },
                     leadingIcon = { Icon(Icons.Filled.Opacity, contentDescription = null) },
                     onClick = onPageOpacity
                 )
                 DropdownMenuItem(
-                    text = { Text("Page border") },
+                    text = { Text("Page tile border") },
                     leadingIcon = { Icon(Icons.Filled.BorderStyle, contentDescription = null) },
                     onClick = onPageBorder
                 )

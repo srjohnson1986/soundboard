@@ -21,7 +21,9 @@ data class Tile(
     /** Speak [label] aloud via on-device text-to-speech when there's no [fileName]. */
     val speakLabel: Boolean = false,
     /** Longer text to speak instead of [label] — most scripts read better than the short name shown on the tile. Null falls back to [label]. */
-    val ttsScript: String? = null
+    val ttsScript: String? = null,
+    /** Per-tile opacity override, 0..1; null inherits the page's, then the board's. */
+    val opacity: Float? = null
 ) {
     val isEmpty: Boolean get() = fileName == null && !speakLabel
 
@@ -42,7 +44,9 @@ data class Page(
     /** Page-identity accent; null keeps today's neutral theme color. Overridden per-tile by [Tile.colorArgb]. */
     val color: Int? = null,
     /** Auto-return snaps back to whichever page has this set; at most one page should. */
-    val isHome: Boolean = false
+    val isHome: Boolean = false,
+    /** Per-page opacity override, 0..1; null inherits the board's global setting. Overridden per-tile by [Tile.opacity]. */
+    val opacity: Float? = null
 ) {
     /** Tiles currently shown on the grid, in row-major order. */
     val visibleTiles: List<Tile> get() = tiles.take(rows * columns)
@@ -121,6 +125,8 @@ data class Board(
     /** Grid size a newly-added page starts at — it can still be resized individually afterward. */
     val defaultPageRows: Int = 4,
     val defaultPageColumns: Int = 4,
+    /** Global tile opacity, 0..1; overridden per-page by [Page.opacity] and per-tile by [Tile.opacity]. */
+    val tileOpacity: Float = 1f,
     /** Forward-looking marker for the on-disk schema shape; not branched on yet. */
     val schemaVersion: Int = CURRENT_SCHEMA_VERSION
 ) {

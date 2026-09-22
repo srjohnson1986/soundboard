@@ -118,6 +118,11 @@ class BoardViewModel(
         tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
     }
 
+    /** Per-tile opacity override; null inherits the page's, then the board's. */
+    fun setOpacity(tileId: String, opacity: Float?) = updateTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(opacity = opacity?.coerceIn(0f, 1f)) else it }
+    }
+
     fun setSpeakLabel(tileId: String, value: Boolean) = updateTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(speakLabel = value) else it }
     }
@@ -196,6 +201,11 @@ class BoardViewModel(
         commit(_board.value.copy(stickyHomeRowEnabled = value))
     }
 
+    /** Global tile opacity; overridden per-page by [setPageOpacity] and per-tile by [setOpacity]. */
+    fun setTileOpacity(value: Float) {
+        commit(_board.value.copy(tileOpacity = value.coerceIn(0f, 1f)))
+    }
+
     /** Disables tile shadows to help scrolling stay smooth on slower devices. */
     fun setPerformanceModeEnabled(value: Boolean) {
         devicePrefs.performanceModeEnabled = value
@@ -222,6 +232,11 @@ class BoardViewModel(
 
     fun setHomeRowColor(tileId: String, colorArgb: Int?) = updateHomeRowTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
+    }
+
+    /** Same as [setOpacity], for a home-row tile edited via the sticky banner. */
+    fun setHomeRowOpacity(tileId: String, opacity: Float?) = updateHomeRowTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(opacity = opacity?.coerceIn(0f, 1f)) else it }
     }
 
     fun setHomeRowSpeakLabel(tileId: String, value: Boolean) = updateHomeRowTiles { tiles ->
@@ -273,6 +288,11 @@ class BoardViewModel(
 
     fun setPageColor(index: Int, colorArgb: Int?) {
         commit(_board.value.updatingPage(index) { it.copy(color = colorArgb) })
+    }
+
+    /** Per-page opacity override; null inherits the board's global setting. */
+    fun setPageOpacity(index: Int, opacity: Float?) {
+        commit(_board.value.updatingPage(index) { it.copy(opacity = opacity?.coerceIn(0f, 1f)) })
     }
 
     /** Whether a fresh launch jumps to the home page instead of resuming the last-viewed one. */

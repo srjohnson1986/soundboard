@@ -178,6 +178,17 @@ class BoardTest {
     }
 
     @Test
+    fun `tileOpacity defaults to fully opaque`() {
+        assertEquals(1f, Board().tileOpacity)
+    }
+
+    @Test
+    fun `tile and page opacity overrides default to null (inherit)`() {
+        assertEquals(null, Tile().opacity)
+        assertEquals(null, Page().opacity)
+    }
+
+    @Test
     fun `homePage is null when no page is marked home`() {
         val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
 

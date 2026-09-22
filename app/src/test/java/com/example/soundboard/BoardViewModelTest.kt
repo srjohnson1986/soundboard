@@ -812,6 +812,66 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `setTileOpacity persists across a fresh view model`() {
+        val vm = newViewModel()
+
+        vm.setTileOpacity(0.5f)
+
+        assertEquals(0.5f, vm.board.value.tileOpacity)
+        val second = newViewModel()
+        assertEquals(0.5f, second.board.value.tileOpacity)
+    }
+
+    @Test
+    fun `setTileOpacity coerces into the 0 to 1 range`() {
+        val vm = newViewModel()
+
+        vm.setTileOpacity(5f)
+
+        assertEquals(1f, vm.board.value.tileOpacity)
+    }
+
+    @Test
+    fun `setPageOpacity overrides only the targeted page`() {
+        repo.save(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
+        val vm = newViewModel()
+
+        vm.setPageOpacity(1, 0.4f)
+
+        assertEquals(null, vm.board.value.pages[0].opacity)
+        assertEquals(0.4f, vm.board.value.pages[1].opacity)
+    }
+
+    @Test
+    fun `setOpacity overrides only the targeted tile`() {
+        repo.save(boardWith(Tile(id = "a"), Tile(id = "b")))
+        val vm = newViewModel()
+
+        vm.setOpacity("a", 0.3f)
+
+        assertEquals(0.3f, vm.board.value.currentPage.tiles.first { it.id == "a" }.opacity)
+        assertEquals(null, vm.board.value.currentPage.tiles.first { it.id == "b" }.opacity)
+    }
+
+    @Test
+    fun `setHomeRowOpacity edits the home page's tile even from a different current page`() {
+        repo.save(
+            Board(
+                pages = listOf(
+                    Page(name = "Home", isHome = true, tiles = listOf(Tile(id = "a"))),
+                    Page(name = "Other")
+                ),
+                currentPageIndex = 1
+            )
+        )
+        val vm = newViewModel()
+
+        vm.setHomeRowOpacity("a", 0.3f)
+
+        assertEquals(0.3f, vm.board.value.homePage?.tiles?.first { it.id == "a" }?.opacity)
+    }
+
+    @Test
     fun `setDefaultPageRows and setDefaultPageColumns persist across a fresh view model`() {
         val vm = newViewModel()
 

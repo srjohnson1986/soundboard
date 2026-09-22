@@ -307,6 +307,11 @@ class BoardViewModel(
         commit(_board.value.copy(speakUnrecordedTilesEnabled = value))
     }
 
+    /** Whether blank tiles are hidden (and untappable) outside of edit mode, to avoid a stray tap opening the editor. */
+    fun setHideBlankTilesEnabled(value: Boolean) {
+        commit(_board.value.copy(hideBlankTilesEnabled = value))
+    }
+
     fun renameBoard(name: String) {
         commit(_board.value.copy(name = name.ifBlank { "New Board" }))
     }

@@ -616,6 +616,7 @@ fun BoardScreen(
                     hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                     performanceModeEnabled = performanceModeEnabled,
                     speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
+                    hideBlankTilesEnabled = board.hideBlankTilesEnabled,
                     onTap = { tile ->
                         touch()
                         if (!isPlayable(tile, board.speakUnrecordedTilesEnabled) || editMode) {
@@ -652,6 +653,7 @@ fun BoardScreen(
                         hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                         performanceModeEnabled = performanceModeEnabled,
                         speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
+                        hideBlankTilesEnabled = board.hideBlankTilesEnabled,
                         pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
                         onTap = { tile ->
                             touch()
@@ -782,6 +784,8 @@ fun BoardScreen(
             stickyHomeRowEnabled = board.stickyHomeRowEnabled,
             hasHomePage = board.homePageIndex != null,
             onStickyHomeRowEnabledChange = vm::setStickyHomeRowEnabled,
+            hideBlankTilesEnabled = board.hideBlankTilesEnabled,
+            onHideBlankTilesEnabledChange = vm::setHideBlankTilesEnabled,
             defaultPageRows = board.defaultPageRows,
             onDefaultPageRowsChange = vm::setDefaultPageRows,
             defaultPageColumns = board.defaultPageColumns,
@@ -970,6 +974,7 @@ private fun PinnedRow(
     hapticFeedbackEnabled: Boolean,
     performanceModeEnabled: Boolean,
     speakUnrecordedTilesEnabled: Boolean,
+    hideBlankTilesEnabled: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewSound: (Tile) -> Unit
 ) {
@@ -987,6 +992,7 @@ private fun PinnedRow(
                 aspectRatio = aspectRatio,
                 pageColor = pageColor,
                 performanceModeEnabled = performanceModeEnabled,
+                hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                 modifier = Modifier.weight(1f),
                 onTap = { onTap(tile) },
                 // Long-press previews what a pad will say without "using" it for real,
@@ -1024,6 +1030,7 @@ private fun PageGrid(
     hapticFeedbackEnabled: Boolean,
     performanceModeEnabled: Boolean,
     speakUnrecordedTilesEnabled: Boolean,
+    hideBlankTilesEnabled: Boolean,
     pinFirstRow: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewSound: (Tile) -> Unit,
@@ -1128,6 +1135,7 @@ private fun PageGrid(
                         aspectRatio = page.tileAspectRatio,
                         pageColor = pageColor,
                         performanceModeEnabled = performanceModeEnabled,
+                        hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                         modifier = Modifier.weight(1f).then(tileDragModifier(index, tile)),
                         onTap = { onTap(tile) }
                     )
@@ -1153,6 +1161,7 @@ private fun PageGrid(
                     aspectRatio = page.tileAspectRatio,
                     pageColor = pageColor,
                     performanceModeEnabled = performanceModeEnabled,
+                    hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                     modifier = Modifier
                         .then(if (isDragged) Modifier else Modifier.animateItem())
                         .then(tileDragModifier(index, tile)),
@@ -1171,10 +1180,19 @@ private fun TileCard(
     aspectRatio: Float,
     pageColor: Color?,
     performanceModeEnabled: Boolean,
+    hidden: Boolean = false,
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
     onLongClick: (() -> Unit)? = null
 ) {
+    if (hidden) {
+        // Not just invisible — no Card, no border, no combinedClickable, so a stray
+        // tap in this grid cell reaches no callback at all. Keeping the same modifier
+        // (and thus aspectRatio/weight) preserves every other tile's exact position.
+        Spacer(modifier = modifier.aspectRatio(aspectRatio))
+        return
+    }
+
     val filled = !tile.isEmpty
     // A preset can ship a tile with a label but no recording yet (see
     // BoardRepository.sanitizeMissingSounds) — flag that distinctly from a
@@ -1646,6 +1664,8 @@ private fun SettingsDialog(
     stickyHomeRowEnabled: Boolean,
     hasHomePage: Boolean,
     onStickyHomeRowEnabledChange: (Boolean) -> Unit,
+    hideBlankTilesEnabled: Boolean,
+    onHideBlankTilesEnabledChange: (Boolean) -> Unit,
     defaultPageRows: Int,
     onDefaultPageRowsChange: (Int) -> Unit,
     defaultPageColumns: Int,
@@ -1816,6 +1836,20 @@ private fun SettingsDialog(
                     } else {
                         "Set a home page (Page options) to use this."
                     },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Hide blank tiles", modifier = Modifier.weight(1f))
+                    Switch(checked = hideBlankTilesEnabled, onCheckedChange = onHideBlankTilesEnabledChange)
+                }
+                Text(
+                    "Only shown while editing.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

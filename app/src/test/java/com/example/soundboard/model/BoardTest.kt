@@ -173,6 +173,11 @@ class BoardTest {
     }
 
     @Test
+    fun `hideBlankTilesEnabled defaults to false`() {
+        assertEquals(false, Board().hideBlankTilesEnabled)
+    }
+
+    @Test
     fun `homePage is null when no page is marked home`() {
         val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
 

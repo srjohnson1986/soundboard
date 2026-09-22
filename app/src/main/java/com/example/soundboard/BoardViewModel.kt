@@ -478,9 +478,10 @@ class BoardViewModel(
         return RecentPresetItem(ref, label, usedAt)
     }
 
-    /** Factory presets bundled with this build — Jeremy's and the TTS-only board ship in every build; Steve's only where its asset is actually packaged (debug builds). */
+    /** Factory presets bundled with this build — Jeremy's, Sarah's, and the TTS-only board ship in every build; Steve's only where its asset is actually packaged (debug builds). */
     fun factoryPresets(context: Context): List<PresetRef.Factory> = buildList {
         add(PresetRef.Factory(JEREMY_PRESET_ASSET, "Jeremy Draft Care Board"))
+        add(PresetRef.Factory(SARAH_PRESET_ASSET, "Sarah (ElevenLabs) Care Board"))
         add(PresetRef.Factory(TTS_PRESET_ASSET, "TTS Care Board"))
         if (runCatching { context.assets.open(STEVE_PRESET_ASSET).close() }.isSuccess) {
             add(PresetRef.Factory(STEVE_PRESET_ASSET, "Steve Draft Care Board"))
@@ -571,6 +572,9 @@ class BoardViewModel(
 
         /** Same layout as Jeremy's board, but every tile speaks instead of playing audio — bundled in every build. */
         private const val TTS_PRESET_ASSET = "tts-care-board.zip"
+
+        /** Same layout as Jeremy's board, recorded with ElevenLabs' Sarah voice — bundled in every build. */
+        private const val SARAH_PRESET_ASSET = "sarah-care-board.zip"
 
         /** Debug-only (src/debug/assets/) — only actually available where that asset is packaged. */
         private const val STEVE_PRESET_ASSET = "steve-care-board.zip"

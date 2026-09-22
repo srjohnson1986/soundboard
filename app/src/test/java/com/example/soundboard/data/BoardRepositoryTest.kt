@@ -442,6 +442,58 @@ class BoardRepositoryTest {
     }
 
     @Test
+    fun `the bundled sarah-care-board preset imports and loads as a valid four-page board`() {
+        // Same layout as jeremy-care-board.zip, but recorded with ElevenLabs' Sarah
+        // voice, and Trouble's two generic "Get ___" tiles are 5 named contacts instead.
+        val imported = repo.importFromAsset("sarah-care-board.zip")
+
+        assertTrue(imported)
+        val board = repo.load()
+
+        assertEquals("Sarah (ElevenLabs) Care Board", board.name)
+        assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
+        assertEquals(1, board.homePageIndex)
+        assertTrue(board.stickyHomeRowEnabled)
+        // Trouble's last row is now completely filled by the 5 new contact tiles, so
+        // BoardRepository.load()'s auto-grow (Page.withAutoGrownTrailingRow) gives it
+        // one extra blank row beyond jeremy-care-board.zip's plain 24/6 shape.
+        board.pages.forEachIndexed { index, page ->
+            when {
+                index == board.homePageIndex -> {
+                    assertEquals(28, page.tiles.size)
+                    assertEquals(7, page.rows)
+                }
+                page.name == "Trouble" -> {
+                    assertEquals(28, page.tiles.size)
+                    assertEquals(7, page.rows)
+                    assertTrue(page.tiles.drop(24).all { it.isEmpty })
+                }
+                else -> {
+                    assertEquals(24, page.tiles.size)
+                    assertEquals(6, page.rows)
+                }
+            }
+            assertEquals(4, page.columns)
+        }
+        val allTiles = board.pages.flatMap { it.tiles }
+        allTiles.mapNotNull { it.fileName }.forEach { name ->
+            assertTrue("missing sound file $name", repo.soundFile(name).exists())
+        }
+
+        val trouble = board.pages.first { it.name == "Trouble" }
+        assertEquals(
+            listOf("Get nurse", "Get husband", "Get wife", "Get son", "Get daughter"),
+            trouble.tiles.subList(19, 24).map { it.label }
+        )
+        assertEquals("Can you get the nurse?", trouble.tiles[19].ttsScript)
+
+        // The recording script's no_2.wav ("Mm-mm") isn't in sarah-clips.zip, so that
+        // one tile ships as a gap, same treatment as Talking's "Not that" elsewhere.
+        val mmTile = allTiles.first { it.label == "Mm-mm" }
+        assertNull(mmTile.fileName)
+    }
+
+    @Test
     fun `the steve-care-board preset imports and loads as a valid four-page board`() {
         // presets/steve-care-board.zip is debug-only now (app/src/debug/assets/), not
         // auto-loaded like jeremy-care-board.zip, so this exercises the same import

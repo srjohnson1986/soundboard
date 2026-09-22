@@ -150,3 +150,22 @@ not a line), and Well Wishes' "For you" (the recording script calls that one
 rather than by re-deriving from the label, it also carries over the one
 labeling quirk noted above verbatim — Talking's "Thanks (quick)" speaks
 "Thank you." here too, since that's what `thank_you_2.wav` actually says.
+
+## `sarah-care-board.zip` — "Sarah (ElevenLabs) Care Board"
+
+Same four pages, layout, colors, and sticky home row as `jeremy-care-board.zip`,
+recorded with ElevenLabs' Sarah voice instead of a human. The recording
+script for this batch (not checked into the repo) replaced the two generic
+"Get ___" name templates with 5 specific contacts — nurse, husband, wife,
+son, daughter — so Trouble's two old "Get ___" tiles plus its 3 already-blank
+trailing tiles (it has 24 total, only 21 were otherwise used) hold those 5
+named contacts instead; no resize needed. Bundled in every build, same as
+Jeremy's and the TTS-only board — Jeremy's board remains the fallback that
+auto-imports on a fresh install.
+
+Every tile also carries a `ttsScript`, same treatment as `tts-care-board.zip`.
+One known gap: the script's `no_2.wav` ("Mm-mm") isn't in this recording
+batch, so that tile ships with no `fileName`, same as Talking's "Not that"
+gap on Jeremy's board. 23 of the batch's 92 clips aren't tiled anywhere in
+this layout — the same "recorded but no slot yet" phrases documented for
+Jeremy's and Steve's boards above.

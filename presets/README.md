@@ -19,6 +19,17 @@ That makes a layout-and-labels-only zip, with sparse or no recorded audio, a
 legitimate way to build a generic starting template — see the "Presets"
 section in `docs/USER_GUIDE.md`.
 
+## `chimes/chime.wav`
+
+A short (~2s) chime, kept here as the canonical source so it's easy to find
+and swap later. Jeremy's, Sarah's, and Steve's boards all point their
+Trouble page's "Chime" tile at a copy of this file (`sounds/chime.wav`
+inside each preset zip) instead of shipping it as an unrecorded gap.
+`tts-care-board.zip` is left as-is — it speaks the word "Chime" via
+text-to-speech, same as every other tile there, and adding a real audio
+file would break that preset's whole reason for existing (zero recording,
+no `sounds/` directory at all).
+
 ## `steve-care-board.zip` — "Steve Draft Care Board"
 
 Three pages — **Trouble**, **Needs** (home), **Talking** — plus a sticky

@@ -189,6 +189,18 @@ class BoardTest {
     }
 
     @Test
+    fun `tileBorder defaults to disabled`() {
+        assertEquals(TileBorder(), Board().tileBorder)
+        assertEquals(false, Board().tileBorder.enabled)
+    }
+
+    @Test
+    fun `tile and page border overrides default to null (inherit)`() {
+        assertEquals(null, Tile().border)
+        assertEquals(null, Page().border)
+    }
+
+    @Test
     fun `homePage is null when no page is marked home`() {
         val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
 

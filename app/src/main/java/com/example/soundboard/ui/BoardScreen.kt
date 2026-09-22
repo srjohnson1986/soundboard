@@ -40,6 +40,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.BorderStyle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
@@ -132,6 +133,8 @@ import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
+import com.example.soundboard.model.TileBorder
+import com.example.soundboard.model.resolvedColor
 import com.example.soundboard.ui.theme.presetColors
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
@@ -199,6 +202,7 @@ fun BoardScreen(
     var pageOptionsIndex by remember { mutableStateOf<Int?>(null) }
     var pageColorDialogIndex by remember { mutableStateOf<Int?>(null) }
     var pageOpacityDialogIndex by remember { mutableStateOf<Int?>(null) }
+    var pageBorderDialogIndex by remember { mutableStateOf<Int?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showStrayCleanupDialog by remember { mutableStateOf(false) }
@@ -618,6 +622,8 @@ fun BoardScreen(
                     pageColor = homePage.color?.let { Color(it) },
                     pageOpacity = homePage.opacity,
                     globalTileOpacity = if (performanceModeEnabled) 1f else board.tileOpacity,
+                    pageBorder = homePage.border,
+                    globalTileBorder = if (performanceModeEnabled) TileBorder() else board.tileBorder,
                     hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                     performanceModeEnabled = performanceModeEnabled,
                     speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
@@ -660,6 +666,7 @@ fun BoardScreen(
                         speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                         hideBlankTilesEnabled = board.hideBlankTilesEnabled,
                         globalTileOpacity = if (performanceModeEnabled) 1f else board.tileOpacity,
+                        globalTileBorder = if (performanceModeEnabled) TileBorder() else board.tileBorder,
                         pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
                         onTap = { tile ->
                             touch()
@@ -698,6 +705,7 @@ fun BoardScreen(
                     onVolumeChange = { vm.setVolume(editing.id, it) },
                     onColorChange = { vm.setColor(editing.id, it) },
                     onOpacityChange = { vm.setOpacity(editing.id, it) },
+                    onBorderChange = { vm.setBorder(editing.id, it) },
                     onSpeakLabelChange = { vm.setSpeakLabel(editing.id, it) },
                     onPlay = vm::play,
                     onStartRecording = vm::startRecording,
@@ -724,6 +732,7 @@ fun BoardScreen(
                     onVolumeChange = { vm.setHomeRowVolume(editing.id, it) },
                     onColorChange = { vm.setHomeRowColor(editing.id, it) },
                     onOpacityChange = { vm.setHomeRowOpacity(editing.id, it) },
+                    onBorderChange = { vm.setHomeRowBorder(editing.id, it) },
                     onSpeakLabelChange = { vm.setHomeRowSpeakLabel(editing.id, it) },
                     onPlay = vm::play,
                     onStartRecording = vm::startRecording,
@@ -771,12 +780,22 @@ fun BoardScreen(
         }
     }
 
-    pageOpacityDialogIndex?.let { index ->
+pageOpacityDialogIndex?.let { index ->
         board.pages.getOrNull(index)?.let { page ->
             PageOpacityDialog(
                 current = page.opacity,
                 onSelect = { vm.setPageOpacity(index, it) },
                 onDismiss = { pageOpacityDialogIndex = null }
+            )
+        }
+    }
+
+    pageBorderDialogIndex?.let { index ->
+        board.pages.getOrNull(index)?.let { page ->
+            PageBorderDialog(
+                current = page.border,
+                onSelect = { vm.setPageBorder(index, it) },
+                onDismiss = { pageBorderDialogIndex = null }
             )
         }
     }
@@ -806,6 +825,8 @@ fun BoardScreen(
             onHideBlankTilesEnabledChange = vm::setHideBlankTilesEnabled,
             tileOpacity = board.tileOpacity,
             onTileOpacityChange = vm::setTileOpacity,
+            tileBorder = board.tileBorder,
+            onTileBorderChange = vm::setTileBorder,
             defaultPageRows = board.defaultPageRows,
             onDefaultPageRowsChange = vm::setDefaultPageRows,
             defaultPageColumns = board.defaultPageColumns,
@@ -940,6 +961,10 @@ fun BoardScreen(
                     pageOptionsIndex = null
                     pageOpacityDialogIndex = index
                 },
+                onPageBorder = {
+                    pageOptionsIndex = null
+                    pageBorderDialogIndex = index
+                },
                 onMoveLeft = {
                     vm.movePage(index, index - 1)
                     pageOptionsIndex = null
@@ -997,6 +1022,8 @@ private fun PinnedRow(
     pageColor: Color?,
     pageOpacity: Float?,
     globalTileOpacity: Float,
+    pageBorder: TileBorder?,
+    globalTileBorder: TileBorder,
     hapticFeedbackEnabled: Boolean,
     performanceModeEnabled: Boolean,
     speakUnrecordedTilesEnabled: Boolean,
@@ -1018,6 +1045,7 @@ private fun PinnedRow(
                 aspectRatio = aspectRatio,
                 pageColor = pageColor,
                 opacity = tile.opacity ?: pageOpacity ?: globalTileOpacity,
+                border = tile.border ?: pageBorder ?: globalTileBorder,
                 performanceModeEnabled = performanceModeEnabled,
                 hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                 modifier = Modifier.weight(1f),
@@ -1059,6 +1087,7 @@ private fun PageGrid(
     speakUnrecordedTilesEnabled: Boolean,
     hideBlankTilesEnabled: Boolean,
     globalTileOpacity: Float,
+    globalTileBorder: TileBorder,
     pinFirstRow: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewSound: (Tile) -> Unit,
@@ -1163,6 +1192,7 @@ private fun PageGrid(
                         aspectRatio = page.tileAspectRatio,
                         pageColor = pageColor,
                         opacity = tile.opacity ?: page.opacity ?: globalTileOpacity,
+                        border = tile.border ?: page.border ?: globalTileBorder,
                         performanceModeEnabled = performanceModeEnabled,
                         hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                         modifier = Modifier.weight(1f).then(tileDragModifier(index, tile)),
@@ -1190,6 +1220,7 @@ private fun PageGrid(
                     aspectRatio = page.tileAspectRatio,
                     pageColor = pageColor,
                     opacity = tile.opacity ?: page.opacity ?: globalTileOpacity,
+                    border = tile.border ?: page.border ?: globalTileBorder,
                     performanceModeEnabled = performanceModeEnabled,
                     hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                     modifier = Modifier
@@ -1210,6 +1241,7 @@ private fun TileCard(
     aspectRatio: Float,
     pageColor: Color?,
     opacity: Float,
+    border: TileBorder,
     performanceModeEnabled: Boolean,
     hidden: Boolean = false,
     modifier: Modifier = Modifier,
@@ -1257,7 +1289,13 @@ private fun TileCard(
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (filled && !performanceModeEnabled) 2.dp else 0.dp
         ),
-        border = if (filled) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        border = if (border.enabled) {
+            BorderStroke(border.widthDp.dp, border.resolvedColor())
+        } else if (!filled) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+        } else {
+            null
+        }
     ) {
         Box(
             modifier = Modifier
@@ -1362,6 +1400,7 @@ private fun EditTileDialog(
     onVolumeChange: (Float) -> Unit,
     onColorChange: (Int?) -> Unit,
     onOpacityChange: (Float?) -> Unit,
+    onBorderChange: (TileBorder?) -> Unit,
     onSpeakLabelChange: (Boolean) -> Unit,
     onPlay: (Tile) -> Unit,
     onStartRecording: () -> Unit,
@@ -1561,6 +1600,21 @@ private fun EditTileDialog(
                     tile.opacity?.let { opacity -> OpacityControls(opacity, onOpacityChange) }
                 }
 
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Override border", style = MaterialTheme.typography.labelMedium)
+                        Switch(
+                            checked = tile.border != null,
+                            onCheckedChange = { onBorderChange(if (it) TileBorder(enabled = true) else null) }
+                        )
+                    }
+                    tile.border?.let { border -> BorderControls(border, onBorderChange) }
+                }
+
                 if (!tile.isEmpty) {
                     TextButton(
                         onClick = {
@@ -1595,6 +1649,38 @@ private fun OpacityControls(opacity: Float, onChange: (Float?) -> Unit) {
         value = opacity,
         onValueChange = { onChange(it) },
         valueRange = 0.1f..1f
+    )
+}
+
+/** Enabled/color/width controls for a [TileBorder], shared by the tile, page, and global surfaces. */
+@Composable
+private fun BorderControls(border: TileBorder, onChange: (TileBorder) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Show border", style = MaterialTheme.typography.bodyMedium)
+        Switch(checked = border.enabled, onCheckedChange = { onChange(border.copy(enabled = it)) })
+    }
+    Text("Color (first = Recommended)", style = MaterialTheme.typography.bodySmall)
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        presetColors.forEach { color ->
+            ColorSwatch(
+                color = color,
+                selected = color?.toArgb() == border.colorArgb,
+                onClick = { onChange(border.copy(colorArgb = color?.toArgb())) }
+            )
+        }
+    }
+    Text("Width: ${"%.1f".format(border.widthDp)}dp", style = MaterialTheme.typography.bodySmall)
+    Slider(
+        value = border.widthDp,
+        onValueChange = { onChange(border.copy(widthDp = it)) },
+        valueRange = 0.5f..8f
     )
 }
 
@@ -1725,6 +1811,31 @@ private fun PageOpacityDialog(current: Float?, onSelect: (Float?) -> Unit, onDis
     )
 }
 
+@Composable
+private fun PageBorderDialog(current: TileBorder?, onSelect: (TileBorder?) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Page border") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Override the board's setting")
+                    Switch(
+                        checked = current != null,
+                        onCheckedChange = { onSelect(if (it) TileBorder(enabled = true) else null) }
+                    )
+                }
+                current?.let { border -> BorderControls(border, onSelect) }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
 /** App-level preferences that aren't page content — see [com.example.soundboard.data.SettingsRepository]. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1752,6 +1863,8 @@ private fun SettingsDialog(
     onHideBlankTilesEnabledChange: (Boolean) -> Unit,
     tileOpacity: Float,
     onTileOpacityChange: (Float) -> Unit,
+    tileBorder: TileBorder,
+    onTileBorderChange: (TileBorder) -> Unit,
     defaultPageRows: Int,
     onDefaultPageRowsChange: (Int) -> Unit,
     defaultPageColumns: Int,
@@ -1949,6 +2062,15 @@ private fun SettingsDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Tile border", style = MaterialTheme.typography.bodyMedium)
+                BorderControls(tileBorder, onTileBorderChange)
+                Text(
+                    "Overridable per page (Page options) and per tile (Edit tile). " +
+                        "Turned off automatically in Performance mode.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text("Default grid size for new pages", style = MaterialTheme.typography.bodyMedium)
                 Stepper("Rows", defaultPageRows, onDefaultPageRowsChange)
                 Stepper("Columns", defaultPageColumns, onDefaultPageColumnsChange)
@@ -2028,6 +2150,7 @@ private fun PageOptionsDialog(
     onGridSize: () -> Unit,
     onPageColor: () -> Unit,
     onPageOpacity: () -> Unit,
+    onPageBorder: () -> Unit,
     onMoveLeft: () -> Unit,
     onMoveRight: () -> Unit,
     onDelete: () -> Unit,
@@ -2078,6 +2201,11 @@ private fun PageOptionsDialog(
                     text = { Text("Page opacity") },
                     leadingIcon = { Icon(Icons.Filled.Opacity, contentDescription = null) },
                     onClick = onPageOpacity
+                )
+                DropdownMenuItem(
+                    text = { Text("Page border") },
+                    leadingIcon = { Icon(Icons.Filled.BorderStyle, contentDescription = null) },
+                    onClick = onPageBorder
                 )
                 HorizontalDivider()
                 Row(

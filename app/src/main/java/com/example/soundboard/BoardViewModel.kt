@@ -21,6 +21,7 @@ import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
+import com.example.soundboard.model.TileBorder
 import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -118,6 +119,11 @@ class BoardViewModel(
         tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
     }
 
+    /** Per-tile border override; null inherits the page's, then the board's. */
+    fun setBorder(tileId: String, border: TileBorder?) = updateTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(border = border) else it }
+    }
+
     fun setSpeakLabel(tileId: String, value: Boolean) = updateTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(speakLabel = value) else it }
     }
@@ -196,6 +202,11 @@ class BoardViewModel(
         commit(_board.value.copy(stickyHomeRowEnabled = value))
     }
 
+    /** Global tile border; overridden per-page by [setPageBorder] and per-tile by [setBorder]. */
+    fun setTileBorder(value: TileBorder) {
+        commit(_board.value.copy(tileBorder = value))
+    }
+
     /** Disables tile shadows to help scrolling stay smooth on slower devices. */
     fun setPerformanceModeEnabled(value: Boolean) {
         devicePrefs.performanceModeEnabled = value
@@ -222,6 +233,11 @@ class BoardViewModel(
 
     fun setHomeRowColor(tileId: String, colorArgb: Int?) = updateHomeRowTiles { tiles ->
         tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
+    }
+
+    /** Same as [setBorder], for a home-row tile edited via the sticky banner. */
+    fun setHomeRowBorder(tileId: String, border: TileBorder?) = updateHomeRowTiles { tiles ->
+        tiles.map { if (it.id == tileId) it.copy(border = border) else it }
     }
 
     fun setHomeRowSpeakLabel(tileId: String, value: Boolean) = updateHomeRowTiles { tiles ->
@@ -273,6 +289,11 @@ class BoardViewModel(
 
     fun setPageColor(index: Int, colorArgb: Int?) {
         commit(_board.value.updatingPage(index) { it.copy(color = colorArgb) })
+    }
+
+    /** Per-page border override; null inherits the board's global setting. */
+    fun setPageBorder(index: Int, border: TileBorder?) {
+        commit(_board.value.updatingPage(index) { it.copy(border = border) })
     }
 
     /** Whether a fresh launch jumps to the home page instead of resuming the last-viewed one. */

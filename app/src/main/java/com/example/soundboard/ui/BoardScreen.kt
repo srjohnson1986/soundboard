@@ -689,10 +689,16 @@ fun BoardScreen(
             }
         }
     ) { insets ->
+        // Measured once here, above the sticky row, so every page's landscape column
+        // math shares the same height budget regardless of whether the sticky row is
+        // eating into that particular page's own pager space — see PageGrid's
+        // referenceHeightPx doc comment.
+        var contentAreaHeightPx by remember { mutableIntStateOf(0) }
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(insets)
+                .onSizeChanged { contentAreaHeightPx = it.height }
         ) {
             // The actual effective column count PageGrid settled on for the currently
             // active page — reported up via PageGrid's onEffectiveColumnsChanged so
@@ -756,6 +762,7 @@ fun BoardScreen(
                         globalTileOpacity = if (performanceModeEnabled) 1f else board.tileOpacity,
                         globalTileBorder = if (performanceModeEnabled) TileBorder() else board.tileBorder,
                         onEffectiveColumnsChanged = { activePageColumns = it },
+                        referenceHeightPx = contentAreaHeightPx,
                         pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
                         onTap = { tile ->
                             touch()
@@ -1206,6 +1213,13 @@ private fun PageGrid(
     globalTileOpacity: Float,
     globalTileBorder: TileBorder,
     onEffectiveColumnsChanged: (Int) -> Unit,
+    // The height budget for the landscape column math — measured once, above the pager,
+    // covering the space available before the sticky row (PinnedRow) is subtracted. Using
+    // a shared reference instead of this page's own pager-remaining height keeps tile size
+    // consistent across pages: without it, a page with the sticky row showing above it gets
+    // a shorter pager than the home page (which never has one), and would otherwise need
+    // more columns (smaller tiles) than the home page just to still hit targetRows.
+    referenceHeightPx: Int,
     pinFirstRow: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewSound: (Tile) -> Unit,
@@ -1217,18 +1231,17 @@ private fun PageGrid(
     val haptics = LocalHapticFeedback.current
     var gridSizePx by remember { mutableStateOf(IntSize.Zero) }
     val gridWidthPx = gridSizePx.width
-    val gridHeightPx = gridSizePx.height
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val spacingPx = with(density) { 8.dp.toPx() }
-    val columns = if (isLandscape && gridWidthPx > 0 && gridHeightPx > 0) {
+    val columns = if (isLandscape && gridWidthPx > 0 && referenceHeightPx > 0) {
         landscapeColumnCount(
             baseColumns = page.columns,
             aspectRatio = page.tileAspectRatio,
             widthPx = gridWidthPx.toFloat(),
-            heightPx = gridHeightPx.toFloat(),
+            heightPx = referenceHeightPx.toFloat(),
             spacingPx = spacingPx,
             minTileWidthPx = with(density) { 56.dp.toPx() }
         )

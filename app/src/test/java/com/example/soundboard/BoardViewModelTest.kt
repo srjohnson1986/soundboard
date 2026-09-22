@@ -1042,7 +1042,7 @@ class BoardViewModelTest {
         vm.applyPreset(PresetRef.Factory("jeremy-care-board.zip", "Jeremy Draft Care Board"))
 
         assertEquals("Jeremy Draft Care Board", vm.board.value.name)
-        assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), vm.board.value.pages.map { it.name })
+        assertEquals(listOf("Trouble", "Needs", "Talking"), vm.board.value.pages.map { it.name })
         assertEquals("Loaded \"Jeremy Draft Care Board\"", vm.message.value)
     }
 

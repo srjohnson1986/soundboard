@@ -657,7 +657,8 @@ fun BoardScreen(
             val homePage = board.homePage
             if (board.stickyHomeRowEnabled && homePage != null && board.currentPageIndex != board.homePageIndex) {
                 PinnedRow(
-                    tiles = homePage.tiles.take(homePage.columns),
+                    tiles = homePage.visibleTiles,
+                    baseColumns = homePage.columns,
                     editMode = editMode,
                     aspectRatio = homePage.tileAspectRatio,
                     pageColor = homePage.color?.let { Color(it) },
@@ -1062,10 +1063,19 @@ pageOpacityDialogIndex?.let { index ->
 private fun isPlayable(tile: Tile, speakUnrecordedTilesEnabled: Boolean): Boolean =
     tile.fileName != null || ((tile.speakLabel || speakUnrecordedTilesEnabled) && tile.speechText.isNotBlank())
 
-/** The fixed row shown above every non-home page, mirroring the home page's own first row. */
+/**
+ * The fixed row shown above every non-home page, mirroring the home page's own first
+ * row — including how many tiles that "first row" holds. In landscape, [PageGrid]
+ * reflows the home page itself into more columns via [landscapeColumnCount]; this
+ * mirrors that so the pinned row doesn't stay stuck at the portrait [baseColumns]
+ * while the grid underneath it (and the home page itself) has already reflowed wider.
+ * [tiles] should be the home page's full [Page.visibleTiles], not pre-sliced to one
+ * row — the actual row length is computed here from the live column count.
+ */
 @Composable
 private fun PinnedRow(
     tiles: List<Tile>,
+    baseColumns: Int,
     editMode: Boolean,
     aspectRatio: Float,
     pageColor: Color?,
@@ -1081,13 +1091,38 @@ private fun PinnedRow(
     onPreviewSound: (Tile) -> Unit
 ) {
     val haptics = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val configuration = LocalConfiguration.current
+    var rowWidthPx by remember { mutableIntStateOf(0) }
+
+    // PinnedRow is a single fixed row, not a scrollable multi-row grid, so it has no
+    // "available height" of its own to fit rows into the way PageGrid does. As a
+    // stand-in for "how much height would the grid give a single row," this treats
+    // the row as a quarter of screen height — landscapeColumnCount's own default
+    // targetRows=4 — an approximation (it doesn't subtract chrome like the top bar),
+    // but close enough to keep the pinned row roughly the same tile size as the
+    // reflowed grid below it, rather than staying stuck at the portrait column count.
+    val columns = if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE && rowWidthPx > 0) {
+        landscapeColumnCount(
+            baseColumns = baseColumns,
+            aspectRatio = aspectRatio,
+            widthPx = rowWidthPx.toFloat(),
+            heightPx = with(density) { configuration.screenHeightDp.dp.toPx() },
+            spacingPx = with(density) { 8.dp.toPx() },
+            minTileWidthPx = with(density) { 56.dp.toPx() }
+        )
+    } else {
+        baseColumns
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .onSizeChanged { rowWidthPx = it.width },
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        tiles.forEach { tile ->
+        tiles.take(columns).forEach { tile ->
             TileCard(
                 tile = tile,
                 editMode = editMode,
@@ -1786,11 +1821,16 @@ private fun GridSizeDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Grid size") },
+        title = { Text("Grid size (portrait)") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Stepper("Rows", r) { r = it }
                 Stepper("Columns", c) { c = it }
+                Text(
+                    "Landscape may show more columns automatically to fill the screen.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -2285,7 +2325,7 @@ private fun PageOptionsDialog(
                 )
                 HorizontalDivider()
                 DropdownMenuItem(
-                    text = { Text("Grid size ($gridSize)") },
+                    text = { Text("Grid size (portrait) ($gridSize)") },
                     leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null) },
                     onClick = onGridSize
                 )

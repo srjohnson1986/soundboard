@@ -173,13 +173,13 @@ class BoardScreenTest {
         // page's own tab — hold past the long-press timeout via the test clock, the same
         // way idleTimeoutReturnsToTheHomePageAfterInactivity drives a real delay()-based wait.
         longPressPageTab("Page 1")
-        composeRule.onNodeWithText("Grid size (2x2)").performClick()
+        composeRule.onNodeWithText("Grid size (portrait) (2x2)").performClick()
         composeRule.onNodeWithContentDescription("Increase Columns").performClick()
         composeRule.onNodeWithText("Apply").performClick()
         composeRule.onNodeWithText("Page 1").performTouchInput { up() }
 
         longPressPageTab("Page 1")
-        composeRule.onNodeWithText("Grid size (2x3)").assertIsDisplayed()
+        composeRule.onNodeWithText("Grid size (portrait) (2x3)").assertIsDisplayed()
         composeRule.onNodeWithText("Page 1").performTouchInput { up() }
     }
 
@@ -198,7 +198,7 @@ class BoardScreenTest {
         // "Feelings" itself is ambiguous here — it's both the tab label behind the
         // dialog and the dialog's own title — so assert on content unique to the dialog.
         composeRule.onNodeWithText("Rename").assertIsDisplayed()
-        composeRule.onNodeWithText("Grid size (1x1)").assertIsDisplayed()
+        composeRule.onNodeWithText("Grid size (portrait) (1x1)").assertIsDisplayed()
     }
 
     /** Holds a page tab down past the long-press timeout to open its PageOptionsDialog, without releasing it. */

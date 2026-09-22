@@ -368,30 +368,39 @@ fun BoardScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = {
-                        Column {
-                            Text("Soundboard", style = MaterialTheme.typography.labelSmall)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    board.name,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier
-                                        .weight(1f, fill = false)
-                                        .clickable { showRenameDialog = true }
+                    title = { Text("Soundboard", style = MaterialTheme.typography.titleLarge) },
+                    actions = {
+                        Box {
+                            IconButton(onClick = { showMenu = true }) {
+                                Icon(Icons.Filled.Menu, contentDescription = "Menu")
+                            }
+                            DropdownMenu(
+                                expanded = showMenu,
+                                onDismissRequest = { showMenu = false },
+                                // The Edit mode row's fillMaxWidth() doesn't report an intrinsic
+                                // width, so without a floor the menu can size itself too narrow
+                                // and crowd the switch against the label text.
+                                modifier = Modifier.widthIn(min = 260.dp)
+                            ) {
+                                MenuSectionHeader("Boards")
+                                DropdownMenuItem(
+                                    text = { Text("Rename board (${board.name})") },
+                                    leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        showRenameDialog = true
+                                    }
                                 )
                                 Box {
-                                    IconButton(
+                                    DropdownMenuItem(
+                                        text = { Text("Recent boards") },
+                                        leadingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
                                         onClick = {
                                             vm.refreshRecentPresets()
                                             vm.refreshPresets()
                                             showRecentPresetsMenu = true
-                                        },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(Icons.Filled.ArrowDropDown, contentDescription = "Recent boards")
-                                    }
+                                        }
+                                    )
                                     DropdownMenu(
                                         expanded = showRecentPresetsMenu,
                                         onDismissRequest = { showRecentPresetsMenu = false },
@@ -418,6 +427,7 @@ fun BoardScreen(
                                                     },
                                                     onClick = {
                                                         showRecentPresetsMenu = false
+                                                        showMenu = false
                                                         requestApplyPreset(item.ref, item.label)
                                                     }
                                                 )
@@ -428,27 +438,13 @@ fun BoardScreen(
                                             text = { Text("See all presets...") },
                                             onClick = {
                                                 showRecentPresetsMenu = false
+                                                showMenu = false
                                                 showPresetPickerDialog = true
                                             }
                                         )
                                     }
                                 }
-                            }
-                        }
-                    },
-                    actions = {
-                        Box {
-                            IconButton(onClick = { showMenu = true }) {
-                                Icon(Icons.Filled.Menu, contentDescription = "Menu")
-                            }
-                            DropdownMenu(
-                                expanded = showMenu,
-                                onDismissRequest = { showMenu = false },
-                                // The Edit mode row's fillMaxWidth() doesn't report an intrinsic
-                                // width, so without a floor the menu can size itself too narrow
-                                // and crowd the switch against the label text.
-                                modifier = Modifier.widthIn(min = 260.dp)
-                            ) {
+                                HorizontalDivider()
                                 // Mode
                                 Row(
                                     modifier = Modifier

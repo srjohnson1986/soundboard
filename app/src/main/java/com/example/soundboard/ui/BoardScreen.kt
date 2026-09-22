@@ -159,7 +159,7 @@ private fun longPressDurationLabel(millis: Int) = when (millis) {
 private val PlayGreen = Color(0xFF2E7D32)
 
 /** Update alongside each tagged release — [RELEASE_URL] points at this tag's own notes. */
-private const val APP_VERSION = "v0.1.0"
+private const val APP_VERSION = "v0.2.0"
 
 private const val RELEASES_BASE_URL = "https://github.com/srjohnson1986/soundboard/releases"
 private const val RELEASE_URL = "$RELEASES_BASE_URL/tag/$APP_VERSION"

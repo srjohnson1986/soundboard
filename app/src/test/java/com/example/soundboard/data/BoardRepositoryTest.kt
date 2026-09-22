@@ -433,6 +433,7 @@ class BoardRepositoryTest {
         allTiles.mapNotNull { it.fileName }.forEach { name ->
             assertTrue("missing sound file $name", repo.soundFile(name).exists())
         }
+        assertEquals("chime.wav", allTiles.first { it.label == "Chime" }.fileName)
     }
 
     @Test
@@ -509,6 +510,7 @@ class BoardRepositoryTest {
         allTiles.mapNotNull { it.fileName }.forEach { name ->
             assertTrue("missing sound file $name", repo.soundFile(name).exists())
         }
+        assertEquals("chime.wav", allTiles.first { it.label == "Chime" }.fileName)
 
         val trouble = board.pages.first { it.name == "Trouble" }
         assertEquals(
@@ -556,5 +558,6 @@ class BoardRepositoryTest {
         allTiles.mapNotNull { it.fileName }.forEach { name ->
             assertTrue("missing sound file $name", repo.soundFile(name).exists())
         }
+        assertEquals("chime.wav", allTiles.first { it.label == "Chime" }.fileName)
     }
 }

@@ -654,11 +654,17 @@ fun BoardScreen(
                 .fillMaxSize()
                 .padding(insets)
         ) {
+            // The actual effective column count PageGrid settled on for the currently
+            // active page — reported up via PageGrid's onEffectiveColumnsChanged so
+            // PinnedRow can match it exactly instead of guessing its own from screen
+            // height (which doesn't know about the top bar/tabs/pinned-row's own height).
+            var activePageColumns by remember { mutableStateOf<Int?>(null) }
             val homePage = board.homePage
             if (board.stickyHomeRowEnabled && homePage != null && board.currentPageIndex != board.homePageIndex) {
                 PinnedRow(
                     tiles = homePage.visibleTiles,
                     baseColumns = homePage.columns,
+                    activeColumns = activePageColumns,
                     editMode = editMode,
                     aspectRatio = homePage.tileAspectRatio,
                     pageColor = homePage.color?.let { Color(it) },
@@ -709,6 +715,7 @@ fun BoardScreen(
                         hideBlankTilesEnabled = board.hideBlankTilesEnabled,
                         globalTileOpacity = if (performanceModeEnabled) 1f else board.tileOpacity,
                         globalTileBorder = if (performanceModeEnabled) TileBorder() else board.tileBorder,
+                        onEffectiveColumnsChanged = { activePageColumns = it },
                         pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
                         onTap = { tile ->
                             touch()
@@ -1066,9 +1073,12 @@ private fun isPlayable(tile: Tile, speakUnrecordedTilesEnabled: Boolean): Boolea
 /**
  * The fixed row shown above every non-home page, mirroring the home page's own first
  * row — including how many tiles that "first row" holds. In landscape, [PageGrid]
- * reflows the home page itself into more columns via [landscapeColumnCount]; this
- * mirrors that so the pinned row doesn't stay stuck at the portrait [baseColumns]
- * while the grid underneath it (and the home page itself) has already reflowed wider.
+ * reflows whichever page is on screen into more columns via [landscapeColumnCount];
+ * this mirrors that count exactly (via [activeColumns], reported up from that page's
+ * own [PageGrid] instance) so the pinned row's tile size matches the grid underneath
+ * it, rather than staying stuck at the portrait [baseColumns] or guessing its own
+ * count from screen height (which doesn't know about the top bar/tabs/pinned-row's
+ * own height the way [PageGrid] does when it measures its actual content area).
  * [tiles] should be the home page's full [Page.visibleTiles], not pre-sliced to one
  * row — the actual row length is computed here from the live column count.
  */
@@ -1076,6 +1086,7 @@ private fun isPlayable(tile: Tile, speakUnrecordedTilesEnabled: Boolean): Boolea
 private fun PinnedRow(
     tiles: List<Tile>,
     baseColumns: Int,
+    activeColumns: Int?,
     editMode: Boolean,
     aspectRatio: Float,
     pageColor: Color?,
@@ -1091,26 +1102,9 @@ private fun PinnedRow(
     onPreviewSound: (Tile) -> Unit
 ) {
     val haptics = LocalHapticFeedback.current
-    val density = LocalDensity.current
-    val configuration = LocalConfiguration.current
-    var rowWidthPx by remember { mutableIntStateOf(0) }
-
-    // PinnedRow is a single fixed row, not a scrollable multi-row grid, so it has no
-    // "available height" of its own to fit rows into the way PageGrid does. As a
-    // stand-in for "how much height would the grid give a single row," this treats
-    // the row as a quarter of screen height — landscapeColumnCount's own default
-    // targetRows=4 — an approximation (it doesn't subtract chrome like the top bar),
-    // but close enough to keep the pinned row roughly the same tile size as the
-    // reflowed grid below it, rather than staying stuck at the portrait column count.
-    val columns = if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE && rowWidthPx > 0) {
-        landscapeColumnCount(
-            baseColumns = baseColumns,
-            aspectRatio = aspectRatio,
-            widthPx = rowWidthPx.toFloat(),
-            heightPx = with(density) { configuration.screenHeightDp.dp.toPx() },
-            spacingPx = with(density) { 8.dp.toPx() },
-            minTileWidthPx = with(density) { 56.dp.toPx() }
-        )
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val columns = if (isLandscape) {
+        (activeColumns ?: baseColumns).coerceAtLeast(baseColumns)
     } else {
         baseColumns
     }
@@ -1118,8 +1112,7 @@ private fun PinnedRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .onSizeChanged { rowWidthPx = it.width },
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         tiles.take(columns).forEach { tile ->
@@ -1172,6 +1165,7 @@ private fun PageGrid(
     hideBlankTilesEnabled: Boolean,
     globalTileOpacity: Float,
     globalTileBorder: TileBorder,
+    onEffectiveColumnsChanged: (Int) -> Unit,
     pinFirstRow: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewSound: (Tile) -> Unit,
@@ -1200,6 +1194,9 @@ private fun PageGrid(
         )
     } else {
         page.columns
+    }
+    LaunchedEffect(columns, isActive) {
+        if (isActive) onEffectiveColumnsChanged(columns)
     }
     val cellStepPx = if (columns > 0 && gridWidthPx > 0) {
         (gridWidthPx - spacingPx * (columns - 1)) / columns + spacingPx

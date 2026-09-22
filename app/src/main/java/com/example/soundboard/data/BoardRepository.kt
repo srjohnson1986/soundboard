@@ -122,12 +122,36 @@ class BoardRepository(private val context: Context) {
         name
     }.getOrNull()
 
+    /** Every sound file not in [keep], without deleting anything — the "what's unused" query behind [pruneUnused] and the stray-clip cleanup UI. */
+    fun strayFiles(keep: Set<String>): List<File> =
+        soundsDir.listFiles()?.filter { it.name !in keep } ?: emptyList()
+
     /** Deletes any audio file no longer referenced by a tile. */
     fun pruneUnused(keep: Set<String>) {
-        soundsDir.listFiles()?.forEach { file ->
-            if (file.name !in keep) file.delete()
-        }
+        strayFiles(keep).forEach { it.delete() }
     }
+
+    /** Deletes exactly the named sound files, if present. */
+    fun deleteFiles(fileNames: Collection<String>) {
+        fileNames.forEach { soundFile(it).delete() }
+    }
+
+    /** Zips exactly the named sound files, flat by filename, for the user to keep before deleting them. Not a re-importable backup — no board.json, no "sounds/" prefix. */
+    fun exportFiles(fileNames: Collection<String>, uri: Uri): Boolean = runCatching {
+        val out = context.contentResolver.openOutputStream(uri) ?: error("no output stream")
+        out.use { stream ->
+            ZipOutputStream(stream).use { zip ->
+                fileNames.forEach { name ->
+                    val file = soundFile(name)
+                    if (file.exists()) {
+                        zip.putNextEntry(ZipEntry(name))
+                        file.inputStream().use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            }
+        }
+    }.isSuccess
 
     /** Zips board.json and every sound into [uri]. The whole app state in one file. */
     fun exportTo(uri: Uri): Boolean = runCatching {

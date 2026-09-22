@@ -168,6 +168,11 @@ class BoardTest {
     }
 
     @Test
+    fun `speakUnrecordedTilesEnabled defaults to true`() {
+        assertEquals(true, Board().speakUnrecordedTilesEnabled)
+    }
+
+    @Test
     fun `homePage is null when no page is marked home`() {
         val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
 

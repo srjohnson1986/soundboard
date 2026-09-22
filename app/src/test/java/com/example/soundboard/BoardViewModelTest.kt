@@ -14,6 +14,7 @@ import com.example.soundboard.model.Page
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import java.io.ByteArrayInputStream
+import java.io.File
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
@@ -121,6 +122,27 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `play speaks an unrecorded labeled tile when the fallback setting is on`() {
+        repo.save(boardWith(Tile(id = "a", label = "Water")))
+        val vm = newViewModel()
+        assertTrue(vm.board.value.speakUnrecordedTilesEnabled)
+
+        vm.play(vm.board.value.currentPage.tiles.first { it.id == "a" })
+
+        assertEquals(listOf("Water"), speaker.spoken)
+    }
+
+    @Test
+    fun `play does nothing for an unrecorded labeled tile when the fallback setting is off`() {
+        repo.save(boardWith(Tile(id = "a", label = "Water")).copy(speakUnrecordedTilesEnabled = false))
+        val vm = newViewModel()
+
+        vm.play(vm.board.value.currentPage.tiles.first { it.id == "a" })
+
+        assertTrue(speaker.spoken.isEmpty())
+    }
+
+    @Test
     fun `setSpeakLabel updates only the target tile`() {
         repo.save(boardWith(Tile(id = "a"), Tile(id = "b")))
         val vm = newViewModel()
@@ -168,6 +190,49 @@ class BoardViewModelTest {
         vm.clearHomeRowTile("hey")
 
         assertFalse(vm.board.value.homePage!!.tiles.first { it.id == "hey" }.speakLabel)
+    }
+
+    @Test
+    fun `removeSound clears the file but keeps the label and speakLabel`() {
+        repo.save(boardWith(Tile(id = "a", label = "Water", fileName = "a.mp3", speakLabel = true)))
+        val vm = newViewModel()
+
+        vm.removeSound("a")
+
+        val tile = vm.board.value.currentPage.tiles.first { it.id == "a" }
+        assertNull(tile.fileName)
+        assertEquals("Water", tile.label)
+        assertTrue(tile.speakLabel)
+    }
+
+    @Test
+    fun `removeHomeRowSound clears the file but keeps the label and speakLabel`() {
+        repo.save(
+            Board(
+                pages = listOf(
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3", speakLabel = true)), isHome = true)
+                )
+            )
+        )
+        val vm = newViewModel()
+
+        vm.removeHomeRowSound("hey")
+
+        val tile = vm.board.value.homePage!!.tiles.first { it.id == "hey" }
+        assertNull(tile.fileName)
+        assertEquals("Hey", tile.label)
+        assertTrue(tile.speakLabel)
+    }
+
+    @Test
+    fun `removeSound prunes the now-orphaned file`() {
+        repo.save(boardWith(Tile(id = "a", fileName = "a.mp3")))
+        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        val vm = newViewModel()
+
+        vm.removeSound("a")
+
+        assertFalse(repo.soundFile("a.mp3").exists())
     }
 
     @Test
@@ -820,5 +885,58 @@ class BoardViewModelTest {
         vm.clearTile("a")
 
         assertTrue(repo.soundFile("a.mp3").exists())
+    }
+
+    @Test
+    fun `refreshStrayClips finds a file no tile or preset points at`() {
+        repo.save(boardWith(Tile(id = "a", fileName = "used.mp3")))
+        repo.soundFile("used.mp3").apply { parentFile?.mkdirs() }.writeText("used")
+        repo.soundFile("stray.mp3").writeText("stray")
+        val vm = newViewModel()
+
+        vm.refreshStrayClips()
+
+        assertEquals(listOf("stray.mp3"), vm.strayClips.value.map { it.fileName })
+    }
+
+    @Test
+    fun `refreshStrayClips excludes a file only a saved preset still references`() {
+        repo.save(boardWith(Tile(id = "a", fileName = "a.mp3")))
+        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        val vm = newViewModel()
+        vm.saveAsPreset("Backup layout")
+        vm.clearTile("a")
+
+        vm.refreshStrayClips()
+
+        assertTrue(vm.strayClips.value.isEmpty())
+    }
+
+    @Test
+    fun `deleteStrayClips removes the files and clears the list`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val stray = repo.soundFile("stray.mp3").apply { parentFile?.mkdirs() }.also { it.writeText("stray") }
+        val vm = newViewModel()
+        vm.refreshStrayClips()
+
+        vm.deleteStrayClips()
+
+        assertFalse(stray.exists())
+        assertTrue(vm.strayClips.value.isEmpty())
+    }
+
+    @Test
+    fun `exportAndDeleteStrayClips only deletes after a successful export`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val stray = repo.soundFile("stray.mp3").apply { parentFile?.mkdirs() }.also { it.writeText("stray") }
+        val vm = newViewModel()
+        vm.refreshStrayClips()
+        val zipOut = File(context.filesDir, "export.zip")
+
+        vm.exportAndDeleteStrayClips(Uri.fromFile(zipOut))
+
+        assertFalse(stray.exists())
+        assertTrue(vm.strayClips.value.isEmpty())
+        assertTrue(zipOut.exists())
     }
 }

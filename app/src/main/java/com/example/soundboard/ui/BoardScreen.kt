@@ -125,6 +125,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.soundboard.BoardViewModel
 import com.example.soundboard.PresetRef
+import com.example.soundboard.StrayClip
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.ThemeMode
@@ -181,6 +182,7 @@ fun BoardScreen(
     val message by vm.message.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
     val presets by vm.presets.collectAsStateWithLifecycle()
+    val strayClips by vm.strayClips.collectAsStateWithLifecycle()
     val recentPresets by vm.recentPresets.collectAsStateWithLifecycle()
     val performanceModeEnabled by vm.performanceModeEnabled.collectAsStateWithLifecycle()
     var editingTarget by remember { mutableStateOf<EditTarget?>(null) }
@@ -196,6 +198,7 @@ fun BoardScreen(
     var pageColorDialogIndex by remember { mutableStateOf<Int?>(null) }
     var showMenu by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
+    var showStrayCleanupDialog by remember { mutableStateOf(false) }
     var showSpeakDialog by remember { mutableStateOf(false) }
     var editMode by remember { mutableStateOf(false) }
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
@@ -306,6 +309,10 @@ fun BoardScreen(
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let(vm::importBoard) }
+
+    val strayExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri -> uri?.let(vm::exportAndDeleteStrayClips) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -483,6 +490,15 @@ fun BoardScreen(
                                         importLauncher.launch(arrayOf("application/zip"))
                                     }
                                 )
+                                DropdownMenuItem(
+                                    text = { Text("Clean up unused clips") },
+                                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                                    onClick = {
+                                        showMenu = false
+                                        vm.refreshStrayClips()
+                                        showStrayCleanupDialog = true
+                                    }
+                                )
                                 HorizontalDivider()
                                 DropdownMenuItem(
                                     text = {
@@ -599,9 +615,10 @@ fun BoardScreen(
                     pageColor = homePage.color?.let { Color(it) },
                     hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                     performanceModeEnabled = performanceModeEnabled,
+                    speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                     onTap = { tile ->
                         touch()
-                        if (tile.isEmpty || editMode) {
+                        if (!isPlayable(tile, board.speakUnrecordedTilesEnabled) || editMode) {
                             editingTarget = EditTarget.HomeRowTile(tile.id)
                         } else {
                             vm.play(tile)
@@ -634,10 +651,11 @@ fun BoardScreen(
                         isActive = pageIndex == board.currentPageIndex,
                         hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                         performanceModeEnabled = performanceModeEnabled,
+                        speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                         pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
                         onTap = { tile ->
                             touch()
-                            if (tile.isEmpty || editMode) {
+                            if (!isPlayable(tile, board.speakUnrecordedTilesEnabled) || editMode) {
                                 editingTarget = EditTarget.PageTile(tile.id)
                             } else {
                                 vm.play(tile)
@@ -663,9 +681,11 @@ fun BoardScreen(
                 EditTileDialog(
                     tile = editing,
                     isRecording = isRecording,
+                    speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                     onLabelChange = { vm.setLabel(editing.id, it) },
                     onSoundPicked = { vm.assignSound(editing.id, it) },
                     onClear = { vm.clearTile(editing.id) },
+                    onRemoveSound = { vm.removeSound(editing.id) },
                     onVolumeChange = { vm.setVolume(editing.id, it) },
                     onColorChange = { vm.setColor(editing.id, it) },
                     onSpeakLabelChange = { vm.setSpeakLabel(editing.id, it) },
@@ -685,9 +705,11 @@ fun BoardScreen(
                 EditTileDialog(
                     tile = editing,
                     isRecording = isRecording,
+                    speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                     onLabelChange = { vm.setHomeRowLabel(editing.id, it) },
                     onSoundPicked = { vm.assignHomeRowSound(editing.id, it) },
                     onClear = { vm.clearHomeRowTile(editing.id) },
+                    onRemoveSound = { vm.removeHomeRowSound(editing.id) },
                     onVolumeChange = { vm.setHomeRowVolume(editing.id, it) },
                     onColorChange = { vm.setHomeRowColor(editing.id, it) },
                     onSpeakLabelChange = { vm.setHomeRowSpeakLabel(editing.id, it) },
@@ -751,6 +773,8 @@ fun BoardScreen(
             onKeepScreenAwakeChange = vm::setKeepScreenAwake,
             hapticFeedbackEnabled = board.hapticFeedbackEnabled,
             onHapticFeedbackEnabledChange = vm::setHapticFeedbackEnabled,
+            speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
+            onSpeakUnrecordedTilesEnabledChange = vm::setSpeakUnrecordedTilesEnabled,
             performanceModeEnabled = performanceModeEnabled,
             onPerformanceModeEnabledChange = vm::setPerformanceModeEnabled,
             stickyHomeRowEnabled = board.stickyHomeRowEnabled,
@@ -761,6 +785,15 @@ fun BoardScreen(
             defaultPageColumns = board.defaultPageColumns,
             onDefaultPageColumnsChange = vm::setDefaultPageColumns,
             onDismiss = { showSettingsDialog = false }
+        )
+    }
+
+    if (showStrayCleanupDialog) {
+        StrayCleanupDialog(
+            clips = strayClips,
+            onExportAndDelete = { strayExportLauncher.launch("unused-clips.zip") },
+            onDelete = vm::deleteStrayClips,
+            onDismiss = { showStrayCleanupDialog = false }
         )
     }
 
@@ -921,6 +954,10 @@ fun BoardScreen(
 
 }
 
+/** Whether tapping [tile] does anything — plays a clip, or (with the fallback setting) speaks its label. Mirrors [BoardViewModel.play]'s own condition. */
+private fun isPlayable(tile: Tile, speakUnrecordedTilesEnabled: Boolean): Boolean =
+    tile.fileName != null || ((tile.speakLabel || speakUnrecordedTilesEnabled) && tile.label.isNotBlank())
+
 /** The fixed row shown above every non-home page, mirroring the home page's own first row. */
 @Composable
 private fun PinnedRow(
@@ -930,6 +967,7 @@ private fun PinnedRow(
     pageColor: Color?,
     hapticFeedbackEnabled: Boolean,
     performanceModeEnabled: Boolean,
+    speakUnrecordedTilesEnabled: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewSound: (Tile) -> Unit
 ) {
@@ -952,7 +990,7 @@ private fun PinnedRow(
                 // Long-press previews what a pad will say without "using" it for real,
                 // same as PageGrid's hold-without-moving (#4) — not offered in edit mode,
                 // where a tap already opens the editor's own Play/Preview button.
-                onLongClick = if (!editMode && !tile.isEmpty) {
+                onLongClick = if (!editMode && isPlayable(tile, speakUnrecordedTilesEnabled)) {
                     {
                         if (hapticFeedbackEnabled) {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -983,6 +1021,7 @@ private fun PageGrid(
     isActive: Boolean,
     hapticFeedbackEnabled: Boolean,
     performanceModeEnabled: Boolean,
+    speakUnrecordedTilesEnabled: Boolean,
     pinFirstRow: Boolean,
     onTap: (Tile) -> Unit,
     onPreviewSound: (Tile) -> Unit,
@@ -1033,7 +1072,7 @@ private fun PageGrid(
                         // reorder at all — treat it as a request to preview what the tile
                         // says/plays without "using" it for real (#4), same as PinnedRow's
                         // dedicated onLongClick (which has no competing drag gesture to share it with).
-                        if (!editMode && draggedIndex == index && !tile.isEmpty) {
+                        if (!editMode && draggedIndex == index && isPlayable(tile, speakUnrecordedTilesEnabled)) {
                             onPreviewSound(tile)
                         }
                         draggedIndex = null
@@ -1262,9 +1301,11 @@ private fun SpeakDialog(onSpeak: (String) -> Unit, onDismiss: () -> Unit) {
 private fun EditTileDialog(
     tile: Tile,
     isRecording: Boolean,
+    speakUnrecordedTilesEnabled: Boolean,
     onLabelChange: (String) -> Unit,
     onSoundPicked: (android.net.Uri) -> Unit,
     onClear: () -> Unit,
+    onRemoveSound: () -> Unit,
     onVolumeChange: (Float) -> Unit,
     onColorChange: (Int?) -> Unit,
     onSpeakLabelChange: (Boolean) -> Unit,
@@ -1316,12 +1357,34 @@ private fun EditTileDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                OutlinedButton(
-                    onClick = { picker.launch(arrayOf("audio/*")) },
-                    enabled = !isRecording,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(if (tile.fileName == null) "Choose sound" else "Replace sound")
+                if (tile.fileName != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedButton(
+                            onClick = { picker.launch(arrayOf("audio/*")) },
+                            enabled = !isRecording,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Replace sound")
+                        }
+                        OutlinedButton(
+                            onClick = onRemoveSound,
+                            enabled = !isRecording,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Remove sound")
+                        }
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { picker.launch(arrayOf("audio/*")) },
+                        enabled = !isRecording,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Choose sound")
+                    }
                 }
                 Row(
                     modifier = Modifier
@@ -1346,7 +1409,7 @@ private fun EditTileDialog(
                 ) {
                     OutlinedButton(
                         onClick = { onPlay(tile.copy(label = label)) },
-                        enabled = !tile.isEmpty && !isRecording,
+                        enabled = isPlayable(tile.copy(label = label), speakUnrecordedTilesEnabled) && !isRecording,
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(
@@ -1563,6 +1626,8 @@ private fun SettingsDialog(
     onKeepScreenAwakeChange: (Boolean) -> Unit,
     hapticFeedbackEnabled: Boolean,
     onHapticFeedbackEnabledChange: (Boolean) -> Unit,
+    speakUnrecordedTilesEnabled: Boolean,
+    onSpeakUnrecordedTilesEnabledChange: (Boolean) -> Unit,
     performanceModeEnabled: Boolean,
     onPerformanceModeEnabledChange: (Boolean) -> Unit,
     stickyHomeRowEnabled: Boolean,
@@ -1695,6 +1760,20 @@ private fun SettingsDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Text("Speak label when there's no clip", modifier = Modifier.weight(1f))
+                    Switch(checked = speakUnrecordedTilesEnabled, onCheckedChange = onSpeakUnrecordedTilesEnabledChange)
+                }
+                Text(
+                    "Reads a tile's name aloud if it has no recording or upload yet.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text("Performance mode", modifier = Modifier.weight(1f))
                     Switch(checked = performanceModeEnabled, onCheckedChange = onPerformanceModeEnabledChange)
                 }
@@ -1734,6 +1813,63 @@ private fun SettingsDialog(
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
+/** Formats a byte count as a short human-readable size, e.g. "340 KB" or "2.1 MB". */
+private fun formatFileSize(bytes: Long): String = when {
+    bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
+    bytes >= 1_000 -> "%.0f KB".format(bytes / 1_000.0)
+    else -> "$bytes B"
+}
+
+/**
+ * Sound files [BoardViewModel.refreshStrayClips] found with nothing pointing at them —
+ * not on the live board, not in any saved preset. Offers exporting them (for safekeeping)
+ * before deleting, or deleting outright.
+ */
+@Composable
+private fun StrayCleanupDialog(
+    clips: List<StrayClip>,
+    onExportAndDelete: () -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Clean up unused clips") },
+        text = {
+            if (clips.isEmpty()) {
+                Text("No unused clips found.")
+            } else {
+                val totalBytes = clips.sumOf { it.sizeBytes }
+                Text(
+                    "${clips.size} unused clip${if (clips.size == 1) "" else "s"} found, " +
+                        "totaling ${formatFileSize(totalBytes)} — not used by any page or saved preset."
+                )
+            }
+        },
+        confirmButton = {
+            if (clips.isEmpty()) {
+                TextButton(onClick = onDismiss) { Text("Close") }
+            } else {
+                TextButton(onClick = {
+                    onExportAndDelete()
+                    onDismiss()
+                }) { Text("Export & Delete") }
+            }
+        },
+        dismissButton = {
+            if (clips.isNotEmpty()) {
+                Row {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = {
+                        onDelete()
+                        onDismiss()
+                    }) { Text("Delete") }
+                }
+            }
+        }
     )
 }
 

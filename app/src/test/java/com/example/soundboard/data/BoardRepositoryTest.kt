@@ -267,6 +267,47 @@ class BoardRepositoryTest {
     }
 
     @Test
+    fun `strayFiles lists exactly the files not in the keep set, without deleting them`() {
+        soundsDir.mkdirs()
+        val keep = File(soundsDir, "keep.mp3").apply { writeText("keep") }
+        val stray = File(soundsDir, "stray.mp3").apply { writeText("stray") }
+
+        val result = repo.strayFiles(setOf("keep.mp3"))
+
+        assertEquals(listOf("stray.mp3"), result.map { it.name })
+        assertTrue(keep.exists())
+        assertTrue(stray.exists())
+    }
+
+    @Test
+    fun `deleteFiles removes exactly the named files`() {
+        soundsDir.mkdirs()
+        val kept = File(soundsDir, "kept.mp3").apply { writeText("kept") }
+        val removed = File(soundsDir, "removed.mp3").apply { writeText("removed") }
+
+        repo.deleteFiles(listOf("removed.mp3"))
+
+        assertTrue(kept.exists())
+        assertFalse(removed.exists())
+    }
+
+    @Test
+    fun `exportFiles zips exactly the requested files, flat by name`() {
+        soundsDir.mkdirs()
+        File(soundsDir, "a.mp3").writeText("aaa")
+        File(soundsDir, "b.mp3").writeText("bbb")
+        val out = File(context.filesDir, "export.zip")
+
+        val ok = repo.exportFiles(listOf("a.mp3"), Uri.fromFile(out))
+
+        assertTrue(ok)
+        val entries = java.util.zip.ZipInputStream(out.inputStream()).use { zip ->
+            generateSequence { zip.nextEntry }.map { it.name }.toList()
+        }
+        assertEquals(listOf("a.mp3"), entries)
+    }
+
+    @Test
     fun `importSound copies bytes and returns a name that resolves through soundFile`() {
         val uri = Uri.parse("content://fake/audio.mp3")
         val bytes = "hello world".toByteArray()

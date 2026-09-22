@@ -1,8 +1,11 @@
 package com.example.soundboard.ui
 
+import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -108,12 +111,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -321,7 +327,43 @@ fun BoardScreen(
         ActivityResultContracts.CreateDocument("application/zip")
     ) { uri -> uri?.let(vm::exportAndDeleteStrayClips) }
 
+    val backgroundImagePicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri -> uri?.let(vm::setBackgroundImage) }
+
+    // Decoded once per file name change, not on every recomposition — a board with a
+    // background image reloads this exactly once per app launch (or right after picking
+    // a new one), not on every tile tap.
+    val backgroundImageFileName = board.backgroundImageFileName
+    val backgroundBitmap: ImageBitmap? = if (backgroundImageFileName != null) {
+        remember(backgroundImageFileName) {
+            runCatching {
+                BitmapFactory.decodeFile(vm.backgroundImageFile(backgroundImageFileName).path)?.asImageBitmap()
+            }.getOrNull()
+        }
+    } else {
+        null
+    }
+    val backgroundColorArgb = board.backgroundColorArgb
+    val hasCustomBackground = backgroundBitmap != null || backgroundColorArgb != null
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (backgroundBitmap != null) {
+            Image(
+                bitmap = backgroundBitmap,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else if (backgroundColorArgb != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(backgroundColorArgb))
+            )
+        }
     Scaffold(
+        containerColor = if (hasCustomBackground) Color.Transparent else MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             Column {
@@ -688,6 +730,7 @@ fun BoardScreen(
             }
         }
     }
+    }
 
     when (val target = editingTarget) {
         is EditTarget.PageTile -> {
@@ -823,6 +866,13 @@ pageOpacityDialogIndex?.let { index ->
             onStickyHomeRowEnabledChange = vm::setStickyHomeRowEnabled,
             hideBlankTilesEnabled = board.hideBlankTilesEnabled,
             onHideBlankTilesEnabledChange = vm::setHideBlankTilesEnabled,
+            backgroundColorArgb = board.backgroundColorArgb,
+            hasBackgroundImage = board.backgroundImageFileName != null,
+            onBackgroundColorChange = vm::setBackgroundColor,
+            onPickBackgroundImage = {
+                backgroundImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            onClearBackground = vm::clearBackground,
             tileOpacity = board.tileOpacity,
             onTileOpacityChange = vm::setTileOpacity,
             tileBorder = board.tileBorder,
@@ -1861,6 +1911,11 @@ private fun SettingsDialog(
     onStickyHomeRowEnabledChange: (Boolean) -> Unit,
     hideBlankTilesEnabled: Boolean,
     onHideBlankTilesEnabledChange: (Boolean) -> Unit,
+    backgroundColorArgb: Int?,
+    hasBackgroundImage: Boolean,
+    onBackgroundColorChange: (Int?) -> Unit,
+    onPickBackgroundImage: () -> Unit,
+    onClearBackground: () -> Unit,
     tileOpacity: Float,
     onTileOpacityChange: (Float) -> Unit,
     tileBorder: TileBorder,
@@ -2052,6 +2107,35 @@ private fun SettingsDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Background", style = MaterialTheme.typography.bodyMedium)
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    presetColors.forEach { color ->
+                        ColorSwatch(
+                            color = color,
+                            selected = !hasBackgroundImage && color?.toArgb() == backgroundColorArgb,
+                            onClick = { onBackgroundColorChange(color?.toArgb()) }
+                        )
+                    }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedButton(onClick = onPickBackgroundImage, modifier = Modifier.weight(1f)) {
+                        Text("Choose image")
+                    }
+                    OutlinedButton(
+                        onClick = onClearBackground,
+                        enabled = hasBackgroundImage || backgroundColorArgb != null,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Clear")
+                    }
+                }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text("Tile opacity", style = MaterialTheme.typography.bodyMedium)
                 OpacityControls(tileOpacity) { it?.let(onTileOpacityChange) }

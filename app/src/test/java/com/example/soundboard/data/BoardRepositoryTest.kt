@@ -373,6 +373,37 @@ class BoardRepositoryTest {
     }
 
     @Test
+    fun `importBackgroundImage copies bytes and returns a name that resolves through backgroundFile`() {
+        val uri = Uri.parse("content://fake/background.jpg")
+        val bytes = "fake image bytes".toByteArray()
+        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream(bytes))
+
+        val name = repo.importBackgroundImage(uri)
+
+        assertTrue(name != null)
+        val resolved = repo.backgroundFile(name!!)
+        assertTrue(resolved.exists())
+        assertEquals("fake image bytes", resolved.readText())
+    }
+
+    @Test
+    fun `a full backup export then import round-trips the background image`() {
+        val uri = Uri.parse("content://fake/background.jpg")
+        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("fake image bytes".toByteArray()))
+        val name = repo.importBackgroundImage(uri)!!
+        repo.save(Board(backgroundImageFileName = name))
+        val zip = File(context.filesDir, "backup.zip")
+
+        assertTrue(repo.exportTo(Uri.fromFile(zip)))
+        repo.backgroundFile(name).delete()
+        assertTrue(repo.importFrom(Uri.fromFile(zip)))
+
+        val restored = repo.backgroundFile(name)
+        assertTrue(restored.exists())
+        assertEquals("fake image bytes", restored.readText())
+    }
+
+    @Test
     fun `the bundled jeremy-care-board preset imports and loads as a valid four-page board`() {
         // Regression coverage for the actual shipped preset (presets/jeremy-care-board.zip,
         // mirrored at app/src/main/assets/jeremy-care-board.zip) — guards against the zip

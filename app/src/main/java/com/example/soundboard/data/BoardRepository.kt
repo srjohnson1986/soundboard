@@ -33,6 +33,7 @@ class BoardRepository(private val context: Context) {
 
     private val boardFile = File(context.filesDir, "board.json")
     private val soundsDir = File(context.filesDir, "sounds")
+    private val backgroundsDir = File(context.filesDir, "backgrounds")
 
     /**
      * Boards saved before pages existed are a flat name/rows/columns/tiles
@@ -132,6 +133,20 @@ class BoardRepository(private val context: Context) {
         strayFiles(keep).forEach { it.delete() }
     }
 
+    fun backgroundFile(name: String): File = File(backgroundsDir, name)
+
+    /** Copies the picked image into app storage and returns its local file name — same reasoning as [importSound]. */
+    fun importBackgroundImage(uri: Uri): String? = runCatching {
+        backgroundsDir.mkdirs()
+        val ext = extensionFor(uri)
+        val name = UUID.randomUUID().toString() + if (ext.isBlank()) "" else ".$ext"
+        val target = File(backgroundsDir, name)
+        context.contentResolver.openInputStream(uri)!!.use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        }
+        name
+    }.getOrNull()
+
     /** Deletes exactly the named sound files, if present. */
     fun deleteFiles(fileNames: Collection<String>) {
         fileNames.forEach { soundFile(it).delete() }
@@ -168,6 +183,12 @@ class BoardRepository(private val context: Context) {
                     file.inputStream().use { it.copyTo(zip) }
                     zip.closeEntry()
                 }
+
+                backgroundsDir.listFiles()?.forEach { file ->
+                    zip.putNextEntry(ZipEntry("background/${file.name}"))
+                    file.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                }
             }
         }
     }.isSuccess
@@ -189,6 +210,7 @@ class BoardRepository(private val context: Context) {
 
     private fun importZip(stream: InputStream) {
         soundsDir.mkdirs()
+        backgroundsDir.mkdirs()
         ZipInputStream(stream).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
@@ -196,6 +218,10 @@ class BoardRepository(private val context: Context) {
                     entry.name == "board.json" -> boardFile.outputStream().use { zip.copyTo(it) }
                     entry.name.startsWith("sounds/") && !entry.isDirectory -> {
                         val target = File(soundsDir, entry.name.removePrefix("sounds/"))
+                        target.outputStream().use { zip.copyTo(it) }
+                    }
+                    entry.name.startsWith("background/") && !entry.isDirectory -> {
+                        val target = File(backgroundsDir, entry.name.removePrefix("background/"))
                         target.outputStream().use { zip.copyTo(it) }
                     }
                 }

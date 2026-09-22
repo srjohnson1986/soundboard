@@ -178,6 +178,12 @@ class BoardTest {
     }
 
     @Test
+    fun `background color and image default to null`() {
+        assertEquals(null, Board().backgroundColorArgb)
+        assertEquals(null, Board().backgroundImageFileName)
+    }
+
+    @Test
     fun `tileOpacity defaults to fully opaque`() {
         assertEquals(1f, Board().tileOpacity)
     }

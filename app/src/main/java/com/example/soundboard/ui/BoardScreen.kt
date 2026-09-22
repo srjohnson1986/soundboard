@@ -1,5 +1,6 @@
 package com.example.soundboard.ui
 
+import android.content.res.Configuration
 import android.graphics.BitmapFactory
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -121,12 +122,14 @@ import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
@@ -1143,12 +1146,26 @@ private fun PageGrid(
 ) {
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
-    var gridWidthPx by remember { mutableIntStateOf(0) }
+    var gridSizePx by remember { mutableStateOf(IntSize.Zero) }
+    val gridWidthPx = gridSizePx.width
+    val gridHeightPx = gridSizePx.height
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
-    val columns = page.columns
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val spacingPx = with(density) { 8.dp.toPx() }
+    val columns = if (isLandscape && gridWidthPx > 0 && gridHeightPx > 0) {
+        landscapeColumnCount(
+            baseColumns = page.columns,
+            aspectRatio = page.tileAspectRatio,
+            widthPx = gridWidthPx.toFloat(),
+            heightPx = gridHeightPx.toFloat(),
+            spacingPx = spacingPx,
+            minTileWidthPx = with(density) { 56.dp.toPx() }
+        )
+    } else {
+        page.columns
+    }
     val cellStepPx = if (columns > 0 && gridWidthPx > 0) {
         (gridWidthPx - spacingPx * (columns - 1)) / columns + spacingPx
     } else 0f
@@ -1224,7 +1241,7 @@ private fun PageGrid(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 12.dp)
-            .onSizeChanged { gridWidthPx = it.width }
+            .onSizeChanged { gridSizePx = it }
     ) {
         if (split) {
             Row(

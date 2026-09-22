@@ -518,14 +518,15 @@ class BoardViewModel(
 
     /** Single write path: update state, drop orphaned audio, persist. */
     private fun commit(board: Board) {
+        val grown = board.copy(pages = board.pages.map { it.withAutoGrownTrailingRow() })
         val before = allTiles(_board.value).mapNotNull { it.fileName }.toSet()
-        val after = allTiles(board).mapNotNull { it.fileName }.toSet()
-        _board.value = board
+        val after = allTiles(grown).mapNotNull { it.fileName }.toSet()
+        _board.value = grown
 
         (before - after).forEach { player.unload(it) }
 
         viewModelScope.launch(ioDispatcher) {
-            repo.save(board)
+            repo.save(grown)
             // A saved preset references sound files by name without copying them (see
             // PresetRepository) — protect those from pruning too, or clearing/replacing a
             // live tile could delete audio a saved preset still points at.

@@ -343,6 +343,21 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `filling the last empty tile in the last row grows the page by one row`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        val uri = Uri.parse("content://fake/clip.mp3")
+        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("clip".toByteArray()))
+        vm.assignSound("a", uri)
+
+        val page = vm.board.value.currentPage
+        assertEquals(2, page.rows)
+        assertEquals(2, page.tiles.size)
+        assertTrue(page.tiles[1].isEmpty)
+    }
+
+    @Test
     fun `recording start-stop points the tile at the recorded file and loads it`() {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
@@ -458,13 +473,15 @@ class BoardViewModelTest {
         // Board.resized() never drops a tile — shrinking only hides it from
         // visibleTiles. Its sound survives until the tile is cleared directly
         // (see commit 7e67b7d, "Preserve hidden tiles' sounds when shrinking").
+        // A spare blank tile keeps the seeded row from being completely full — this test
+        // is about shrink/reveal, not the auto-grow-a-trailing-row behavior (see BoardTest).
         repo.save(
             Board(
                 pages = listOf(
                     Page(
                         rows = 1,
-                        columns = 2,
-                        tiles = listOf(Tile(id = "a", fileName = "a.mp3"), Tile(id = "b", fileName = "b.mp3"))
+                        columns = 3,
+                        tiles = listOf(Tile(id = "a", fileName = "a.mp3"), Tile(id = "b", fileName = "b.mp3"), Tile(id = "c"))
                     )
                 )
             )
@@ -479,7 +496,7 @@ class BoardViewModelTest {
         assertTrue(repo.soundFile("b.mp3").exists())
         assertFalse(player.unloaded.contains("b.mp3"))
         assertEquals(1, vm.board.value.currentPage.visibleTiles.size)
-        assertEquals(2, vm.board.value.currentPage.tiles.size)
+        assertEquals(3, vm.board.value.currentPage.tiles.size)
     }
 
     @Test

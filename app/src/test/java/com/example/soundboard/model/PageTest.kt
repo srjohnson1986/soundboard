@@ -2,6 +2,7 @@ package com.example.soundboard.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PageTest {
@@ -76,5 +77,40 @@ class PageTest {
 
         assertEquals(1f, page.tileAspectRatio)
         assertEquals(null, page.color)
+    }
+
+    private fun filledTile(id: String) = Tile(id = id, fileName = "$id.mp3")
+
+    @Test
+    fun `withAutoGrownTrailingRow is a no-op when the last row still has a blank tile`() {
+        val page = Page(rows = 1, columns = 2, tiles = listOf(filledTile("a"), Tile(id = "b")))
+
+        val result = page.withAutoGrownTrailingRow()
+
+        assertEquals(page, result)
+    }
+
+    @Test
+    fun `withAutoGrownTrailingRow appends a blank row once the last row is completely filled`() {
+        val page = Page(rows = 1, columns = 2, tiles = listOf(filledTile("a"), filledTile("b")))
+
+        val result = page.withAutoGrownTrailingRow()
+
+        assertEquals(2, result.rows)
+        assertEquals(2, result.columns)
+        assertEquals(4, result.tiles.size)
+        assertEquals(listOf(filledTile("a"), filledTile("b")), result.tiles.take(2))
+        assertTrue(result.tiles.drop(2).all { it.isEmpty })
+    }
+
+    @Test
+    fun `withAutoGrownTrailingRow never reveals tiles hidden by a prior shrink`() {
+        // Same shape resized() leaves behind when shrinking: more backing tiles than
+        // rows x columns currently shows, and the hidden ones happen to be filled too.
+        val page = Page(rows = 1, columns = 1, tiles = listOf(filledTile("a"), filledTile("b")))
+
+        val result = page.withAutoGrownTrailingRow()
+
+        assertEquals(page, result)
     }
 }

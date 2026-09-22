@@ -48,6 +48,16 @@ class PresetRepositoryTest {
     }
 
     @Test
+    fun `save then load round-trips a tile's ttsScript`() {
+        val board = boardNamed("My Layout", Tile(id = "a", label = "Water", ttsScript = "I would like a glass of water please"))
+
+        val id = presetRepo.save(board)
+        val loaded = presetRepo.load(id)
+
+        assertEquals("I would like a glass of water please", loaded?.currentPage?.tiles?.first { it.id == "a" }?.ttsScript)
+    }
+
+    @Test
     fun `list returns saved presets newest first`() {
         val firstId = presetRepo.save(boardNamed("First"))
         File(presetsDir, "$firstId.json").setLastModified(1_000L)

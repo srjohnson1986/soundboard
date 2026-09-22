@@ -21,14 +21,15 @@ section in `docs/USER_GUIDE.md`.
 
 ## `steve-care-board.zip` — "Steve Draft Care Board"
 
-Four pages — **Trouble**, **Needs** (home), **Talking**, **Well Wishes** —
-plus a sticky home row (Hey / Something's wrong / Call the doctor / 911, in
-red — the home page's own first row) fixed above every other page's 6-row x
-4-column grid. Tiles are "Wide"
-(4:3) rather than square, and each page carries its own color identity
-(Trouble amber, Needs blue, Talking neutral, Well Wishes green) so which
+Three pages — **Trouble**, **Needs** (home), **Talking** — plus a sticky
+home row (Hey / Something's wrong / Call the doctor / 911, in red — the
+home page's own first row) fixed above every other page's 6-row x 4-column
+grid. Tiles are "Wide" (4:3) rather than square, and each page carries its
+own color identity (Trouble amber, Needs blue, Talking neutral) so which
 page is active is visible at a glance. This is the layout described in the
-original board-layout planning doc.
+original board-layout planning doc, minus a fourth page, **Well Wishes**,
+that shipped almost entirely unrecorded and was removed until it's properly
+filled in.
 
 Content came together in two passes: an initial pass reused 41 of the 50
 recordings from an earlier flat draft, redistributed onto the new page
@@ -39,12 +40,6 @@ recorded clips are on a tile somewhere in this board.** Trouble and Needs
 (including its sticky first row) are now **fully recorded** (every non-blank tile has real
 audio); Talking is recorded except for "Not that", which has no matching
 clip yet.
-
-**Well Wishes still intentionally ships with only two labeled tiles** ("Mom",
-"Dad") and no audio on either — those are placeholders for messages *Mom
-and Dad themselves* record for the patient, not anything in the recording
-batch (which is all patient-voice utility phrases). The "Get Mom"/"Get Dad"
-summoning clips are a different thing entirely and live on Trouble.
 
 **Recorded but with no slot in this layout** (matches the planning doc's own
 "not tiled yet" list almost exactly): warmth (`good_morning`,
@@ -83,7 +78,7 @@ any other backup.
 ## `jeremy-care-board.zip` — "Jeremy Draft Care Board"
 
 Same layout and tile-for-tile mapping as `steve-care-board.zip` above (same
-four pages, same sticky home row, same colors, same "Wide" tiles, Needs as home)
+three pages, same sticky home row, same colors, same "Wide" tiles, Needs as home)
 built from a separate recording batch in Jeremy's own voice — same 92-clip
 script as Steve's, filename-for-filename identical except for two extras
 (see below).
@@ -114,17 +109,15 @@ Three things differ from Steve's board:
   on Trouble use those as-is (literally placeholder audio) until real names
   get recorded.
 - **`personal_message_jeremy.wav`** doesn't correspond to anything in the
-  board-layout doc's tile list. It's placed on Well Wishes as a third tile
-  labeled "For you", next to the still-empty "Mom"/"Dad" placeholders — a
-  guess at the right home for it; relabel or move it if that's not what it
-  actually is.
+  board-layout doc's tile list. It was tiled as "For you" on the since-removed
+  Well Wishes page (see above); pruned along with that page for now.
 - **`pain_worse_ALT_retake.wav`** is an alternate take of "Pain worse."
   The plain `pain_worse.wav` is what's on the tile; the alt take is left
   unused/spare, same treatment as Steve's ambiguous multi-take clips.
 
 ## `tts-care-board.zip` — "TTS Care Board"
 
-Same four pages, layout, colors, and labels as `jeremy-care-board.zip`, but
+Same three pages, layout, colors, and labels as `jeremy-care-board.zip`, but
 built for zero recording: every tile with a label speaks it via on-device
 text-to-speech (`speakLabel = true`, `fileName = null`) instead of playing a
 clip. There's no `sounds/` directory in this zip at all — nothing to copy —
@@ -132,10 +125,7 @@ so it's a few KB instead of several megabytes.
 
 Bundled in every build (not debug-only), so it always shows up in **Load
 preset** as a way to try the full layout, or hand someone a working board,
-without waiting on any recording. One accepted quirk: Well Wishes' "Mom"/
-"Dad" placeholder tiles (meant for a family member's own recorded message —
-see above) speak the literal word "Mom"/"Dad" here, same as every other
-labeled tile — no special-casing.
+without waiting on any recording.
 
 Most tiles also carry a `Tile.ttsScript` — the actual sentence recorded for
 that clip (e.g. "Water" speaks "Water, please.", "Meds not working" speaks
@@ -144,16 +134,15 @@ to record Jeremy's and Steve's audio, matched to each tile by the fileName
 `jeremy-care-board.zip`'s corresponding tile uses. A few tiles have no real
 sentence to assign and just speak their plain label instead: Trouble's
 "Chime" (a physical sound, not a phrase), Trouble's two "Get ___" name
-templates (the script leaves the name blank), Talking's "Ha!" (a real laugh,
-not a line), and Well Wishes' "For you" (the recording script calls that one
-"just an outline, not a script"). Because the script is matched by fileName
-rather than by re-deriving from the label, it also carries over the one
-labeling quirk noted above verbatim — Talking's "Thanks (quick)" speaks
-"Thank you." here too, since that's what `thank_you_2.wav` actually says.
+templates (the script leaves the name blank), and Talking's "Ha!" (a real
+laugh, not a line). Because the script is matched by fileName rather than by
+re-deriving from the label, it also carries over the one labeling quirk
+noted above verbatim — Talking's "Thanks (quick)" speaks "Thank you." here
+too, since that's what `thank_you_2.wav` actually says.
 
 ## `sarah-care-board.zip` — "Sarah (ElevenLabs) Care Board"
 
-Same four pages, layout, colors, and sticky home row as `jeremy-care-board.zip`,
+Same three pages, layout, colors, and sticky home row as `jeremy-care-board.zip`,
 recorded with ElevenLabs' Sarah voice instead of a human. The recording
 script for this batch (not checked into the repo) replaced the two generic
 "Get ___" name templates with 5 specific contacts — nurse, husband, wife,

@@ -404,7 +404,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `the bundled jeremy-care-board preset imports and loads as a valid four-page board`() {
+    fun `the bundled jeremy-care-board preset imports and loads as a valid three-page board`() {
         // Regression coverage for the actual shipped preset (presets/jeremy-care-board.zip,
         // mirrored at app/src/main/assets/jeremy-care-board.zip) — guards against the zip
         // and the app's Board schema drifting apart silently.
@@ -414,7 +414,7 @@ class BoardRepositoryTest {
         val board = repo.load()
 
         assertEquals("Jeremy Draft Care Board", board.name)
-        assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
+        assertEquals(listOf("Trouble", "Needs", "Talking"), board.pages.map { it.name })
         assertEquals(1, board.homePageIndex)
         assertTrue(board.stickyHomeRowEnabled)
         // The home page carries an extra sticky first row (4 tiles), so it's one row taller.
@@ -445,7 +445,7 @@ class BoardRepositoryTest {
         val board = repo.load()
 
         assertEquals("TTS Care Board", board.name)
-        assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
+        assertEquals(listOf("Trouble", "Needs", "Talking"), board.pages.map { it.name })
         assertEquals(1, board.homePageIndex)
         assertTrue(board.stickyHomeRowEnabled)
 
@@ -469,11 +469,10 @@ class BoardRepositoryTest {
         // A few have no real sentence to assign and fall back to their plain label.
         assertNull(labeled.first { it.label == "Chime" }.ttsScript)
         assertNull(labeled.first { it.label == "Ha!" }.ttsScript)
-        assertNull(labeled.first { it.label == "For you" }.ttsScript)
     }
 
     @Test
-    fun `the bundled sarah-care-board preset imports and loads as a valid four-page board`() {
+    fun `the bundled sarah-care-board preset imports and loads as a valid three-page board`() {
         // Same layout as jeremy-care-board.zip, but recorded with ElevenLabs' Sarah
         // voice, and Trouble's two generic "Get ___" tiles are 5 named contacts instead.
         val imported = repo.importFromAsset("sarah-care-board.zip")
@@ -482,7 +481,7 @@ class BoardRepositoryTest {
         val board = repo.load()
 
         assertEquals("Sarah (ElevenLabs) Care Board", board.name)
-        assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
+        assertEquals(listOf("Trouble", "Needs", "Talking"), board.pages.map { it.name })
         assertEquals(1, board.homePageIndex)
         assertTrue(board.stickyHomeRowEnabled)
         // Trouble's last row is now completely filled by the 5 new contact tiles, so
@@ -525,7 +524,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `the steve-care-board preset imports and loads as a valid four-page board`() {
+    fun `the steve-care-board preset imports and loads as a valid three-page board`() {
         // presets/steve-care-board.zip is debug-only now (app/src/debug/assets/), not
         // auto-loaded like jeremy-care-board.zip, so this exercises the same import
         // path a user tapping Import would, via a fake content:// uri pointed at the
@@ -540,7 +539,7 @@ class BoardRepositoryTest {
         assertTrue(imported)
         val board = repo.load()
 
-        assertEquals(listOf("Trouble", "Needs", "Talking", "Well Wishes"), board.pages.map { it.name })
+        assertEquals(listOf("Trouble", "Needs", "Talking"), board.pages.map { it.name })
         assertEquals(1, board.homePageIndex)
         assertTrue(board.stickyHomeRowEnabled)
         board.pages.forEachIndexed { index, page ->

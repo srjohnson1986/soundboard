@@ -8,6 +8,15 @@ import java.util.UUID
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
 /**
+ * How pages lay out in landscape. [PAGE_GRID] uses each page's own landscape grid
+ * ([Page.effectiveLandscapeColumns] x [Page.shownLandscapeRows]) with rows kept at
+ * their portrait height; [FIT_TO_SCREEN] reflows the portrait tiles into however many
+ * columns fit 4 rows on screen (the original landscape behavior).
+ */
+@Serializable
+enum class LandscapeLayout { PAGE_GRID, FIT_TO_SCREEN }
+
+/**
  * A tile's border. [colorArgb] null means "Recommended" — resolved to the
  * current theme's outlineVariant color at render time rather than a fixed
  * value, so it looks right in both light and dark mode.
@@ -41,6 +50,9 @@ data class Tile(
 ) {
     val isEmpty: Boolean get() = fileName == null && !speakLabel
 
+    /** Whether the tile holds anything worth keeping on screen — a sound, speech, or even just a label still awaiting a recording. */
+    val hasContent: Boolean get() = !isEmpty || label.isNotBlank()
+
     /** What TTS actually says for this tile: [ttsScript] when set, otherwise [label]. */
     val speechText: String get() = ttsScript?.takeIf { it.isNotBlank() } ?: label
 }
@@ -62,16 +74,68 @@ data class Page(
     /** Per-page opacity override, 0..1; null inherits the board's global setting. Overridden per-tile by [Tile.opacity]. */
     val opacity: Float? = null,
     /** Per-page border override; null inherits the board's global setting. Overridden per-tile by [Tile.border]. */
-    val border: TileBorder? = null
+    val border: TileBorder? = null,
+    /** Landscape grid rows; null derives it from [rows] (see [configuredLandscapeRows]). */
+    val landscapeRows: Int? = null,
+    /** Landscape grid columns; null derives it from [columns] (see [effectiveLandscapeColumns]). */
+    val landscapeColumns: Int? = null
 ) {
-    /** Tiles currently shown on the grid, in row-major order. */
+    /** Tiles currently shown on the portrait grid, in row-major order. */
     val visibleTiles: List<Tile> get() = tiles.take(rows * columns)
 
+    /** Landscape columns: [landscapeColumns] when set, otherwise twice the portrait [columns]. */
+    val effectiveLandscapeColumns: Int get() = landscapeColumns ?: defaultLandscapeColumns(columns)
+
     /**
-     * Changes the visible grid size without ever dropping a tile. Shrinking just
-     * hides the trailing tiles — their sound stays assigned — and growing reveals
-     * them again, only appending fresh empty tiles if the page has never been
-     * this large. The only way to lose a tile's sound is clearing it directly.
+     * Landscape rows before content is accounted for: [landscapeRows] when set, otherwise
+     * half the portrait [rows] (rounded up) plus one — rows keep their portrait height in
+     * landscape, so this roughly fills the shorter screen and always leaves spare blanks.
+     */
+    val configuredLandscapeRows: Int get() = landscapeRows ?: defaultLandscapeRows(rows)
+
+    /** Rows landscape actually shows: [configuredLandscapeRows], extended so no tile with content is hidden. */
+    val shownLandscapeRows: Int get() = maxOf(configuredLandscapeRows, rowsNeededFor(effectiveLandscapeColumns))
+
+    /** Tiles shown on the landscape grid (under [LandscapeLayout.PAGE_GRID]), in row-major order. */
+    val landscapeTiles: List<Tile> get() = tiles.take(shownLandscapeRows * effectiveLandscapeColumns)
+
+    /** Rows needed at [gridColumns] wide to reach the last tile with a sound or label; 0 if there is none. */
+    fun rowsNeededFor(gridColumns: Int): Int {
+        if (gridColumns <= 0) return 0
+        val last = tiles.indexOfLast { it.hasContent }
+        return if (last < 0) 0 else last / gridColumns + 1
+    }
+
+    /**
+     * Brings the page back in line with its layout rules after any change, so neither
+     * orientation ever hides a tile with content: portrait [rows] grow to reach the last
+     * such tile (e.g. one filled in a landscape-only slot), a completely filled last row
+     * gets a fresh blank row after it (see [withAutoGrownTrailingRow]), and the backing
+     * list is padded with blank tiles to cover every landscape slot too.
+     */
+    fun normalized(): Page {
+        var page = this
+        val needed = page.rowsNeededFor(page.columns)
+        if (needed > page.rows) page = page.resized(needed, page.columns)
+        page = page.withAutoGrownTrailingRow()
+        if (page.landscapeRows != null) {
+            val landscapeColumns = page.effectiveLandscapeColumns
+            val lastRow = page.landscapeTiles.takeLast(landscapeColumns)
+            val lastRowFull = lastRow.size == landscapeColumns && lastRow.none { it.isEmpty }
+            page = page.copy(landscapeRows = page.shownLandscapeRows + if (lastRowFull) 1 else 0)
+        }
+        val slots = page.shownLandscapeRows * page.effectiveLandscapeColumns
+        if (page.tiles.size < slots) {
+            page = page.copy(tiles = page.tiles + List(slots - page.tiles.size) { Tile() })
+        }
+        return page
+    }
+
+    /**
+     * Changes the portrait grid size without ever dropping a tile. Shrinking hides
+     * trailing blank tiles, and growing reveals them again, only appending fresh empty
+     * tiles if the page has never been this large. [normalized] then keeps the rows
+     * from shrinking past any tile with content, so no sound is ever hidden.
      */
     fun resized(newRows: Int, newColumns: Int): Page {
         val target = newRows * newColumns
@@ -84,14 +148,12 @@ data class Page(
     }
 
     /**
-     * Appends a fresh blank row once every tile in the last visible row is filled, so
-     * there's always at least one blank tile to add a new pad to without opening Page
-     * options first. Never fires on a page that's currently shrunk with hidden trailing
-     * tiles ([tiles] longer than [rows] x [columns], see [resized]) — revealing those is
-     * what a manual resize is for; auto-grow only ever adds a genuinely new row.
+     * Appends a fresh blank row once every tile in the last visible portrait row is
+     * filled, so there's always at least one blank tile to add a new pad to without
+     * opening Page options first.
      */
     fun withAutoGrownTrailingRow(): Page {
-        if (rows <= 0 || columns <= 0 || tiles.size > rows * columns) return this
+        if (rows <= 0 || columns <= 0) return this
         val lastRow = visibleTiles.takeLast(columns)
         return if (lastRow.size == columns && lastRow.none { it.isEmpty }) {
             resized(rows + 1, columns)
@@ -100,16 +162,24 @@ data class Page(
         }
     }
 
-    /** Reorders the visible tiles by moving [fromIndex] to [toIndex]; hidden tiles are untouched. */
+    /**
+     * Reorders tiles by moving [fromIndex] to [toIndex]. Indexes are into the full
+     * backing list, since portrait and landscape each show a different-length prefix of it.
+     */
     fun moved(fromIndex: Int, toIndex: Int): Page {
-        val visibleCount = rows * columns
-        if (fromIndex !in 0 until visibleCount || toIndex !in 0 until visibleCount || fromIndex == toIndex) {
-            return this
-        }
-        val visible = tiles.take(visibleCount).toMutableList()
-        val tile = visible.removeAt(fromIndex)
-        visible.add(toIndex, tile)
-        return copy(tiles = visible + tiles.drop(visibleCount))
+        if (fromIndex !in tiles.indices || toIndex !in tiles.indices || fromIndex == toIndex) return this
+        val next = tiles.toMutableList()
+        val tile = next.removeAt(fromIndex)
+        next.add(toIndex, tile)
+        return copy(tiles = next)
+    }
+
+    companion object {
+        /** Landscape columns for a page with [columns] portrait columns and no override. */
+        fun defaultLandscapeColumns(columns: Int): Int = columns * 2
+
+        /** Landscape rows for a page with [rows] portrait rows and no override: half (rounded up) plus one. */
+        fun defaultLandscapeRows(rows: Int): Int = (rows + 1) / 2 + 1
     }
 }
 
@@ -149,6 +219,8 @@ data class Board(
     val tileOpacity: Float = 1f,
     /** Global tile border; overridden per-page by [Page.border] and per-tile by [Tile.border]. */
     val tileBorder: TileBorder = TileBorder(),
+    /** How pages lay out in landscape: each page's own landscape grid, or auto-fit to the screen. */
+    val landscapeLayout: LandscapeLayout = LandscapeLayout.PAGE_GRID,
     /** Forward-looking marker for the on-disk schema shape; not branched on yet. */
     val schemaVersion: Int = CURRENT_SCHEMA_VERSION
 ) {
@@ -162,6 +234,9 @@ data class Board(
 
     /** Whether any tile on any page has a sound or speech set up, for gating destructive replace actions. */
     val hasAnySound: Boolean get() = pages.any { page -> page.tiles.any { !it.isEmpty } }
+
+    /** Every page brought in line with its layout rules; see [Page.normalized]. */
+    fun normalized(): Board = copy(pages = pages.map { it.normalized() })
 
     /** Applies [transform] to the current page only, leaving the rest of the board untouched. */
     fun updatingCurrentPage(transform: (Page) -> Page): Board =

@@ -71,14 +71,22 @@ regardless of Save/Cancel — only the name is staged until you tap Save.
 Open the **☰** menu, tap **Grid size (N x M)**, adjust rows/columns with the
 +/- steppers, pick a tile shape (see below), and tap **Apply**.
 
-Shrinking the grid doesn't delete anything — it just hides the tiles that no
-longer fit, starting from the end. Grow the grid back to the same size (or
-larger) and they reappear exactly as you left them, sounds included. The
-only way to actually lose a tile's sound is to clear it directly.
+Shrinking the grid doesn't delete anything, and it never hides a tile that
+has a sound or a label. Rows stop shrinking at the last such tile, and only
+blank tiles past it are tucked away. The only way to actually lose a tile's
+sound is to clear it directly.
 
 **Tile shape** — **Square** (the default) or **Wide**. A grid with more rows
 than columns tends to need Wide so two-line labels fit without wrapping to a
 cramped third line. This is a per-page setting, alongside rows/columns.
+
+**Landscape** — turning the device sideways shows the same tiles in a wider
+grid: twice the columns, and about half the rows plus one, so there are always
+a few blank tiles ready to fill. Rows stay the same height as in portrait. To
+pick a different landscape size for a page, turn on **Custom landscape size**
+in Grid size. A tile filled in landscape also shows up in portrait; the page
+simply gets another row. To go back to the old behavior of adding columns until
+4 rows fit on screen, set **Settings → Landscape layout** to **Fit to screen**.
 
 ## Pages
 

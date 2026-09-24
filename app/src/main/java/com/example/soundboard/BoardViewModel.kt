@@ -19,6 +19,7 @@ import com.example.soundboard.data.RecentPresetEntry
 import com.example.soundboard.data.RecentPresetsRepository
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Board
+import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
@@ -300,6 +301,15 @@ class BoardViewModel(
 
     fun setTileAspectRatio(index: Int, ratio: Float) {
         commit(_board.value.updatingPage(index) { it.copy(tileAspectRatio = ratio) })
+    }
+
+    /** Per-page landscape grid; null for either dimension derives it from the portrait grid. */
+    fun setLandscapeGrid(index: Int, rows: Int?, columns: Int?) {
+        commit(_board.value.updatingPage(index) { it.copy(landscapeRows = rows, landscapeColumns = columns) })
+    }
+
+    fun setLandscapeLayout(layout: LandscapeLayout) {
+        commit(_board.value.copy(landscapeLayout = layout))
     }
 
     fun setPageColor(index: Int, colorArgb: Int?) {
@@ -598,7 +608,7 @@ class BoardViewModel(
 
     /** Single write path: update state, drop orphaned audio, persist. */
     private fun commit(board: Board) {
-        val grown = board.copy(pages = board.pages.map { it.withAutoGrownTrailingRow() })
+        val grown = board.normalized()
         val before = allTiles(_board.value).mapNotNull { it.fileName }.toSet()
         val after = allTiles(grown).mapNotNull { it.fileName }.toSet()
         _board.value = grown

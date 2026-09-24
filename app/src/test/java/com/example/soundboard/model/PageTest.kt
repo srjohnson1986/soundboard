@@ -104,13 +104,110 @@ class PageTest {
     }
 
     @Test
-    fun `withAutoGrownTrailingRow never reveals tiles hidden by a prior shrink`() {
-        // Same shape resized() leaves behind when shrinking: more backing tiles than
-        // rows x columns currently shows, and the hidden ones happen to be filled too.
-        val page = Page(rows = 1, columns = 1, tiles = listOf(filledTile("a"), filledTile("b")))
+    fun `landscape defaults to twice the columns and half the rows rounded up plus one`() {
+        assertEquals(8, Page(rows = 4, columns = 4).effectiveLandscapeColumns)
+        assertEquals(3, Page(rows = 4, columns = 4).configuredLandscapeRows)
+        assertEquals(4, Page(rows = 5, columns = 4).configuredLandscapeRows)
+        assertEquals(2, Page(rows = 1, columns = 1).configuredLandscapeRows)
+        assertEquals(2, Page(rows = 1, columns = 1).effectiveLandscapeColumns)
+    }
 
-        val result = page.withAutoGrownTrailingRow()
+    @Test
+    fun `landscape overrides replace the derived defaults`() {
+        val page = Page(rows = 4, columns = 4, landscapeRows = 2, landscapeColumns = 5)
 
-        assertEquals(page, result)
+        assertEquals(5, page.effectiveLandscapeColumns)
+        assertEquals(2, page.configuredLandscapeRows)
+    }
+
+    @Test
+    fun `normalized pads the backing list to cover every landscape slot`() {
+        val page = Page(rows = 4, columns = 4, tiles = (0 until 16).map { tile("t$it") })
+
+        val result = page.normalized()
+
+        // 8 columns x 3 rows in landscape.
+        assertEquals(24, result.tiles.size)
+        assertEquals(page.tiles, result.tiles.take(16))
+        assertEquals(24, result.landscapeTiles.size)
+        assertEquals(16, result.visibleTiles.size)
+    }
+
+    @Test
+    fun `a tile filled in a landscape-only slot grows the portrait rows to show it`() {
+        val tiles = (0 until 24).map { if (it == 19) filledTile("t$it") else tile("t$it") }
+        val page = Page(rows = 4, columns = 4, tiles = tiles)
+
+        val result = page.normalized()
+
+        assertEquals(5, result.rows)
+        assertTrue(result.visibleTiles.any { it.id == "t19" })
+    }
+
+    @Test
+    fun `shrinking never hides a tile with content`() {
+        val tiles = (0 until 16).map { if (it == 13) filledTile("t$it") else tile("t$it") }
+        val page = Page(rows = 4, columns = 4, tiles = tiles)
+
+        val result = page.resized(2, 4).normalized()
+
+        assertEquals(4, result.rows)
+        assertTrue(result.visibleTiles.any { it.id == "t13" })
+    }
+
+    @Test
+    fun `a label still awaiting a recording counts as content`() {
+        val tiles = (0 until 16).map { if (it == 13) tile("t$it", label = "Water") else tile("t$it") }
+
+        val result = Page(rows = 4, columns = 4, tiles = tiles).resized(2, 4).normalized()
+
+        assertEquals(4, result.rows)
+    }
+
+    @Test
+    fun `shrinking still hides trailing blank tiles`() {
+        val page = Page(rows = 4, columns = 4, tiles = (0 until 16).map { tile("t$it") })
+
+        val result = page.resized(2, 4).normalized()
+
+        assertEquals(2, result.rows)
+        assertEquals(8, result.visibleTiles.size)
+    }
+
+    @Test
+    fun `landscape rows extend past a too-small override to reach content`() {
+        val tiles = (0 until 8).map { if (it == 5) filledTile("t$it") else tile("t$it") }
+        val page = Page(rows = 4, columns = 2, tiles = tiles, landscapeRows = 1, landscapeColumns = 2)
+
+        assertEquals(3, page.shownLandscapeRows)
+        assertTrue(page.landscapeTiles.any { it.id == "t5" })
+    }
+
+    @Test
+    fun `normalized adds a blank landscape row once an overridden landscape grid's last row is full`() {
+        val tiles = listOf(filledTile("a"), filledTile("b"), tile("c"), tile("d"))
+        val page = Page(rows = 2, columns = 2, tiles = tiles, landscapeRows = 1, landscapeColumns = 2)
+
+        val result = page.normalized()
+
+        assertEquals(2, result.landscapeRows)
+        assertTrue(result.landscapeTiles.last().isEmpty)
+    }
+
+    @Test
+    fun `normalized is idempotent`() {
+        val tiles = (0 until 24).map { if (it == 19) filledTile("t$it") else tile("t$it") }
+        val once = Page(rows = 4, columns = 4, tiles = tiles).normalized()
+
+        assertEquals(once, once.normalized())
+    }
+
+    @Test
+    fun `moved can reach tiles past the portrait grid`() {
+        val page = Page(rows = 1, columns = 2, tiles = (0 until 4).map { tile("t$it") })
+
+        val result = page.moved(0, 3)
+
+        assertEquals(listOf("t1", "t2", "t3", "t0"), result.tiles.map { it.id })
     }
 }

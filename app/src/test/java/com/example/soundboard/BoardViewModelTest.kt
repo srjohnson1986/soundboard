@@ -354,8 +354,8 @@ class BoardViewModelTest {
 
         val page = vm.board.value.currentPage
         assertEquals(2, page.rows)
-        assertEquals(2, page.tiles.size)
-        assertTrue(page.tiles[1].isEmpty)
+        assertEquals(2, page.visibleTiles.size)
+        assertTrue(page.visibleTiles[1].isEmpty)
     }
 
     @Test
@@ -470,12 +470,10 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `shrinking the grid preserves the audio of hidden tiles`() {
-        // Board.resized() never drops a tile — shrinking only hides it from
-        // visibleTiles. Its sound survives until the tile is cleared directly
-        // (see commit 7e67b7d, "Preserve hidden tiles' sounds when shrinking").
-        // A spare blank tile keeps the seeded row from being completely full — this test
-        // is about shrink/reveal, not the auto-grow-a-trailing-row behavior (see BoardTest).
+    fun `shrinking the grid never hides or drops a tile with a sound`() {
+        // Page.resized() never drops a tile, and Page.normalized() keeps rows from
+        // shrinking past the last tile with content — so a sound is never hidden in
+        // either orientation, and survives until the tile is cleared directly.
         repo.save(
             Board(
                 pages = listOf(
@@ -493,11 +491,13 @@ class BoardViewModelTest {
 
         vm.resize(0, 1, 1)
 
+        val page = vm.board.value.currentPage
         assertTrue(repo.soundFile("a.mp3").exists())
         assertTrue(repo.soundFile("b.mp3").exists())
         assertFalse(player.unloaded.contains("b.mp3"))
-        assertEquals(1, vm.board.value.currentPage.visibleTiles.size)
-        assertEquals(3, vm.board.value.currentPage.tiles.size)
+        assertEquals(1, page.columns)
+        // Two rows reach "b"; that last row is then full, so one blank row follows it.
+        assertEquals(listOf("a", "b", "c"), page.visibleTiles.map { it.id })
     }
 
     @Test

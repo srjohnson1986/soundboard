@@ -55,7 +55,7 @@ class BoardRepository(private val context: Context) {
             )
         }
         val sanitized = sanitizeMissingSounds(migrateHomePageIndex(board, root))
-        sanitized.copy(pages = sanitized.pages.map { it.withAutoGrownTrailingRow() })
+        sanitized.normalized()
     }.getOrElse { Board() }
 
     /**

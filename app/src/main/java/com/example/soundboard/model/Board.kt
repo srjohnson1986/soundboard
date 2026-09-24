@@ -31,6 +31,29 @@ enum class RowHeight(val maxScale: Float) {
     UNLIMITED(Float.POSITIVE_INFINITY)
 }
 
+/** Typeface for tile labels. The two hyperlegible fonts are bundled (SIL OFL); the rest ship with Android. */
+@Serializable
+enum class LabelFont { DEFAULT, CONDENSED, SERIF, ATKINSON_HYPERLEGIBLE, LEXEND }
+
+/**
+ * How tile labels are drawn. Each grid uses one font size for all of its labels — the
+ * largest in [minSizeSp]..[maxSizeSp] at which every label fits its tile — so labels grow
+ * on big tiles (few columns) without one short label towering over its neighbors.
+ */
+@Serializable
+data class LabelStyle(
+    val minSizeSp: Float = 14f,
+    val maxSizeSp: Float = 32f,
+    val font: LabelFont = LabelFont.DEFAULT,
+    val bold: Boolean = false,
+    val allCaps: Boolean = false
+) {
+    companion object {
+        /** The sizes Settings offers for either end of the range. */
+        val SIZE_RANGE_SP = 10f..48f
+    }
+}
+
 /**
  * A tile's border. [colorArgb] null means "Recommended" — resolved to the
  * current theme's outlineVariant color at render time rather than a fixed
@@ -240,6 +263,8 @@ data class Board(
     val landscapeLayout: LandscapeLayout = LandscapeLayout.PAGE_GRID,
     /** Global row height cap; overridden per-page by [Page.rowHeight]. */
     val rowHeight: RowHeight = RowHeight.STANDARD,
+    /** Font, size range, weight and case for every tile label on the board. */
+    val labelStyle: LabelStyle = LabelStyle(),
     /** Forward-looking marker for the on-disk schema shape; not branched on yet. */
     val schemaVersion: Int = CURRENT_SCHEMA_VERSION
 ) {

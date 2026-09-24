@@ -90,6 +90,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -132,12 +133,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -146,6 +149,8 @@ import com.example.soundboard.BoardViewModel
 import com.example.soundboard.PresetRef
 import com.example.soundboard.StrayClip
 import com.example.soundboard.data.SavedPreset
+import com.example.soundboard.model.LabelFont
+import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.RowHeight
@@ -170,6 +175,71 @@ private fun rowHeightLabel(rowHeight: RowHeight) = when (rowHeight) {
     RowHeight.TALL -> "Tall"
     RowHeight.EXTRA_TALL -> "Extra tall"
     RowHeight.UNLIMITED -> "No limit"
+}
+
+/** Settings' "Tile labels" section: font, size range, bold and all caps, with a live sample. */
+@Composable
+private fun LabelStyleControls(labelStyle: LabelStyle, onChange: (LabelStyle) -> Unit) {
+    Text("Tile labels", style = MaterialTheme.typography.bodyMedium)
+    OptionDropdown(
+        label = "Font",
+        selected = labelStyle.font,
+        options = LabelFont.entries,
+        optionLabel = { it.displayName() },
+        onSelect = { onChange(labelStyle.copy(font = it)) }
+    )
+    // Dragging only moves the slider; the board (and disk) update once, on release.
+    var sizeRange by remember(labelStyle.minSizeSp, labelStyle.maxSizeSp) {
+        mutableStateOf(labelStyle.minSizeSp..labelStyle.maxSizeSp)
+    }
+    Text(
+        "Text size: ${sizeRange.start.roundToInt()}–${sizeRange.endInclusive.roundToInt()} sp",
+        style = MaterialTheme.typography.bodySmall
+    )
+    RangeSlider(
+        value = sizeRange,
+        onValueChange = { sizeRange = it },
+        valueRange = LabelStyle.SIZE_RANGE_SP,
+        onValueChangeFinished = {
+            onChange(
+                labelStyle.copy(
+                    minSizeSp = sizeRange.start.roundToInt().toFloat(),
+                    maxSizeSp = sizeRange.endInclusive.roundToInt().toFloat()
+                )
+            )
+        }
+    )
+    Text(
+        "Each page's labels share the largest size that still fits all of its tiles, " +
+            "so labels grow on pages with fewer columns and never go below the smaller number.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Bold")
+        Switch(checked = labelStyle.bold, onCheckedChange = { onChange(labelStyle.copy(bold = it)) })
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("All caps")
+        Switch(checked = labelStyle.allCaps, onCheckedChange = { onChange(labelStyle.copy(allCaps = it)) })
+    }
+    val sample = "Call the doctor"
+    Text(
+        text = if (labelStyle.allCaps) sample.uppercase() else sample,
+        style = baseLabelTextStyle(labelStyle).copy(fontSize = sizeRange.start.roundToInt().sp),
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    )
 }
 
 /** A read-only dropdown picking one of [options]. */
@@ -760,6 +830,7 @@ fun BoardScreen(
                     homePage = homePage,
                     landscapeLayout = board.landscapeLayout,
                     boardRowHeight = board.rowHeight,
+                    labelStyle = board.labelStyle,
                     activeColumns = activePageColumns,
                     editMode = editMode,
                     pageColor = homePage.color?.let { Color(it) },
@@ -812,6 +883,7 @@ fun BoardScreen(
                         globalTileBorder = if (performanceModeEnabled) TileBorder() else board.tileBorder,
                         landscapeLayout = board.landscapeLayout,
                         boardRowHeight = board.rowHeight,
+                        labelStyle = board.labelStyle,
                         onEffectiveColumnsChanged = { activePageColumns = it },
                         referenceHeightPx = contentAreaHeightPx,
                         pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
@@ -997,6 +1069,8 @@ pageOpacityDialogIndex?.let { index ->
             onLandscapeLayoutChange = vm::setLandscapeLayout,
             rowHeight = board.rowHeight,
             onRowHeightChange = vm::setRowHeight,
+            labelStyle = board.labelStyle,
+            onLabelStyleChange = vm::setLabelStyle,
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1189,6 +1263,30 @@ private val GRID_PADDING = 12.dp
 /** Gap between neighboring tiles, both across and down. */
 private val TILE_SPACING = 8.dp
 
+/** Inset between a tile's edge and its label. */
+private val TILE_CONTENT_PADDING = 6.dp
+
+/**
+ * The shared label style for a grid of [tiles], each [tileWidthPx] x [tileHeightPx]: one
+ * size for every label, as large as [labelStyle] allows while all of them still fit.
+ */
+@Composable
+private fun rememberTilesLabelStyle(
+    tiles: List<Tile>,
+    tileWidthPx: Float,
+    tileHeightPx: Float,
+    labelStyle: LabelStyle
+): TextStyle {
+    val insetPx = with(LocalDensity.current) { (TILE_CONTENT_PADDING * 2).toPx() }
+    val texts = remember(tiles, labelStyle.allCaps) { tiles.map { tileDisplayText(it, labelStyle.allCaps) } }
+    return rememberGridLabelStyle(
+        texts = texts,
+        boxWidthPx = (tileWidthPx - insetPx).toInt(),
+        boxHeightPx = (tileHeightPx - insetPx).toInt(),
+        labelStyle = labelStyle
+    )
+}
+
 /**
  * [page]'s row height: its portrait row height, capped by its row height setting (the
  * page's own override, else [boardRowHeight]) — see [cappedRowHeightPx]. Used in portrait
@@ -1230,6 +1328,7 @@ private fun PinnedRow(
     homePage: Page,
     landscapeLayout: LandscapeLayout,
     boardRowHeight: RowHeight,
+    labelStyle: LabelStyle,
     activeColumns: Int?,
     editMode: Boolean,
     pageColor: Color?,
@@ -1256,11 +1355,17 @@ private fun PinnedRow(
     val tiles = if (usePageGrid) homePage.landscapeTiles else homePage.visibleTiles
     // Fit to screen sizes landscape tiles by their shape alone, as it always has.
     val rowHeight = if (isLandscape && !usePageGrid) null else pageRowHeight(homePage, boardRowHeight)
+    val density = LocalDensity.current
+    var rowWidthPx by remember { mutableIntStateOf(0) }
+    val tileWidthPx = if (columns > 0) (rowWidthPx - with(density) { TILE_SPACING.toPx() } * (columns - 1)) / columns else 0f
+    val tileHeightPx = rowHeight?.let { with(density) { it.toPx() } } ?: (tileWidthPx / homePage.tileAspectRatio)
+    val labelTextStyle = rememberTilesLabelStyle(tiles.take(columns), tileWidthPx, tileHeightPx, labelStyle)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = GRID_PADDING, vertical = 8.dp),
+            .padding(horizontal = GRID_PADDING, vertical = 8.dp)
+            .onSizeChanged { rowWidthPx = it.width },
         horizontalArrangement = Arrangement.spacedBy(TILE_SPACING)
     ) {
         tiles.take(columns).forEach { tile ->
@@ -1269,6 +1374,8 @@ private fun PinnedRow(
                 editMode = editMode,
                 aspectRatio = homePage.tileAspectRatio,
                 rowHeight = rowHeight,
+                labelTextStyle = labelTextStyle,
+                allCaps = labelStyle.allCaps,
                 pageColor = pageColor,
                 opacity = tile.opacity ?: pageOpacity ?: globalTileOpacity,
                 border = tile.border ?: pageBorder ?: globalTileBorder,
@@ -1318,6 +1425,7 @@ private fun PageGrid(
     globalTileBorder: TileBorder,
     landscapeLayout: LandscapeLayout,
     boardRowHeight: RowHeight,
+    labelStyle: LabelStyle,
     onEffectiveColumnsChanged: (Int) -> Unit,
     // The height budget for the landscape column math — measured once, above the pager,
     // covering the space available before the sticky row (PinnedRow) is subtracted. Using
@@ -1365,11 +1473,9 @@ private fun PageGrid(
         (gridWidthPx - spacingPx * (columns - 1)) / columns
     } else 0f
     val cellStepXPx = if (tileWidthPx > 0f) tileWidthPx + spacingPx else 0f
-    val cellStepYPx = when {
-        tileWidthPx <= 0f -> 0f
-        rowHeight != null -> with(density) { rowHeight.toPx() } + spacingPx
-        else -> tileWidthPx / page.tileAspectRatio + spacingPx
-    }
+    val tileHeightPx = rowHeight?.let { with(density) { it.toPx() } } ?: (tileWidthPx / page.tileAspectRatio)
+    val cellStepYPx = if (tileWidthPx > 0f) tileHeightPx + spacingPx else 0f
+    val labelTextStyle = rememberTilesLabelStyle(shownTiles, tileWidthPx, tileHeightPx, labelStyle)
 
     fun tileDragModifier(index: Int, tile: Tile): Modifier {
         val isDragged = index == draggedIndex
@@ -1455,6 +1561,8 @@ private fun PageGrid(
                         editMode = editMode,
                         aspectRatio = page.tileAspectRatio,
                         rowHeight = rowHeight,
+                        labelTextStyle = labelTextStyle,
+                        allCaps = labelStyle.allCaps,
                         pageColor = pageColor,
                         opacity = tile.opacity ?: page.opacity ?: globalTileOpacity,
                         border = tile.border ?: page.border ?: globalTileBorder,
@@ -1484,6 +1592,8 @@ private fun PageGrid(
                     editMode = editMode,
                     aspectRatio = page.tileAspectRatio,
                     rowHeight = rowHeight,
+                    labelTextStyle = labelTextStyle,
+                    allCaps = labelStyle.allCaps,
                     pageColor = pageColor,
                     opacity = tile.opacity ?: page.opacity ?: globalTileOpacity,
                     border = tile.border ?: page.border ?: globalTileBorder,
@@ -1514,6 +1624,9 @@ private fun TileCard(
     // setting, and landscape's page grid keeps them at their portrait height even though
     // its tiles are a different width.
     rowHeight: Dp? = null,
+    // The grid's shared label style, already sized by rememberGridLabelStyle.
+    labelTextStyle: TextStyle,
+    allCaps: Boolean,
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
     onLongClick: (() -> Unit)? = null
@@ -1571,18 +1684,14 @@ private fun TileCard(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(6.dp)
+                .padding(TILE_CONTENT_PADDING)
         ) {
             Text(
-                text = when {
-                    tile.label.isNotBlank() -> tile.label
-                    filled -> "Unnamed"
-                    else -> "+"
-                },
+                text = tileDisplayText(tile, allCaps),
                 textAlign = TextAlign.Center,
-                maxLines = 3,
+                maxLines = LABEL_MAX_LINES,
                 overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.labelLarge,
+                style = labelTextStyle,
                 color = contentColor,
                 modifier = Modifier.align(Alignment.Center)
             )
@@ -2228,6 +2337,8 @@ private fun SettingsDialog(
     onLandscapeLayoutChange: (LandscapeLayout) -> Unit,
     rowHeight: RowHeight,
     onRowHeightChange: (RowHeight) -> Unit,
+    labelStyle: LabelStyle,
+    onLabelStyleChange: (LabelStyle) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -2476,6 +2587,8 @@ private fun SettingsDialog(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                LabelStyleControls(labelStyle, onLabelStyleChange)
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text("Landscape layout", style = MaterialTheme.typography.bodyMedium)
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {

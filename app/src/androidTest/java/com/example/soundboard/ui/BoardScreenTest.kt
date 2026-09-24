@@ -149,6 +149,24 @@ class BoardScreenTest {
     }
 
     @Test
+    fun settingsGroupsOpenTheirOwnDialogAndBackReturnsToTheList() {
+        launchWith(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))))
+
+        composeRule.onNodeWithContentDescription("Menu").performClick()
+        composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithText("Screen").performClick()
+        clickSwitchBeside("Keep screen awake")
+        composeRule.waitUntil(timeoutMillis = 2_000) { vm.board.value.keepScreenAwake }
+
+        composeRule.onNodeWithText("Back").performClick()
+        // Back to the group list, whose summary now reflects the change.
+        composeRule.onNodeWithText("Tile labels").assertIsDisplayed()
+        composeRule.onNodeWithText("Stays awake", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Done").performClick()
+        assertEquals(0, composeRule.onAllNodesWithText("Tile labels").fetchSemanticsNodes().size)
+    }
+
+    @Test
     fun saveBoardAsRenamesTheBoard() {
         launchWith(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))))
 
@@ -393,6 +411,7 @@ class BoardScreenTest {
 
         composeRule.onNodeWithContentDescription("Menu").performClick()
         composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithText("Home page").performClick()
         clickSwitchBeside("Sticky home row")
         composeRule.onNodeWithText("Done").performClick()
 

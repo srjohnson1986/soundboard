@@ -470,14 +470,21 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   **Import backup**); and the app-version link at the bottom. Page-level
   actions — add, rename, delete, grid size, page color, and home-page
   selection — live in the tab row and `PageOptionsDialog` instead; see below.
-- **`SettingsDialog` holds board-wide preferences that aren't page content**
+- **Settings is a list of groups, each its own dialog.** `SettingsDialog` shows
+  one row per `SettingsGroup` (Home page, Look, Tile labels, Grid layout,
+  Tapping & speech, Screen) with a summary of its current values; picking one
+  opens `SettingsGroupDialog` via `BoardDialog.SettingsGroupDetail(group)`,
+  whose Back (and the system back gesture) reopens the list and whose Done
+  closes Settings (#169). This keeps any one screen short instead of one long
+  scroll of unrelated controls.
+- **Settings holds board-wide preferences that aren't page content**
   — open on home page, auto-return timeout (`IDLE_TIMEOUT_OPTIONS_MINUTES`,
   `0` means "Off"), long-press duration, theme, background, default tile
   opacity/border, row height, label style, landscape layout and so on. They
   are fields on `Board` itself, so they travel with the board and persist
   through `commit()` like any other board edit. The one exception is
   **Performance mode**, which describes the device rather than the board and
-  lives in `DevicePreferences` (`SharedPreferences`). The dialog takes the
+  lives in `DevicePreferences` (`SharedPreferences`). The group dialog takes the
   `Board` plus a `BoardSettingsActions` (the ViewModel) rather than a value
   and a callback per setting. Unlike `editMode`, which lives entirely in
   Compose state, all of these need to survive process death.

@@ -396,6 +396,7 @@ class LayoutAndLabelTest {
 
         composeRule.onNodeWithContentDescription("Menu").performClick()
         composeRule.onNodeWithText("Settings").performClick()
+        composeRule.onNodeWithText("Tile labels").performClick()
 
         composeRule.onNodeWithText("Preview").assertExists()
         composeRule.onNodeWithText("Smallest (16 sp)").assertExists()

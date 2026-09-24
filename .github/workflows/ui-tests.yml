@@ -5,9 +5,11 @@ name: UI tests
 # so a red run here is a prompt to look, not a blocker. Run it by hand ("Run workflow")
 # before a release.
 
+# Documentation-only changes skip the emulator run (see the matching note in ci.yml).
 on:
   pull_request:
     branches: [master]
+    paths-ignore: ['**/*.md', 'docs/**']
   workflow_dispatch:
 
 permissions:

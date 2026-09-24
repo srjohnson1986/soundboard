@@ -1,10 +1,14 @@
 name: CI
 
+# Documentation-only changes skip CI: nothing in a Markdown file can break the build.
+# Any change that also touches code or build files still runs everything.
 on:
   push:
     branches: [master]
+    paths-ignore: ['**/*.md', 'docs/**']
   pull_request:
     branches: [master]
+    paths-ignore: ['**/*.md', 'docs/**']
   workflow_dispatch:
 
 permissions:

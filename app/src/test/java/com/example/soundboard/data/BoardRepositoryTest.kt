@@ -124,7 +124,7 @@ class BoardRepositoryTest {
 
         assertEquals(2, loaded.currentPage.rows)
         assertEquals(4, loaded.currentPage.visibleTiles.size)
-        assertTrue(loaded.currentPage.tiles.drop(2).all { it.isEmpty })
+        assertTrue(loaded.currentPage.tiles.drop(2).none { it.hasSound })
     }
 
     @Test
@@ -232,7 +232,7 @@ class BoardRepositoryTest {
         val tile = loaded.currentPage.tiles.first { it.id == "a" }
         assertNull(tile.fileName)
         assertEquals("Call Mom", tile.label)
-        assertTrue(tile.isEmpty)
+        assertFalse(tile.hasSound)
     }
 
     @Test
@@ -482,10 +482,10 @@ class BoardRepositoryTest {
         assertTrue("expected some labeled tiles", labeled.isNotEmpty())
         labeled.forEach { tile ->
             assertNull("expected no fileName on \"${tile.label}\"", tile.fileName)
-            assertTrue("expected speakLabel on \"${tile.label}\"", tile.speakLabel)
+            assertTrue("expected speakWhenNoSound on \"${tile.label}\"", tile.speakWhenNoSound)
         }
         blank.forEach { tile ->
-            assertTrue("expected blank tile ${tile.id} to be empty", tile.isEmpty)
+            assertFalse("expected blank tile ${tile.id} to be empty", tile.hasSound)
         }
 
         // Most labeled tiles carry the actual sentence recorded for that clip, not
@@ -522,7 +522,7 @@ class BoardRepositoryTest {
                 page.name == "Trouble" -> {
                     assertEquals(28, page.visibleTiles.size)
                     assertEquals(7, page.rows)
-                    assertTrue(page.visibleTiles.drop(24).all { it.isEmpty })
+                    assertTrue(page.visibleTiles.drop(24).none { it.hasSound })
                 }
                 else -> {
                     assertEquals(24, page.visibleTiles.size)

@@ -15,7 +15,12 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 | `audio/Recorder.kt` | Interface (`start`/`stop`/`cancel`) that `BoardViewModel` depends on for recording — same fake-in-tests seam as `Player`. |
 | `audio/AudioRecorder.kt` | Real `Recorder` implementation: owns a `MediaRecorder`, encoding straight to a file `BoardRepository` hands it. |
 | `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other layers together, single write path. Takes `BoardRepository`/`Player`/`Recorder`/`PresetRepository`/dispatcher as constructor params (see below) rather than constructing them. |
-| `ui/BoardScreen.kt` | Compose UI: sticky home row banner, per-page swipeable grid (`HorizontalPager`), drag-to-reorder, edit dialog, grid-size/preset/page/color dialogs, top bar showing the active board's name, and a tab row for switching pages. |
+| `BoardSettingsActions.kt` | Interface listing every change the Settings dialog can make; `BoardViewModel` implements it, so the dialog takes one object instead of a callback per setting. |
+| `ui/BoardScreen.kt` | The screen: its state (edit mode, the one open `BoardDialog`, the idle timer), the pager, the sticky home row, and the dialog host. |
+| `ui/BoardTopBar.kt` | Title, page tabs (with the long-press gesture) and the hamburger menu. |
+| `ui/PageGrid.kt` | `PageGrid`, `PinnedRow` and `TileCard`: grid layout, drag-to-reorder, tile colors. |
+| `ui/EditTileDialog.kt`, `ui/SettingsDialog.kt`, `ui/PageDialogs.kt`, `ui/BoardManagementDialogs.kt`, `ui/SpeakDialog.kt` | The dialogs, grouped by what they edit. |
+| `ui/Controls.kt` | Shared building blocks: `SwitchRow`, `HelperText`, `ColorPicker`, `SegmentedChoice`, `OverrideSection`, `OptionDropdown`, `Stepper`, opacity/border controls. |
 | `MainActivity.kt` | Just sets content to `SoundboardTheme { BoardScreen() }`. |
 
 Data flows one way: UI calls a `BoardViewModel` function → it updates
@@ -67,14 +72,17 @@ board-level state that isn't grid geometry or page tiles —
 their write paths, and none of them need a dedicated persistence concept
 since they're just more fields in `board.json`. `Board.currentPage` resolves
 the active `Page` (clamping `currentPageIndex` defensively);
-`Board.updatingCurrentPage { transform }` is how every tile/grid mutation
-reaches it without the caller handling the page list itself. `addPage()`,
-`removePage()` (a no-op on the last remaining page), `renamePage()`, and
-`switchTo()` round out page management, all returning a new `Board` like
-every other mutator here.
+`Board.updatingCurrentPage { transform }` is how a grid mutation reaches it
+without the caller handling the page list itself, and
+`Board.updatingTile(tileId) { transform }` edits one tile on whichever page
+holds it. `withPageAdded()`, `withPageRemoved()` (a no-op on the last
+remaining page), `withPageRenamed()`, and `withCurrentPage()` round out page
+management, all returning a new `Board` like every other mutator here. The
+naming is consistent across `Board` and `Page`: `with…` returns a copy with
+something set, `updating…` applies a caller's transform.
 
 **Why `isHome` is per-page, not a board-level index.** It used to be a single
-`Board.homePageIndex: Int?`, which meant `removePage()`/`movedPage()` both had
+`Board.homePageIndex: Int?`, which meant `withPageRemoved()`/`withPageMoved()` both had
 to carry index-remapping logic (shift it down, clear it, or follow a move) any
 time the page list changed shape. Moving the flag onto `Page` itself made that
 bookkeeping unnecessary — deleting a page deletes its `isHome` flag with it,
@@ -82,7 +90,7 @@ and reordering pages doesn't touch `isHome` at all, since it's intrinsic to
 the `Page` object rather than a position in a list. `Board.homePageIndex` is
 kept as a computed property (`pages.indexOfFirst { it.isHome }`) purely so the
 handful of read sites (the auto-return effect, the Home-page toggle) didn't
-need to change at all. `withHomePage(index)`/`clearingHomePage()` are still
+need to change at all. `withHomePage(index)`/`withoutHomePage()` are still
 the write paths, just implemented as `pages.map { it.copy(isHome = ...) }`
 now instead of setting a single field.
 
@@ -96,13 +104,13 @@ page. `stickyHomeRowEnabled` replaced it: when on, `BoardScreen` renders
 `board.homePage.tiles.take(homePage.columns)` fixed above whichever page
 isn't the home page (hidden on the home page itself, since it's already
 showing there as ordinary content). Editing a tile from that banner writes
-straight into the home page's tile list via `BoardViewModel`'s `setHomeRow*`/
-`assignHomeRowSound`/`clearHomeRowTile`/`stopHomeRowRecording` functions —
-the same shape as the page-tile mutators, just targeting
-`Board.updatingPage(homePageIndex)` instead of `updatingCurrentPage`, since
-the home page usually isn't the page you're looking at when you tap its
-banner. There's no separate width setting either — the banner is simply as
-wide as the home page's own `columns`.
+straight into the home page's tile list through the same `BoardViewModel`
+tile editors as any other tile (`setLabel`, `assignSound`, `stopRecording`,
+…): they go through `Board.updatingTile(tileId)`, which finds the tile on
+whichever page holds it. That works because tile ids are unique across a
+board — the banner shows the home page's own tiles, never copies (#155).
+There's no separate width setting either — the banner is simply as wide as
+the home page's own `columns`.
 
 **Each orientation shows a prefix of one shared `tiles` list.** Portrait
 shows `visibleTiles = tiles.take(rows * columns)`. Landscape (under
@@ -125,16 +133,16 @@ Every write goes through `Board.normalized()` (`BoardViewModel.commit` and
 3. pads `tiles` with blanks to cover every landscape slot.
 
 `shownLandscapeRows` also extends past a too-small override at read time.
-`Page.resized()` never drops tiles. Shrinking therefore only hides trailing
+`Page.withGridSize()` never drops tiles. Shrinking therefore only hides trailing
 *blank* tiles; rows stop at the last tile with content.
 
-`Page.moved(fromIndex, toIndex)` indexes into the full `tiles` list, since
+`Page.withTileMoved(fromIndex, toIndex)` indexes into the full `tiles` list, since
 portrait and landscape each show a different-length prefix of it.
 
-Both `resized()` and `moved()` return `this` unchanged on invalid input
+Both `withGridSize()` and `withTileMoved()` return `this` unchanged on invalid input
 (out-of-range indices, no-op moves) rather than throwing — callers don't need
-to pre-validate. `Board`'s own mutators (`addPage`, `removePage`, `renamePage`,
-`switchTo`) follow the same rule for out-of-range indices.
+to pre-validate. `Board`'s own mutators (`withPageRemoved`, `withPageRenamed`,
+`withCurrentPage`, `withPageMoved`) follow the same rule for out-of-range indices.
 
 ## Persistence
 
@@ -181,7 +189,7 @@ to pre-validate. `Board`'s own mutators (`addPage`, `removePage`, `renamePage`,
   doing nothing when tapped, `sanitizeMissingSounds` walks every page's tiles
   (the home page's, sticky-row-eligible or not, included — there's no
   separate list anymore) and resets `fileName` to `null` wherever `soundFile(fileName)`
-  doesn't exist — same label, now honestly `isEmpty`. This runs unconditionally
+  doesn't exist — same label, now honestly without a sound (`!hasSound`). This runs unconditionally
   on every load, not just right after an import, so it also self-heals a
   board whose sound file went missing some other way. It does not rewrite
   `board.json` — the fix-up is in-memory only, and gets persisted naturally
@@ -259,11 +267,11 @@ which is either `Saved(id)` (loaded via `PresetRepository.load()`, then
 `commit()`ed like any other board mutation) or `Factory(assetName, label)`
 (the two bundled zips, still going through `BoardRepository.importFromAsset()`
 exactly as before — they're self-contained zips, not lightweight JSON, so
-they don't need `PresetRepository` at all). `factoryPresets(context)` builds
-that Factory list by attempting `context.assets.open(assetName)` — Steve's
+they don't need `PresetRepository` at all). `factoryPresets()` builds
+that Factory list by asking `BoardRepository.hasAsset(assetName)` — Steve's
 entry simply doesn't appear when its asset isn't packaged (debug builds
 only), the same practical availability the old `BuildConfig.DEBUG`-gated menu
-item had, without importing `BuildConfig` into the ViewModel.
+item had, without importing `BuildConfig` (or a `Context`) into the ViewModel.
 
 `Board.hasAnySound` (any tile on any page with a `fileName`)
 gates the UI's confirm dialog before applying a preset over a board that has
@@ -319,10 +327,10 @@ The flow, split between `EditTileDialog` (permission + button state) and
    writes into — then `recorder.start(file)`. The file is tracked as
    `pendingRecordingFile` and `_isRecording` flips true, which is what turns
    the dialog's button into `Stop (Ns)`.
-3. Tapping **Stop** calls `vm.stopRecording(tileId)` (or `stopHomeRowRecording`
-   for a tile edited via the sticky home row banner), which stops the recorder, `player.load()`s the
+3. Tapping **Stop** calls `vm.stopRecording(tileId)` (the same call for a
+   tile edited via the sticky home row banner), which stops the recorder, `player.load()`s the
    resulting file, and writes `fileName` onto the tile through the normal
-   `updateTiles`/`commit()` path — recording is assigned exactly as
+   `updateTile`/`commit()` path — recording is assigned exactly as
    immediately as picking a file is, not gated behind the dialog's Save
    button.
 4. A failed `MediaRecorder.stop()` (thrown when too little audio was
@@ -411,8 +419,8 @@ pointer-move frame during a drag would mean dozens of disk writes per
 gesture, for a plain reordering where `before == after` every time (no file
 names actually change). Instead:
 
-- `previewMove(from, to)` just sets `_board.value = _board.value.moved(from,
-  to)` — updates the UI instantly, touches nothing on disk.
+- `previewMove(from, to)` just sets `_board.value` to the current page
+  `withTileMoved(from, to)` — updates the UI instantly, touches nothing on disk.
 - `commitOrder()` — called once, from the drag's `onDragEnd` — runs the
   current board through `commit()` as normal.
 
@@ -424,10 +432,18 @@ gesture.
 
 ## The UI layer
 
-`BoardScreen` is one `@Composable` function plus private helpers
-(`PinnedRow`, `PageGrid`, `TileCard`, `EditTileDialog`, `ColorSwatch`,
-`GridSizeDialog`, `PageColorDialog`, `PresetPickerDialog`, `TextInputDialog`,
-`Stepper`). A few things worth knowing if you're touching it:
+`BoardScreen` is the screen-level `@Composable`; the top bar, grid and each
+group of dialogs live in their own files next to it (see "Layers" above), and
+repeated pieces (a label with a switch, helper text, a color swatch row, an
+"override the board's setting" switch) come from `ui/Controls.kt` rather than
+being rebuilt in each dialog. A few things worth knowing if you're touching it:
+
+- **Only one dialog is ever open, so it's one piece of state.** Every dialog is
+  modal, so `BoardScreen` keeps a single `openDialog: BoardDialog?` instead of
+  a show-flag or page index per dialog. The page-scoped variants carry the
+  index of the page they were opened for. `showDialog()` is also where a dialog
+  that lists something from disk (the preset picker, unused-clip cleanup)
+  refreshes that list first.
 
 - **The active board's name lives in the title, not a separate label.**
   `TopAppBar`'s `title` is a two-line `Column`: "Soundboard" (the app) in
@@ -452,36 +468,36 @@ gesture.
   **Import backup**); and the app-version link at the bottom. Page-level
   actions — add, rename, delete, grid size, page color, and home-page
   selection — live in the tab row and `PageOptionsDialog` instead; see below.
-- **`SettingsDialog` holds app-level preferences that aren't page content.**
-  Currently that's **Open on home page** (a `Switch`, unchanged from before —
-  see `BoardViewModel.setOpenOnHomePage`) and **auto-return to home page
-  after**, a `RadioButton` list built from `IDLE_TIMEOUT_OPTIONS_MINUTES`
-  (`0, 1, 2, 5, 10` — `0` means "Off"). Both persist through
-  `SettingsRepository` (`SharedPreferences`, same pattern for each: a
-  `BoardViewModel`-level `StateFlow` seeded from the repo, with a setter that
-  writes through to the repo and then updates the flow). Unlike `editMode`,
-  which lives entirely in Compose state, these two need to be restored across
-  process death, which is why they're modeled this way instead of as plain
-  `remember` state in `BoardScreen`.
+- **`SettingsDialog` holds board-wide preferences that aren't page content**
+  — open on home page, auto-return timeout (`IDLE_TIMEOUT_OPTIONS_MINUTES`,
+  `0` means "Off"), long-press duration, theme, background, default tile
+  opacity/border, row height, label style, landscape layout and so on. They
+  are fields on `Board` itself, so they travel with a preset and persist
+  through `commit()` like any other board edit. The one exception is
+  **Performance mode**, which describes the device rather than the board and
+  lives in `DevicePreferences` (`SharedPreferences`). The dialog takes the
+  `Board` plus a `BoardSettingsActions` (the ViewModel) rather than a value
+  and a callback per setting. Unlike `editMode`, which lives entirely in
+  Compose state, all of these need to survive process death.
 - **Save as preset**/**Load preset** are the same-device version-history
   actions (see "Presets" above), kept visually grouped and separate from
   **Export backup**/**Import backup**. **Save as preset** opens
   `TextInputDialog` against `vm.saveAsPreset()`. **Load preset** calls
   `vm.refreshPresets()` then opens `PresetPickerDialog`, listing
-  `vm.factoryPresets(context)` (bundled zips — Steve's only appears where
+  `vm.factoryPresets()` (bundled zips — Steve's only appears where
   its asset actually opens, i.e. debug builds) above `vm.presets` (on-device
   saved snapshots, newest first). Picking one routes through
   `requestApplyPreset()`, mirroring `requestDeletePage()`'s shape: a confirm
   `AlertDialog` only when `board.hasAnySound`, otherwise `vm.applyPreset()`
   runs immediately.
-- **The last menu item is the app version, `APP_VERSION`** — update it
-  alongside every tagged release (and `versionName` in `app/build.gradle.kts`
-  to match; see `docs/RELEASING.md` for the full cut-a-release checklist).
-  Tapping it fires an `ACTION_VIEW` intent at `RELEASE_URL`, opening
-  a page in the browser; `RELEASE_URL` is `"$RELEASES_BASE_URL/tag/$APP_VERSION"`,
-  landing on that specific version's own release notes rather than the bare
-  `/releases` list. All three constants live next to
-  `IDLE_TIMEOUT_OPTIONS_MINUTES` at the top of the file.
+- **The last menu item is the app version, `APP_VERSION`** — built from
+  `BuildConfig.VERSION_NAME`, so bumping `versionName` in
+  `app/build.gradle.kts` is the only change a release needs (see
+  `docs/RELEASING.md` for the full cut-a-release checklist). Tapping it fires
+  an `ACTION_VIEW` intent at `RELEASE_URL`, opening a page in the browser;
+  `RELEASE_URL` is `"$RELEASES_BASE_URL/tag/$APP_VERSION"`, landing on that
+  specific version's own release notes rather than the bare `/releases`
+  list. All three constants live at the top of `BoardTopBar.kt`.
 - **Pages are a `PrimaryScrollableTabRow` under the `TopAppBar`, always
   shown even for a single page, plus a `HorizontalPager` driving the actual
   grid.** Both the app bar and tab row live inside one `Column` passed to
@@ -508,21 +524,23 @@ gesture.
   `Icons.Filled.Home` — so it reads as "home" without opening anything.
 - **Long-pressing a page's tab opens `PageOptionsDialog`, independent of
   `editMode`.** The tab row's own `pointerInput` (see the Initial-pass note
-  above) sets `pageOptionsIndex = index` on a long-press regardless of
+  above) opens `BoardDialog.PageOptions(index)` on a long-press regardless of
   whether edit mode is on, unlike tile drag-reorder. `PageOptionsDialog` is
   where per-page management actually lives now: **Rename** (`TextInputDialog`
   → `vm.renamePage()`); **Set as home page** (`vm.setHomePage()`, `enabled =
   !isHome` — once a page is already home there's no "remove home" action,
-  only setting a different page as the new home); **Grid size**/**Page
-  color**, opening `GridSizeDialog`/`PageColorDialog` against
-  `vm.resize()`/`vm.setTileAspectRatio()`/`vm.setPageColor()`; **Move
+  only setting a different page as the new home); **Grid size**, opening
+  `GridSizeDialog` against `vm.resize()`/`vm.setTileAspectRatio()`; **Page
+  appearance**, one `PageAppearanceDialog` for the page color plus its
+  optional tile opacity and border overrides (`vm.setPageColor()`/
+  `setPageOpacity()`/`setPageBorder()`); **Move
   left**/**Move right** (`vm.movePage()`, each disabled at its respective end
   of the page list); and **Delete page**, hidden entirely — not just
-  disabled — when `board.pages.size == 1` (matching `Board.removePage()`'s
+  disabled — when `board.pages.size == 1` (matching `Board.withPageRemoved()`'s
   own no-op-on-last-page behavior), and otherwise routing through
   `requestDeletePage()`, which shows a confirm dialog naming how many tiles
   have sounds before calling `vm.deletePage()`, or deletes immediately if the
-  page is all-empty. Because the long-pressed page (`pageOptionsIndex`) isn't
+  page is all-empty. Because the long-pressed page (the dialog's `pageIndex`) isn't
   necessarily the one on screen (`board.currentPageIndex`), `resize()`,
   `setTileAspectRatio()`, and `setPageColor()` all take an explicit page
   `index` and go through `Board.updatingPage(index)` rather than
@@ -540,17 +558,15 @@ gesture.
   grid continuing below from tile `columns`. Drags across that boundary map
   columns proportionally (`dragTargetIndex`), since the pinned row can hold
   fewer, wider tiles than the rows under it.
-- **`editingTarget: EditTarget?`** (a `PageTile(id)` or `HomeRowTile(id)`
-  sealed type) replaces a plain tile-id string precisely so the edit dialog
-  knows which page to look the tile up in and which mutator group
-  (`vm.setLabel`/... vs. `vm.setHomeRowLabel`/...) to call. It's plain Compose
-  state, not part of `Board`. A `LaunchedEffect(board.currentPageIndex)`
-  resets it to `null` on every page switch, but **only when it's a
-  `PageTile`** — a `HomeRowTile` dialog left open survives a page switch
-  cleanly, since it always resolves against the home page regardless of which
-  page is on screen.
+- **The tile editor is `BoardDialog.EditTile(tileId, fromStickyRow)`.** The
+  tile is found by id on whichever page holds it (`Board.findTile`), and
+  edited through the same `vm.setLabel`/... calls either way. It's plain
+  Compose state, not part of `Board`. A `LaunchedEffect(board.currentPageIndex)`
+  closes it on every page switch, but **only when `fromStickyRow` is false** —
+  a page tile's editor would otherwise keep editing a tile no longer on
+  screen, while a sticky-row tile stays visible whichever page is current.
 - **Auto-return to home page.** `lastInteractionAt` is bumped by a local
-  `touch()` call from every meaningful interaction (tile tap, tab tap, a
+  `recordInteraction()` call from every meaningful interaction (tile tap, tab tap, a
   settled swipe) rather than from a low-level raw-pointer listener,  so only
   real interactions with the board reset the countdown. A
   `LaunchedEffect(lastInteractionAt, board.homePageIndex, idleTimeoutMinutes)`
@@ -566,7 +582,7 @@ gesture.
   `TileCard` takes `aspectRatio`/`pageColor` as parameters instead of a
   hardcoded `1f` and a hardcoded `primaryContainer`; `GridSizeDialog` has a
   Square/Wide toggle next to the rows/columns steppers (`vm.setTileAspectRatio()`,
-  4f/3f for "Wide"). A `Tile`'s own `colorArgb` always overrides `pageColor`,
+  `Page.WIDE_TILE_ASPECT_RATIO` — 4:3 — for "Wide"). A `Tile`'s own `colorArgb` always overrides `pageColor`,
   and `pageColor` only applies to **filled** tiles — an empty tile keeps the
   neutral "add a sound here" look regardless of the page's accent.
 - **Tap vs. edit are different gestures on purpose.** A tile's `Card` uses
@@ -576,18 +592,18 @@ gesture.
   anymore (a permanent nested `clickable` there used to crowd small tiles);
   `BoardScreen` holds a top-level `editMode` boolean toggled from the `☰`
   menu, `TileCard` renders the pencil purely as a visual indicator whenever
-  `editMode` is true, and `onTap` checks `tile.isEmpty || editMode` to decide
-  whether a tap on the whole card edits or plays.
+  `editMode` is true, and `onTap` checks `!tile.isPlayable(...) || editMode`
+  to decide whether a tap on the whole card edits or plays.
 - **A labeled-but-empty tile is visually distinct from a plain blank one.**
-  `TileCard`'s `needsRecording = tile.isEmpty && tile.label.isNotBlank()`
+  `TileCard`'s `needsRecording = !tile.hasSound && tile.label.isNotBlank()`
   renders a small 🔇 glyph in the opposite corner from the edit-mode pencil.
   This is the state a generic preset leaves a tile in after
   `BoardRepository.sanitizeMissingSounds()` (see "Persistence") clears a
   `fileName` with nothing behind it — the label still shows (rather than a
   bare "+"), so the board reads as "labeled, still needs a recording"
   instead of either "filled" or "totally empty." Tapping it opens the edit
-  dialog exactly like any other empty tile (`onTap` already checks
-  `tile.isEmpty`, unchanged).
+  dialog exactly like any other empty tile (unless the board's
+  speak-unrecorded-tiles setting makes it speak its label instead).
 - **Drag math.** `cellStepPx` (cell size + spacing, in pixels) is computed
   from the grid's measured width (`Modifier.onSizeChanged`) divided by column
   count. During a drag, the accumulated offset is converted to a row/column
@@ -648,12 +664,12 @@ gesture.
 
 | Layer | File(s) | Runs on |
 |---|---|---|
-| `Page.resized()`/`.moved()`/`.normalized()` and the landscape grid defaults | `test/.../model/PageTest.kt` | plain JVM (JUnit) |
+| `Page.withGridSize()`/`.withTileMoved()`/`.normalized()`, tile opacity/border fallback, and the landscape grid defaults | `test/.../model/PageTest.kt` | plain JVM (JUnit) |
 | Landscape column/row-height math, label size search | `test/.../ui/GridLayoutTest.kt`, `test/.../ui/LabelTextTest.kt` | plain JVM (JUnit) |
-| `Board` page management (`addPage`/`removePage`/`renamePage`/`switchTo`/`withHomePage`) and `hasAnySound` | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
+| `Board` page management (`withPageAdded`/`withPageRemoved`/`withPageRenamed`/`withCurrentPage`/`withHomePage`), `updatingTile`/`findTile`, `soundFileNames`, `Tile.isPlayable`, and `hasAnySound` | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
 | `BoardRepository`, incl. the legacy-schema and `homePageIndex` migrations and additive-field defaults in `load()` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
 | `PresetRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/PresetRepositoryTest.kt` | Robolectric |
-| `BoardViewModel`, incl. home-row mutators, cross-page/preset orphan pruning, record/stop/cancel, and saveAsPreset/applyPreset | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
+| `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/preset orphan pruning, record/stop/cancel, and saveAsPreset/applyPreset | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
 | `BoardScreen`, incl. the sticky home row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 | Landscape grid, row height cap, drag steps, label size/font/caps, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
 

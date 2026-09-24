@@ -172,18 +172,18 @@ internal fun GridSizeDialog(
     ) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var r by remember { mutableIntStateOf(rows) }
-    var c by remember { mutableIntStateOf(columns) }
-    var wide by remember { mutableStateOf(aspectRatio != 1f) }
+    var portraitRows by remember { mutableIntStateOf(rows) }
+    var portraitColumns by remember { mutableIntStateOf(columns) }
+    var isWide by remember { mutableStateOf(aspectRatio != Page.SQUARE_TILE_ASPECT_RATIO) }
     var customLandscape by remember { mutableStateOf(landscapeRows != null || landscapeColumns != null) }
-    var pageRowHeight by remember { mutableStateOf(rowHeight) }
+    var rowHeightOverride by remember { mutableStateOf(rowHeight) }
     // The derived defaults track the portrait steppers live, so switching to custom
     // starts from exactly what landscape was about to show.
-    val defaultLandscapeRows = Page.defaultLandscapeRows(r)
-    val defaultLandscapeColumns = Page.defaultLandscapeColumns(c)
-    var lr by remember { mutableIntStateOf(landscapeRows ?: defaultLandscapeRows) }
-    var lc by remember { mutableIntStateOf(landscapeColumns ?: defaultLandscapeColumns) }
-    val shrinking = r * c < rows * columns
+    val defaultLandscapeRows = Page.defaultLandscapeRows(portraitRows)
+    val defaultLandscapeColumns = Page.defaultLandscapeColumns(portraitColumns)
+    var customLandscapeRows by remember { mutableIntStateOf(landscapeRows ?: defaultLandscapeRows) }
+    var customLandscapeColumns by remember { mutableIntStateOf(landscapeColumns ?: defaultLandscapeColumns) }
+    val shrinking = portraitRows * portraitColumns < rows * columns
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -194,8 +194,8 @@ internal fun GridSizeDialog(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text("Portrait", style = MaterialTheme.typography.labelMedium)
-                Stepper("Rows", r) { r = it }
-                Stepper("Columns", c) { c = it }
+                Stepper("Rows", portraitRows) { portraitRows = it }
+                Stepper("Columns", portraitColumns) { portraitColumns = it }
                 if (shrinking) {
                     HelperText(
                         "Shrinking only hides blank tiles — rows stop at the last " +
@@ -208,15 +208,15 @@ internal fun GridSizeDialog(
                     checked = customLandscape,
                     onCheckedChange = { on ->
                         if (on) {
-                            lr = defaultLandscapeRows
-                            lc = defaultLandscapeColumns
+                            customLandscapeRows = defaultLandscapeRows
+                            customLandscapeColumns = defaultLandscapeColumns
                         }
                         customLandscape = on
                     }
                 )
                 if (customLandscape) {
-                    Stepper("Landscape rows", lr) { lr = it }
-                    Stepper("Landscape columns", lc) { lc = it }
+                    Stepper("Landscape rows", customLandscapeRows) { customLandscapeRows = it }
+                    Stepper("Landscape columns", customLandscapeColumns) { customLandscapeColumns = it }
                 } else {
                     HelperText("Landscape: $defaultLandscapeRows rows x $defaultLandscapeColumns columns (twice the columns).")
                 }
@@ -235,29 +235,29 @@ internal fun GridSizeDialog(
                     Text("Tile shape", modifier = Modifier.weight(1f))
                     SegmentedChoice(
                         options = listOf(false, true),
-                        selected = wide,
+                        selected = isWide,
                         optionLabel = { isWide -> if (isWide) "Wide" else "Square" },
-                        onSelect = { wide = it }
+                        onSelect = { isWide = it }
                     )
                 }
                 OptionDropdown(
                     label = "Max row height",
-                    selected = pageRowHeight,
+                    selected = rowHeightOverride,
                     options = listOf(null) + RowHeight.entries,
                     optionLabel = { it?.let(::rowHeightLabel) ?: "Board default (${rowHeightLabel(boardRowHeight)})" },
-                    onSelect = { pageRowHeight = it }
+                    onSelect = { rowHeightOverride = it }
                 )
             }
         },
         confirmButton = {
             TextButton(onClick = {
                 onConfirm(
-                    r,
-                    c,
-                    if (wide) 4f / 3f else 1f,
-                    lr.takeIf { customLandscape },
-                    lc.takeIf { customLandscape },
-                    pageRowHeight
+                    portraitRows,
+                    portraitColumns,
+                    if (isWide) Page.WIDE_TILE_ASPECT_RATIO else Page.SQUARE_TILE_ASPECT_RATIO,
+                    customLandscapeRows.takeIf { customLandscape },
+                    customLandscapeColumns.takeIf { customLandscape },
+                    rowHeightOverride
                 )
             }) { Text("Apply") }
         },

@@ -90,6 +90,12 @@ internal fun <T> OptionDropdown(
     }
 }
 
+/** Opacity sliders stop at 10% so a tile can never become fully invisible (and untappable-looking). */
+private val OPACITY_RANGE = 0.1f..1f
+
+/** Border width choices, in dp. */
+private val BORDER_WIDTH_RANGE_DP = 0.5f..8f
+
 /** A percentage label + slider for a resolved [Float] opacity, shared by the tile, page, and global surfaces. */
 @Composable
 internal fun OpacityControls(opacity: Float, onChange: (Float?) -> Unit) {
@@ -97,7 +103,7 @@ internal fun OpacityControls(opacity: Float, onChange: (Float?) -> Unit) {
     Slider(
         value = opacity,
         onValueChange = { onChange(it) },
-        valueRange = 0.1f..1f
+        valueRange = OPACITY_RANGE
     )
 }
 
@@ -116,7 +122,7 @@ internal fun BorderControls(border: TileBorder, onChange: (TileBorder) -> Unit) 
     Slider(
         value = border.widthDp,
         onValueChange = { onChange(border.copy(widthDp = it)) },
-        valueRange = 0.5f..8f
+        valueRange = BORDER_WIDTH_RANGE_DP
     )
 }
 
@@ -165,18 +171,23 @@ private fun ColorSwatch(color: Color?, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** Rows or columns a grid can have — every [Stepper] edits one of these. */
+private val GRID_DIMENSION_RANGE = 1..50
+
+/** A label with -/+ buttons around [value], kept within [GRID_DIMENSION_RANGE]. */
 @Composable
 internal fun Stepper(label: String, value: Int, onChange: (Int) -> Unit) {
+    val range = GRID_DIMENSION_RANGE
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(label, modifier = Modifier.weight(1f))
-        IconButton(onClick = { if (value > 1) onChange(value - 1) }) {
+        IconButton(onClick = { if (value > range.first) onChange(value - 1) }) {
             Icon(Icons.Filled.Remove, contentDescription = "Decrease $label")
         }
         Text("$value", style = MaterialTheme.typography.titleMedium)
-        IconButton(onClick = { if (value < 50) onChange(value + 1) }) {
+        IconButton(onClick = { if (value < range.last) onChange(value + 1) }) {
             Icon(Icons.Filled.Add, contentDescription = "Increase $label")
         }
     }

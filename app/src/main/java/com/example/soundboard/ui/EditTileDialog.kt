@@ -55,7 +55,7 @@ internal fun EditTileDialog(
     onColorChange: (Int?) -> Unit,
     onOpacityChange: (Float?) -> Unit,
     onBorderChange: (TileBorder?) -> Unit,
-    onSpeakLabelChange: (Boolean) -> Unit,
+    onSpeakWhenNoSoundChange: (Boolean) -> Unit,
     onPlay: (Tile) -> Unit,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
@@ -136,8 +136,8 @@ internal fun EditTileDialog(
                 }
                 SwitchRow(
                     label = "Speak the label instead",
-                    checked = tile.speakLabel,
-                    onCheckedChange = onSpeakLabelChange,
+                    checked = tile.speakWhenNoSound,
+                    onCheckedChange = onSpeakWhenNoSoundChange,
                     modifier = Modifier.padding(vertical = 4.dp),
                     supportingText = "Used when there's no sound file",
                     labelStyle = MaterialTheme.typography.bodyMedium
@@ -235,7 +235,7 @@ internal fun EditTileDialog(
                     labelStyle = MaterialTheme.typography.labelMedium
                 ) { border -> BorderControls(border, onBorderChange) }
 
-                if (!tile.isEmpty) {
+                if (tile.hasSound) {
                     TextButton(
                         onClick = {
                             onClear()

@@ -15,6 +15,7 @@ import com.example.soundboard.BoardViewModel
 import com.example.soundboard.PresetRef
 import com.example.soundboard.StrayClip
 import com.example.soundboard.data.SavedPreset
+import kotlin.time.Duration.Companion.milliseconds
 
 /** Lists bundled ("Factory") and on-device saved presets to load; picking one hands the choice back for the caller's own confirm gate. */
 @Composable
@@ -62,7 +63,7 @@ private fun PresetRow(name: String, subtitle: String, onClick: () -> Unit) {
 /** Coarse "how long ago" for a saved-preset timestamp — good enough for a picker list, no date library needed. */
 internal fun relativeSavedAt(savedAt: Long): String {
     val elapsedMs = (System.currentTimeMillis() - savedAt).coerceAtLeast(0)
-    val minutes = elapsedMs / 60_000
+    val minutes = elapsedMs.milliseconds.inWholeMinutes
     val hours = minutes / 60
     val days = hours / 24
     return when {

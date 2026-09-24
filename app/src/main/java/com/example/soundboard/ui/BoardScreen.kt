@@ -42,6 +42,7 @@ import com.example.soundboard.model.Board
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.TileBorder
 import java.io.File
+import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 
@@ -92,7 +93,8 @@ fun BoardScreen(
     var isDragActive by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
-    fun touch() {
+    /** Restarts the auto-return idle timer (see the LaunchedEffect keyed on [lastInteractionAt]). */
+    fun recordInteraction() {
         lastInteractionAt = System.currentTimeMillis()
     }
 
@@ -114,7 +116,7 @@ fun BoardScreen(
     // page is cheap to recreate, so deleting it outright isn't worth a dialog.
     fun requestDeletePage(index: Int) {
         val page = board.pages.getOrNull(index) ?: return
-        if (page.tiles.any { !it.isEmpty }) {
+        if (page.hasAnySound) {
             showDialog(BoardDialog.ConfirmDeletePage(index))
         } else {
             vm.deletePage(index)
@@ -135,7 +137,7 @@ fun BoardScreen(
 
     /** A tile tap: plays it, or opens its editor when there's nothing to play or edit mode is on. */
     fun onTileTap(tileId: String, isPlayable: Boolean, fromStickyRow: Boolean, play: () -> Unit) {
-        touch()
+        recordInteraction()
         if (!isPlayable || editMode) {
             showDialog(BoardDialog.EditTile(tileId, fromStickyRow))
         } else {
@@ -169,7 +171,7 @@ fun BoardScreen(
     LaunchedEffect(lastInteractionAt, board.homePageIndex, board.idleTimeoutMinutes) {
         val home = board.homePageIndex ?: return@LaunchedEffect
         if (board.idleTimeoutMinutes <= 0) return@LaunchedEffect
-        delay(board.idleTimeoutMinutes * 60_000L)
+        delay(board.idleTimeoutMinutes.minutes)
         if (home != board.currentPageIndex) {
             vm.switchPage(home)
         }
@@ -197,7 +199,7 @@ fun BoardScreen(
     LaunchedEffect(pagerState) {
         snapshotFlow { pagerState.currentPage }.collect { page ->
             if (!isProgrammaticPageScroll && page != board.currentPageIndex) {
-                touch()
+                recordInteraction()
                 vm.switchPage(page)
             }
         }
@@ -247,7 +249,7 @@ fun BoardScreen(
                     editMode = editMode,
                     onEditModeChange = { editMode = it },
                     onSelectPage = { index ->
-                        touch()
+                        recordInteraction()
                         vm.switchPage(index)
                     },
                     onOpenDialog = ::showDialog,
@@ -293,7 +295,7 @@ fun BoardScreen(
                             ) { vm.play(tile) }
                         },
                         onPreviewSound = { tile ->
-                            touch()
+                            recordInteraction()
                             vm.play(tile)
                         }
                     )
@@ -336,7 +338,7 @@ fun BoardScreen(
                                 ) { vm.play(tile) }
                             },
                             onPreviewSound = { tile ->
-                                touch()
+                                recordInteraction()
                                 vm.play(tile)
                             },
                             onPreviewMove = vm::previewMove,
@@ -370,7 +372,7 @@ fun BoardScreen(
                 onColorChange = { vm.setColor(editing.id, it) },
                 onOpacityChange = { vm.setOpacity(editing.id, it) },
                 onBorderChange = { vm.setBorder(editing.id, it) },
-                onSpeakLabelChange = { vm.setSpeakLabel(editing.id, it) },
+                onSpeakWhenNoSoundChange = { vm.setSpeakWhenNoSound(editing.id, it) },
                 onPlay = vm::play,
                 onStartRecording = vm::startRecording,
                 onStopRecording = { vm.stopRecording(editing.id) },
@@ -506,8 +508,8 @@ fun BoardScreen(
                 pageGridActive = board.landscapeLayout == LandscapeLayout.PAGE_GRID,
                 rowHeight = page.rowHeight,
                 boardRowHeight = board.rowHeight,
-                onConfirm = { r, c, ratio, landscapeRows, landscapeColumns, rowHeight ->
-                    vm.resize(index, r, c)
+                onConfirm = { rows, columns, ratio, landscapeRows, landscapeColumns, rowHeight ->
+                    vm.resize(index, rows, columns)
                     vm.setTileAspectRatio(index, ratio)
                     vm.setLandscapeGrid(index, landscapeRows, landscapeColumns)
                     vm.setPageRowHeight(index, rowHeight)
@@ -530,7 +532,7 @@ fun BoardScreen(
         is BoardDialog.ConfirmDeletePage -> pageAt(dialog.pageIndex)?.let { page ->
             ConfirmDeletePageDialog(
                 pageName = page.name,
-                soundCount = page.tiles.count { !it.isEmpty },
+                soundCount = page.tiles.count { it.hasSound },
                 onConfirm = {
                     vm.deletePage(dialog.pageIndex)
                     closeDialog()

@@ -47,10 +47,10 @@ never `assembleRelease`, so it doesn't need this file at all).
 
 ## Every release
 
-1. Bump `APP_VERSION` in `BoardScreen.kt` and `versionName` in
-   `app/build.gradle.kts` to match (see the note next to `APP_VERSION` in
-   `docs/ARCHITECTURE.md`'s UI-layer section), through the usual
-   issue/branch/PR flow.
+1. Bump `versionName` (and `versionCode`) in `app/build.gradle.kts`, through
+   the usual issue/branch/PR flow. The in-app version label (`APP_VERSION` in
+   `ui/BoardTopBar.kt`) and its release-notes link read `versionName` via
+   `BuildConfig`, so there's nothing else to keep in sync.
 2. Once that's merged, tag the merge commit and push the tag:
    ```bash
    git tag -a vX.Y.Z <commit> -m "vX.Y.Z"

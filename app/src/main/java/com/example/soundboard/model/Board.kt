@@ -1,5 +1,6 @@
 package com.example.soundboard.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -77,8 +78,12 @@ data class Tile(
     val fileName: String? = null,
     val volume: Float = 1f,
     val colorArgb: Int? = null,
-    /** Speak [label] aloud via on-device text-to-speech when there's no [fileName]. */
-    val speakLabel: Boolean = false,
+    /**
+     * Speak [speechText] aloud via on-device text-to-speech when there's no [fileName].
+     * Stored as "speakLabel", its original name, so existing boards and presets still load.
+     */
+    @SerialName("speakLabel")
+    val speakWhenNoSound: Boolean = false,
     /** Longer text to speak instead of [label] — most scripts read better than the short name shown on the tile. Null falls back to [label]. */
     val ttsScript: String? = null,
     /** Per-tile opacity override, 0..1; null inherits the page's, then the board's. */
@@ -86,20 +91,25 @@ data class Tile(
     /** Per-tile border override; null inherits the page's, then the board's. */
     val border: TileBorder? = null
 ) {
-    val isEmpty: Boolean get() = fileName == null && !speakLabel
+    /**
+     * Whether tapping the tile makes a sound of some kind: it has a sound file, or it's set
+     * to speak. A tile without one is "blank", even if it has a label still awaiting a
+     * recording (see [hasContent]).
+     */
+    val hasSound: Boolean get() = fileName != null || speakWhenNoSound
 
     /** Whether the tile holds anything worth keeping on screen — a sound, speech, or even just a label still awaiting a recording. */
-    val hasContent: Boolean get() = !isEmpty || label.isNotBlank()
+    val hasContent: Boolean get() = hasSound || label.isNotBlank()
 
     /** What TTS actually says for this tile: [ttsScript] when set, otherwise [label]. */
     val speechText: String get() = ttsScript?.takeIf { it.isNotBlank() } ?: label
 
     /**
      * Whether tapping this tile does anything: plays its clip, or speaks its [speechText]
-     * when [speakLabel] is on or the board's [Board.speakUnrecordedTilesEnabled] fallback is.
+     * when [speakWhenNoSound] is on or the board's [Board.speakUnrecordedTilesEnabled] fallback is.
      */
     fun isPlayable(speakUnrecordedTilesEnabled: Boolean): Boolean =
-        fileName != null || ((speakLabel || speakUnrecordedTilesEnabled) && speechText.isNotBlank())
+        fileName != null || ((speakWhenNoSound || speakUnrecordedTilesEnabled) && speechText.isNotBlank())
 }
 
 /** One grid of tiles within a [Board]; a board can have several, switched via tabs. */
@@ -110,8 +120,8 @@ data class Page(
     val rows: Int = 4,
     val columns: Int = 4,
     val tiles: List<Tile> = List(16) { Tile() },
-    /** Card width:height, e.g. 1f for square or 4f/3f for wider-than-tall. */
-    val tileAspectRatio: Float = 1f,
+    /** Card width:height: [SQUARE_TILE_ASPECT_RATIO], or [WIDE_TILE_ASPECT_RATIO] for wider-than-tall. */
+    val tileAspectRatio: Float = SQUARE_TILE_ASPECT_RATIO,
     /** Page-identity accent; null keeps today's neutral theme color. Overridden per-tile by [Tile.colorArgb]. */
     val color: Int? = null,
     /** Auto-return snaps back to whichever page has this set; at most one page should. */
@@ -146,6 +156,9 @@ data class Page(
     /** Tiles shown on the landscape grid (under [LandscapeLayout.PAGE_GRID]), in row-major order. */
     val landscapeTiles: List<Tile> get() = tiles.take(shownLandscapeRows * effectiveLandscapeColumns)
 
+    /** Whether any tile on this page has a sound or speech set up — see [Tile.hasSound]. */
+    val hasAnySound: Boolean get() = tiles.any { it.hasSound }
+
     /** [tile]'s opacity: its own override, else this page's, else [boardOpacity]. */
     fun opacityFor(tile: Tile, boardOpacity: Float): Float = tile.opacity ?: opacity ?: boardOpacity
 
@@ -169,12 +182,12 @@ data class Page(
     fun normalized(): Page {
         var page = this
         val needed = page.rowsNeededFor(page.columns)
-        if (needed > page.rows) page = page.resized(needed, page.columns)
+        if (needed > page.rows) page = page.withGridSize(needed, page.columns)
         page = page.withAutoGrownTrailingRow()
         if (page.landscapeRows != null) {
             val landscapeColumns = page.effectiveLandscapeColumns
             val lastRow = page.landscapeTiles.takeLast(landscapeColumns)
-            val lastRowFull = lastRow.size == landscapeColumns && lastRow.none { it.isEmpty }
+            val lastRowFull = lastRow.size == landscapeColumns && lastRow.all { it.hasSound }
             page = page.copy(landscapeRows = page.shownLandscapeRows + if (lastRowFull) 1 else 0)
         }
         val slots = page.shownLandscapeRows * page.effectiveLandscapeColumns
@@ -190,7 +203,7 @@ data class Page(
      * tiles if the page has never been this large. [normalized] then keeps the rows
      * from shrinking past any tile with content, so no sound is ever hidden.
      */
-    fun resized(newRows: Int, newColumns: Int): Page {
+    fun withGridSize(newRows: Int, newColumns: Int): Page {
         val target = newRows * newColumns
         val next = if (tiles.size < target) {
             tiles + List(target - tiles.size) { Tile() }
@@ -208,8 +221,8 @@ data class Page(
     fun withAutoGrownTrailingRow(): Page {
         if (rows <= 0 || columns <= 0) return this
         val lastRow = visibleTiles.takeLast(columns)
-        return if (lastRow.size == columns && lastRow.none { it.isEmpty }) {
-            resized(rows + 1, columns)
+        return if (lastRow.size == columns && lastRow.all { it.hasSound }) {
+            withGridSize(rows + 1, columns)
         } else {
             this
         }
@@ -219,7 +232,7 @@ data class Page(
      * Reorders tiles by moving [fromIndex] to [toIndex]. Indexes are into the full
      * backing list, since portrait and landscape each show a different-length prefix of it.
      */
-    fun moved(fromIndex: Int, toIndex: Int): Page {
+    fun withTileMoved(fromIndex: Int, toIndex: Int): Page {
         if (fromIndex !in tiles.indices || toIndex !in tiles.indices || fromIndex == toIndex) return this
         val next = tiles.toMutableList()
         val tile = next.removeAt(fromIndex)
@@ -228,6 +241,12 @@ data class Page(
     }
 
     companion object {
+        /** The default tile shape. */
+        const val SQUARE_TILE_ASPECT_RATIO = 1f
+
+        /** The "Wide" tile shape Grid size offers — roomier for two-line labels. */
+        const val WIDE_TILE_ASPECT_RATIO = 4f / 3f
+
         /** Landscape columns for a page with [columns] portrait columns and no override. */
         fun defaultLandscapeColumns(columns: Int): Int = columns * 2
 
@@ -257,7 +276,7 @@ data class Board(
     val keepScreenAwake: Boolean = false,
     /** Whether long-press haptics (page-tab options, tile drag-reorder arm) fire. */
     val hapticFeedbackEnabled: Boolean = true,
-    /** Whether a tile with no sound file speaks its label via TTS, even without [Tile.speakLabel] set. */
+    /** Whether a tile with no sound file speaks its label via TTS, even without [Tile.speakWhenNoSound] set. */
     val speakUnrecordedTilesEnabled: Boolean = true,
     /** Whether blank tiles are hidden (and untappable) outside of edit mode, to avoid a stray tap opening the editor. */
     val hideBlankTilesEnabled: Boolean = false,
@@ -290,7 +309,7 @@ data class Board(
     val homePage: Page? get() = homePageIndex?.let { pages[it] }
 
     /** Whether any tile on any page has a sound or speech set up, for gating destructive replace actions. */
-    val hasAnySound: Boolean get() = pages.any { page -> page.tiles.any { !it.isEmpty } }
+    val hasAnySound: Boolean get() = pages.any { it.hasAnySound }
 
     /**
      * Every sound file any tile on any page points at. The home row is just the home
@@ -328,7 +347,7 @@ data class Board(
         })
 
     /** Appends a new empty page and switches to it. */
-    fun addPage(name: String = "Page ${pages.size + 1}"): Board {
+    fun withPageAdded(name: String = "Page ${pages.size + 1}"): Board {
         // Page's own tiles default (List(16)) is sized for its own 4x4 rows/columns default,
         // not necessarily this board's configured default — build tiles to actually match so
         // a larger default grid (e.g. 6x6) doesn't start with fewer tiles than cells.
@@ -342,7 +361,7 @@ data class Board(
     }
 
     /** Removes the page at [index]; a no-op if it's the only page left. */
-    fun removePage(index: Int): Board {
+    fun withPageRemoved(index: Int): Board {
         if (pages.size <= 1 || index !in pages.indices) return this
         val nextPages = pages.filterIndexed { i, _ -> i != index }
         return copy(
@@ -351,7 +370,7 @@ data class Board(
         )
     }
 
-    fun renamePage(index: Int, name: String): Board {
+    fun withPageRenamed(index: Int, name: String): Board {
         if (index !in pages.indices) return this
         val page = pages[index]
         val nextName = name.ifBlank { page.name }
@@ -359,7 +378,7 @@ data class Board(
     }
 
     /** Switches the active page; a no-op if [index] is out of range. */
-    fun switchTo(index: Int): Board =
+    fun withCurrentPage(index: Int): Board =
         if (index in pages.indices) copy(currentPageIndex = index) else this
 
     /** Marks [index] as the page auto-return snaps back to, and no other; a no-op if out of range. */
@@ -371,10 +390,10 @@ data class Board(
         }
 
     /** Clears the home page, disabling auto-return. */
-    fun clearingHomePage(): Board = copy(pages = pages.map { it.copy(isHome = false) })
+    fun withoutHomePage(): Board = copy(pages = pages.map { it.copy(isHome = false) })
 
     /** Reorders pages by moving [fromIndex] to [toIndex]; the current and home page follow their page. */
-    fun movedPage(fromIndex: Int, toIndex: Int): Board {
+    fun withPageMoved(fromIndex: Int, toIndex: Int): Board {
         if (fromIndex !in pages.indices || toIndex !in pages.indices || fromIndex == toIndex) return this
         val nextPages = pages.toMutableList()
         val moving = nextPages.removeAt(fromIndex)

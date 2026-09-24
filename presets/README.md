@@ -1,22 +1,24 @@
-# Factory presets
+# Built-in boards
 
-The app has two kinds of preset (see `docs/ARCHITECTURE.md`'s "Presets"
-section): lightweight, on-device saves made in-app via **Save as preset**
-(just a small JSON snapshot, no audio of its own), and **factory presets** —
-the zips in this folder. A factory preset is a full backup-shaped zip
+The app has two kinds of board you can open besides the one on screen (see
+`docs/ARCHITECTURE.md`'s "Saved boards" section): lightweight, on-device saves
+made in-app via **Save board as...** (just a small JSON snapshot, no audio of
+its own), and **built-in boards** — the zips in this folder. (This folder, and
+older docs, call them "presets"; the app now just calls everything a board.) A
+built-in board is a full backup-shaped zip
 (`board.json` at the root plus every referenced sound under `sounds/`, the
 same format `BoardRepository.exportTo()`/`importFrom()` produce) bundled as
 an app asset, so it's self-contained and works on a device that has never
-recorded anything. All three zips here show up in the **☰** menu's **Load preset**
-picker automatically, labeled "Factory," alongside whatever you've saved
+recorded anything. All three zips here show up in the **☰** menu's **Open board...**
+picker automatically, labeled "Built-in," alongside whatever you've saved
 yourself.
 
-A factory preset (or any backup zip, via **Import backup**) doesn't need
+A built-in board (or any backup zip, via **Import backup**) doesn't need
 every tile's clip actually present in `sounds/` — `BoardRepository.load()`
 sanitizes any tile whose `fileName` has no backing file back to empty
 (keeping its label), rather than leaving it "filled" with nothing playable.
 That makes a layout-and-labels-only zip, with sparse or no recorded audio, a
-legitimate way to build a generic starting template — see the "Presets"
+legitimate way to build a generic starting template — see the "Saving and opening boards"
 section in `docs/USER_GUIDE.md`.
 
 ## `chimes/chime.wav`
@@ -79,8 +81,8 @@ name (currently the top bar's title; see
 doesn't auto-load on install.** Only one board can be the fallback, but it's
 still bundled for convenience: a copy lives at
 `app/src/debug/assets/steve-care-board.zip` (debug builds only).
-`BoardViewModel.factoryPresets()` checks whether that asset actually opens,
-so it appears in the **☰** menu's **Load preset** picker only where it's
+`BoardViewModel.builtInBoards()` checks whether that asset actually opens,
+so it appears in the **☰** menu's **Open board...** picker only where it's
 packaged — debug builds — with no separate menu item or `BuildConfig` check
 of its own needed. On a release build (or any build where the asset isn't
 there), pushing the zip and using **Import backup** still works the same as
@@ -104,8 +106,8 @@ auto-import — it's never triggered again; uninstall (or clear app data) to
 see it re-trigger.
 
 Once it's the fallback, the normal way to get back to it on a board that's
-already been saved is the **☰** menu's **Load preset**, which lists it as a
-"Factory" entry ("Jeremy Draft Care Board") — no `adb push` or file picker
+already been saved is the **☰** menu's **Open board...**, which lists it as a
+"Built-in" entry ("Jeremy Draft Care Board") — no `adb push` or file picker
 needed. Loading it over a board that has sounds asks for confirmation first.
 
 Trouble and Needs (including its sticky first row) are fully recorded; Talking is missing
@@ -134,8 +136,8 @@ text-to-speech (`speakLabel = true`, `fileName = null`) instead of playing a
 clip. There's no `sounds/` directory in this zip at all — nothing to copy —
 so it's a few KB instead of several megabytes.
 
-Bundled in every build (not debug-only), so it always shows up in **Load
-preset** as a way to try the full layout, or hand someone a working board,
+Bundled in every build (not debug-only), so it always shows up in **Open
+board...** as a way to try the full layout, or hand someone a working board,
 without waiting on any recording.
 
 Most tiles also carry a `Tile.ttsScript` — the actual sentence recorded for

@@ -80,7 +80,7 @@ data class Tile(
     val colorArgb: Int? = null,
     /**
      * Speak [speechText] aloud via on-device text-to-speech when there's no [fileName].
-     * Stored as "speakLabel", its original name, so existing boards and presets still load.
+     * Stored as "speakLabel", its original name, so existing boards, saved boards and backups still load.
      */
     @SerialName("speakLabel")
     val speakWhenNoSound: Boolean = false,
@@ -261,7 +261,7 @@ data class Board(
     val pages: List<Page> = listOf(Page()),
     val currentPageIndex: Int = 0,
     // The settings below live on the board rather than in device SharedPreferences so they
-    // travel with it — switching to a different person's preset switches these too.
+    // travel with it — switching to a different person's board switches these too.
     /** When on, the home page's first row shows fixed above every other page (never on the home page itself). */
     val stickyHomeRowEnabled: Boolean = false,
     /** Whether a fresh launch jumps straight to the home page instead of resuming the last-viewed one. */

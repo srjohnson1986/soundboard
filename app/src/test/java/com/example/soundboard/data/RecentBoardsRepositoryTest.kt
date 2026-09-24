@@ -9,13 +9,13 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
-class RecentPresetsRepositoryTest {
+class RecentBoardsRepositoryTest {
 
-    private lateinit var repo: RecentPresetsRepository
+    private lateinit var repo: RecentBoardsRepository
 
     @Before
     fun setUp() {
-        repo = RecentPresetsRepository(ApplicationProvider.getApplicationContext())
+        repo = RecentBoardsRepository(ApplicationProvider.getApplicationContext())
     }
 
     @Test
@@ -25,17 +25,17 @@ class RecentPresetsRepositoryTest {
 
     @Test
     fun `recordUsed puts the newest entry first`() {
-        repo.recordUsed(RecentPresetEntry(kind = RecentPresetKind.FACTORY, assetName = "jeremy-care-board.zip", label = "Jeremy", usedAt = 1L))
-        repo.recordUsed(RecentPresetEntry(kind = RecentPresetKind.SAVED, id = "abc", label = "My Board", usedAt = 2L))
+        repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.BUILT_IN, assetName = "jeremy-care-board.zip", label = "Jeremy", usedAt = 1L))
+        repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = "abc", label = "My Board", usedAt = 2L))
 
         assertEquals(listOf("My Board", "Jeremy"), repo.recent().map { it.label })
     }
 
     @Test
     fun `recordUsed on the same preset moves it to the front instead of duplicating it`() {
-        repo.recordUsed(RecentPresetEntry(kind = RecentPresetKind.SAVED, id = "abc", label = "My Board", usedAt = 1L))
-        repo.recordUsed(RecentPresetEntry(kind = RecentPresetKind.FACTORY, assetName = "jeremy-care-board.zip", label = "Jeremy", usedAt = 2L))
-        repo.recordUsed(RecentPresetEntry(kind = RecentPresetKind.SAVED, id = "abc", label = "My Board (renamed)", usedAt = 3L))
+        repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = "abc", label = "My Board", usedAt = 1L))
+        repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.BUILT_IN, assetName = "jeremy-care-board.zip", label = "Jeremy", usedAt = 2L))
+        repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = "abc", label = "My Board (renamed)", usedAt = 3L))
 
         val recent = repo.recent()
         assertEquals(2, recent.size)
@@ -46,7 +46,7 @@ class RecentPresetsRepositoryTest {
     @Test
     fun `recent caps at 5 entries`() {
         repeat(7) { i ->
-            repo.recordUsed(RecentPresetEntry(kind = RecentPresetKind.SAVED, id = "id$i", label = "Board $i", usedAt = i.toLong()))
+            repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = "id$i", label = "Board $i", usedAt = i.toLong()))
         }
 
         val recent = repo.recent()
@@ -62,6 +62,6 @@ class RecentPresetsRepositoryTest {
                 """{"kind":"factory","assetName":"jeremy-care-board.zip","label":"Jeremy","usedAt":1}]"""
         )
 
-        assertEquals(listOf(RecentPresetKind.SAVED, RecentPresetKind.FACTORY), repo.recent().map { it.kind })
+        assertEquals(listOf(RecentBoardKind.SAVED, RecentBoardKind.BUILT_IN), repo.recent().map { it.kind })
     }
 }

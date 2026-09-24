@@ -68,7 +68,7 @@ class BoardRepository(private val context: Context) {
 
     /**
      * A tile's `fileName` can point at audio that was never actually copied in —
-     * a generic preset shipped with only some (or none) of its clips recorded
+     * a generic built-in board shipped with only some (or none) of its clips recorded
      * yet, or a backup zip missing a file for some other reason. Rather than
      * rendering that tile as "filled" with a sound that silently does nothing
      * when tapped, drop back to `fileName = null`: same tile, same label, now
@@ -172,7 +172,7 @@ class BoardRepository(private val context: Context) {
     }.isSuccess
 
     /**
-     * Same as [importFrom] but reads a preset bundled as an app asset, e.g. the
+     * Same as [importFrom] but reads a built-in board bundled as an app asset, e.g. the
      * fallback board shipped under `src/main/assets/`. Silently no-ops (returns
      * false) if [assetName] isn't present, so callers don't need to guard it.
      */
@@ -203,7 +203,7 @@ class BoardRepository(private val context: Context) {
         }
     }
 
-    /** Whether [assetName] is packaged in this build — some presets only ship in debug builds. */
+    /** Whether [assetName] is packaged in this build — some built-in boards only ship in debug builds. */
     fun hasAsset(assetName: String): Boolean = runCatching { context.assets.open(assetName).close() }.isSuccess
 
     private fun ZipOutputStream.putFile(entryName: String, file: File) {
@@ -225,7 +225,7 @@ class BoardRepository(private val context: Context) {
     }
 
     private companion object {
-        /** Folder prefixes inside a backup zip. "background/" is singular unlike the on-device "backgrounds" dir; kept as-is so existing backups and bundled presets still import. */
+        /** Folder prefixes inside a backup zip. "background/" is singular unlike the on-device "backgrounds" dir; kept as-is so existing backups and built-in boards still import. */
         const val ZIP_SOUNDS_DIR = "sounds/"
         const val ZIP_BACKGROUNDS_DIR = "background/"
     }

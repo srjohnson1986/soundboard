@@ -26,8 +26,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.soundboard.BoardViewModel
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
-import com.example.soundboard.data.PresetRepository
-import com.example.soundboard.data.RecentPresetsRepository
+import com.example.soundboard.data.SavedBoardRepository
+import com.example.soundboard.data.RecentBoardsRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelFont
 import com.example.soundboard.model.LabelStyle
@@ -83,7 +83,7 @@ class LayoutAndLabelTest {
             repo.soundFile(name).apply { parentFile?.mkdirs() }.writeText(name)
         }
         repo.save(board)
-        vm = BoardViewModel(repo, FakePlayer(), FakeRecorder(), PresetRepository(context), FakeSpeaker(), DevicePreferences(context), RecentPresetsRepository(context))
+        vm = BoardViewModel(repo, FakePlayer(), FakeRecorder(), SavedBoardRepository(context), FakeSpeaker(), DevicePreferences(context), RecentBoardsRepository(context))
         composeRule.setContent {
             if (fontScale == null) {
                 BoardScreen(vm = vm)

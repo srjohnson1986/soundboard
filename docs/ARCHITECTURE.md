@@ -9,12 +9,12 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 |---|---|
 | `model/Board.kt` | `Tile`, `Page`, and `Board` data classes; resize, visibility, reorder, and page-management logic. No Android dependencies. |
 | `data/BoardRepository.kt` | Reads/writes `board.json`, copies picked audio into app storage, zips/unzips backups. All file I/O. |
-| `data/PresetRepository.kt` | Reads/writes small `Board`-snapshot JSON files under `filesDir/presets/` — same-device version history, deliberately not carrying its own copy of audio (see "Presets" below). |
+| `data/SavedBoardRepository.kt` | Reads/writes small `Board`-snapshot JSON files under `filesDir/presets/` — same-device version history, deliberately not carrying its own copy of audio (see "Saved boards" below). |
 | `audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
 | `audio/SoundPlayer.kt` | Real `Player` implementation: owns the `SoundPool` and the current `MediaPlayer`. No knowledge of `Board` or `Tile`. |
 | `audio/Recorder.kt` | Interface (`start`/`stop`/`cancel`) that `BoardViewModel` depends on for recording — same fake-in-tests seam as `Player`. |
 | `audio/AudioRecorder.kt` | Real `Recorder` implementation: owns a `MediaRecorder`, encoding straight to a file `BoardRepository` hands it. |
-| `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other layers together, single write path. Takes `BoardRepository`/`Player`/`Recorder`/`PresetRepository`/dispatcher as constructor params (see below) rather than constructing them. |
+| `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other layers together, single write path. Takes `BoardRepository`/`Player`/`Recorder`/`SavedBoardRepository`/dispatcher as constructor params (see below) rather than constructing them. |
 | `BoardSettingsActions.kt` | Interface listing every change the Settings dialog can make; `BoardViewModel` implements it, so the dialog takes one object instead of a callback per setting. |
 | `ui/BoardScreen.kt` | The screen: its state (edit mode, the one open `BoardDialog`, the idle timer), the pager, the sticky home row, and the dialog host. |
 | `ui/BoardTopBar.kt` | Title, page tabs (with the long-press gesture) and the hamburger menu. |
@@ -162,7 +162,7 @@ to pre-validate. `Board`'s own mutators (`withPageRemoved`, `withPageRenamed`,
   first and checking for a `"pages"` key: present, decode normally; absent,
   decode the legacy shape (`LegacyBoard`, private to `BoardRepository.kt`) and
   wrap it into a single `Page`. This is why `steve-care-board.zip` (the
-  bundled fallback preset, itself old-format when this migration was added)
+  bundled fallback board, itself old-format when this migration was added)
   never needed regenerating — the migration runs on every `load()`, so it
   applies the moment the asset is imported. By contrast,
   `stickyHomeRowEnabled`, `Page.color`, and `Page.tileAspectRatio` needed **no** new branching logic
@@ -183,7 +183,7 @@ to pre-validate. `Board`'s own mutators (`withPageRemoved`, `withPageRenamed`,
   to get its home page back, just this one.
   **`sanitizeMissingSounds(board)` runs last, on every `load()`.** A tile's
   `fileName` is just a claim — nothing enforces that the file it names
-  actually exists. A generic preset can legitimately ship with some or all
+  actually exists. A generic built-in board can legitimately ship with some or all
   clips unrecorded, and any zip import in general could be missing a file for
   other reasons. Rather than let a tile render as "filled" while silently
   doing nothing when tapped, `sanitizeMissingSounds` walks every page's tiles
@@ -203,12 +203,12 @@ to pre-validate. `Board`'s own mutators (`withPageRemoved`, `withPageRenamed`,
 
 **`DevicePreferences` is the one setting deliberately *not* on `Board`.**
 Everything else in Settings travels with the board on purpose (loading a
-different preset switches those too — see the settings-on-board comment atop
+different board switches those too — see the settings-on-board comment atop
 `Board`'s fields). Performance mode (disables tile shadows, tap ripples, and
 the drag-reorder scale effect, see "The UI layer" below) describes the
 device the app happens to be running on, not the board's content, so it
 lives in ordinary `SharedPreferences` (`DevicePreferences`, a small
-`Context`-backed wrapper) instead — loading a different preset must not
+`Context`-backed wrapper) instead — opening a different board must not
 silently turn it back off. `BoardViewModel` reads it once at construction
 into its own `performanceModeEnabled: StateFlow<Boolean>`, separate from
 `board`.
@@ -222,59 +222,61 @@ either. `importFrom()` overwrites `board.json` and merges files into
 adding stray files there could leave orphans; in practice the app is the only
 thing that ever writes there, so this hasn't mattered.
 
-## Presets
+## Saved boards
 
-**Presets and Backup solve different problems and deliberately don't share a
-mechanism**, even though a preset's content is exactly a `Board`. Backup is
+**Saved boards and Backup solve different problems and deliberately don't share a
+mechanism**, even though a saved board's content is exactly a `Board`. Backup is
 the *portable, self-contained* one — a zip carrying its own audio, meant to
-survive a reinstall or move to another device. A **preset** is *same-device
+survive a reinstall or move to another device. A **saved board** is *same-device
 version history* — you're saving a snapshot of your own board's layout to
 come back to later, on this device, while its sound files are still sitting
 in the shared `sounds/` directory you already have.
 
-`PresetRepository` stores each saved preset as its own small file,
+`SavedBoardRepository` stores each saved board as its own small file,
 `filesDir/presets/<uuid>.json` — literally just `Board` JSON, no new schema.
+(The folder keeps its name from when saved boards were called presets, so
+existing ones still show up; `recent_presets.json` likewise.)
 Once `isHome` moved onto `Page` (above), `Board` already was exactly the
-shape a preset needs: pages, names, order, home page, dimensions, and every
-tile's label/sound-reference/volume/color. Critically, **a saved preset does
+shape a saved board needs: pages, names, order, home page, dimensions, and every
+tile's label/sound-reference/volume/color. Critically, **a saved board does
 not copy any audio** — `Tile.fileName` stays a bare filename resolved against
-whatever `sounds/` directory it's loaded into, so a saved preset just
+whatever `sounds/` directory it's loaded into, so a saved board just
 references the same files the live board already uses. This keeps a save
 cheap (a few KB of JSON, not a copy of every recorded clip) but means a saved
-preset **cannot survive a reinstall or cleared app data on its own** — that
-wipes `sounds/` too, leaving the preset's `fileName`s pointing at nothing.
-Backup is still what you'd use for that. `PresetRepository.list()` scans
+board **cannot survive a reinstall or cleared app data on its own** — that
+wipes `sounds/` too, leaving the saved board's `fileName`s pointing at nothing.
+Backup is still what you'd use for that. `SavedBoardRepository.list()` scans
 `presets/*.json` directly rather than keeping a separate index file, so the
 list can never drift from what's actually on disk, and skips (rather than
 crashes on) a file that fails to decode.
 
 **This creates one sharp edge `BoardViewModel.commit()` has to guard
 against.** `commit()`'s existing job is pruning `sounds/` files no longer
-referenced by the live board (`repo.pruneUnused(after)`). Once a saved preset
+referenced by the live board (`repo.pruneUnused(after)`). Once a saved board
 can reference a file the *live* board no longer does, that same prune would
-silently delete audio a saved preset still needs — clearing a tile today,
-loading that preset tomorrow, and finding it silently plays nothing.
-`commit()` folds `presetRepo.allReferencedFileNames()` (every `fileName`
-across every saved preset) into the keep-set before pruning:
-`repo.pruneUnused(after + presetRepo.allReferencedFileNames())`. This is the
+silently delete audio a saved board still needs — clearing a tile today,
+opening that saved board tomorrow, and finding it silently plays nothing.
+`commit()` folds `savedBoardRepo.allReferencedFileNames()` (every `fileName`
+across every saved board) into the keep-set before pruning:
+`repo.pruneUnused(after + savedBoardRepo.allReferencedFileNames())`. This is the
 one correctness-critical piece of the whole feature.
 
-`BoardViewModel.saveAsPreset(name)` also renames the live board to `name` —
+`BoardViewModel.saveBoardAs(name)` also renames the live board to `name` —
 the save dialog already prompts for a name defaulting to the current board
 name, so this absorbed what used to be a separate "Save" (rename-only) menu
-action rather than keeping both. `applyPreset(ref)` takes a `PresetRef`,
-which is either `Saved(id)` (loaded via `PresetRepository.load()`, then
-`commit()`ed like any other board mutation) or `Factory(assetName, label)`
+action rather than keeping both. `openBoard(ref)` takes a `BoardRef`,
+which is either `Saved(id)` (loaded via `SavedBoardRepository.load()`, then
+`commit()`ed like any other board mutation) or `BuiltIn(assetName, label)`
 (the two bundled zips, still going through `BoardRepository.importFromAsset()`
 exactly as before — they're self-contained zips, not lightweight JSON, so
-they don't need `PresetRepository` at all). `factoryPresets()` builds
-that Factory list by asking `BoardRepository.hasAsset(assetName)` — Steve's
+they don't need `SavedBoardRepository` at all). `builtInBoards()` builds
+that built-in list by asking `BoardRepository.hasAsset(assetName)` — Steve's
 entry simply doesn't appear when its asset isn't packaged (debug builds
 only), the same practical availability the old `BuildConfig.DEBUG`-gated menu
 item had, without importing `BuildConfig` (or a `Context`) into the ViewModel.
 
 `Board.hasAnySound` (any tile on any page with a `fileName`)
-gates the UI's confirm dialog before applying a preset over a board that has
+gates the UI's confirm dialog before opening another board over a board that has
 real content — same reasoning, and same shape, as the page-delete confirm
 (`requestDeletePage`) already uses.
 
@@ -355,7 +357,7 @@ class BoardViewModel(
     private val repo: BoardRepository,
     private val player: Player,
     private val recorder: Recorder,
-    private val presetRepo: PresetRepository,
+    private val savedBoardRepo: SavedBoardRepository,
     private val speaker: Speaker,
     private val devicePrefs: DevicePreferences,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -363,10 +365,10 @@ class BoardViewModel(
 ```
 
 `BoardViewModel.Factory(application)` builds the real `BoardRepository`,
-`SoundPlayer`, `AudioRecorder`, `PresetRepository`, `TtsSpeaker`, and
+`SoundPlayer`, `AudioRecorder`, `SavedBoardRepository`, `TtsSpeaker`, and
 `DevicePreferences` and is what `BoardScreen` passes to
 `viewModel(factory = ...)`. Tests construct `BoardViewModel` directly
-instead, passing a real `BoardRepository`, `PresetRepository`, and
+instead, passing a real `BoardRepository`, `SavedBoardRepository`, and
 `DevicePreferences` (against a Robolectric or instrumented context — file I/O
 and `SharedPreferences` are cheap enough not to fake), a `FakePlayer` in
 place of `SoundPlayer`, a `FakeRecorder` in place of `AudioRecorder`, and a
@@ -392,7 +394,7 @@ private fun commit(board: Board) {
 
     viewModelScope.launch(ioDispatcher) {
         repo.save(board)
-        repo.pruneUnused(after + presetRepo.allReferencedFileNames())
+        repo.pruneUnused(after + savedBoardRepo.allReferencedFileNames())
     }
 }
 ```
@@ -402,8 +404,8 @@ current page** — a sound assigned on a page you're not viewing (including the
 home page's sticky-row-eligible first row) must still survive pruning —
 unloads anything that fell out of the referenced set, updates the in-memory
 state immediately (so the UI never waits on disk I/O), then persists on
-`ioDispatcher`. The keep-set folds in `presetRepo.allReferencedFileNames()`
-too — see "Presets" above for why a saved preset's audio needs the same
+`ioDispatcher`. The keep-set folds in `savedBoardRepo.allReferencedFileNames()`
+too — see "Saved boards" above for why a saved board's audio needs the same
 protection a live tile's does. `loadSounds()` (called on initial load and
 after import) uses
 the same `allTiles()` helper to preload everything for the same reason:
@@ -442,7 +444,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   modal, so `BoardScreen` keeps a single `openDialog: BoardDialog?` instead of
   a show-flag or page index per dialog. The page-scoped variants carry the
   index of the page they were opened for. `showDialog()` is also where a dialog
-  that lists something from disk (the preset picker, unused-clip cleanup)
+  that lists something from disk (the Open board picker, unused-clip cleanup)
   refreshes that list first.
 
 - **The active board's name lives in the title, not a separate label.**
@@ -450,7 +452,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   `labelSmall`, then `board.name` in `titleLarge`. It's the only place the
   active board is identified, so a board with no name of its own reads as
   "New Board" rather than blank. There's no dedicated rename-only menu item —
-  **Save as preset** (below) prompts for a name and renames the board to
+  **Save board as...** (below) prompts for a name and renames the board to
   match as a side effect, which absorbed what used to be a separate **Save**
   action.
 - **The hamburger menu is settings and same-device history now, not page
@@ -463,8 +465,8 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   `Switch`) rather than a `DropdownMenuItem` since a switch doesn't fit that
   composable's trailing-content slot cleanly; **Settings**, which opens
   `SettingsDialog` (below), including the **Sticky home row** switch, rather
-  than exposing its contents as more menu rows; **Presets**
-  (**Save as preset**/**Load preset**); **Backup** (**Export backup**/
+  than exposing its contents as more menu rows; **Boards**
+  (**Rename board**, **Recent boards**, **Save board as...**/**Open board...**); **Backup** (**Export backup**/
   **Import backup**); and the app-version link at the bottom. Page-level
   actions — add, rename, delete, grid size, page color, and home-page
   selection — live in the tab row and `PageOptionsDialog` instead; see below.
@@ -472,23 +474,23 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   — open on home page, auto-return timeout (`IDLE_TIMEOUT_OPTIONS_MINUTES`,
   `0` means "Off"), long-press duration, theme, background, default tile
   opacity/border, row height, label style, landscape layout and so on. They
-  are fields on `Board` itself, so they travel with a preset and persist
+  are fields on `Board` itself, so they travel with the board and persist
   through `commit()` like any other board edit. The one exception is
   **Performance mode**, which describes the device rather than the board and
   lives in `DevicePreferences` (`SharedPreferences`). The dialog takes the
   `Board` plus a `BoardSettingsActions` (the ViewModel) rather than a value
   and a callback per setting. Unlike `editMode`, which lives entirely in
   Compose state, all of these need to survive process death.
-- **Save as preset**/**Load preset** are the same-device version-history
-  actions (see "Presets" above), kept visually grouped and separate from
-  **Export backup**/**Import backup**. **Save as preset** opens
-  `TextInputDialog` against `vm.saveAsPreset()`. **Load preset** calls
-  `vm.refreshPresets()` then opens `PresetPickerDialog`, listing
-  `vm.factoryPresets()` (bundled zips — Steve's only appears where
-  its asset actually opens, i.e. debug builds) above `vm.presets` (on-device
+- **Save board as...**/**Open board...** are the same-device version-history
+  actions (see "Saved boards" above), kept visually grouped and separate from
+  **Export backup**/**Import backup**. **Save board as...** opens
+  `TextInputDialog` against `vm.saveBoardAs()`. **Open board...** calls
+  `vm.refreshSavedBoards()` then opens `OpenBoardDialog`, listing
+  `vm.builtInBoards()` (bundled zips — Steve's only appears where
+  its asset actually opens, i.e. debug builds) above `vm.savedBoards` (on-device
   saved snapshots, newest first). Picking one routes through
-  `requestApplyPreset()`, mirroring `requestDeletePage()`'s shape: a confirm
-  `AlertDialog` only when `board.hasAnySound`, otherwise `vm.applyPreset()`
+  `requestOpenBoard()`, mirroring `requestDeletePage()`'s shape: a confirm
+  `AlertDialog` only when `board.hasAnySound`, otherwise `vm.openBoard()`
   runs immediately.
 - **The last menu item is the app version, `APP_VERSION`** — built from
   `BuildConfig.VERSION_NAME`, so bumping `versionName` in
@@ -597,7 +599,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 - **A labeled-but-empty tile is visually distinct from a plain blank one.**
   `TileCard`'s `needsRecording = !tile.hasSound && tile.label.isNotBlank()`
   renders a small 🔇 glyph in the opposite corner from the edit-mode pencil.
-  This is the state a generic preset leaves a tile in after
+  This is the state a generic built-in board leaves a tile in after
   `BoardRepository.sanitizeMissingSounds()` (see "Persistence") clears a
   `fileName` with nothing behind it — the label still shows (rather than a
   bare "+"), so the board reads as "labeled, still needs a recording"
@@ -668,8 +670,8 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | Landscape column/row-height math, label size search | `test/.../ui/GridLayoutTest.kt`, `test/.../ui/LabelTextTest.kt` | plain JVM (JUnit) |
 | `Board` page management (`withPageAdded`/`withPageRemoved`/`withPageRenamed`/`withCurrentPage`/`withHomePage`), `updatingTile`/`findTile`, `soundFileNames`, `Tile.isPlayable`, and `hasAnySound` | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
 | `BoardRepository`, incl. the legacy-schema and `homePageIndex` migrations and additive-field defaults in `load()` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
-| `PresetRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/PresetRepositoryTest.kt` | Robolectric |
-| `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/preset orphan pruning, record/stop/cancel, and saveAsPreset/applyPreset | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
+| `SavedBoardRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/SavedBoardRepositoryTest.kt` | Robolectric |
+| `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, and saveBoardAs/openBoard | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
 | `BoardScreen`, incl. the sticky home row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 | Landscape grid, row height cap, drag steps, label size/font/caps, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
 
@@ -735,9 +737,9 @@ the `ui-test-report` artifact. `LayoutAndLabelTest` rotates the device itself
   until the drag ends or cancels. This sidesteps relying on Compose's
   child-before-ancestor gesture consumption for a case (dragging a tile
   across the full page width) where that alone wasn't verified to hold up.
-- **There's no "Delete preset" action.** Every `saveAsPreset()` call writes a
+- **There's no "Delete saved board" action.** Every `saveBoardAs()` call writes a
   new file under `presets/` and nothing ever removes one. This is low-risk in
-  practice — each saved preset is a few KB of JSON, not a copy of any audio —
+  practice — each saved board is a few KB of JSON, not a copy of any audio —
   but old, no-longer-wanted saves will accumulate indefinitely until a delete
   action is added.
 - **Recording is untested against a real microphone.** `BoardViewModelTest`

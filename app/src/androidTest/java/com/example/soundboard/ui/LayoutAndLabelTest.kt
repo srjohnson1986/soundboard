@@ -12,6 +12,9 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
@@ -314,6 +317,31 @@ class LayoutAndLabelTest {
         assertEquals(FontWeight.Bold, style.fontWeight)
         assertEquals(LabelFont.ATKINSON_HYPERLEGIBLE.fontFamily(), style.fontFamily)
         assertEquals(0, displayedCount("Water"))
+    }
+
+    @Test
+    fun settingsPreviewShowsBothEndsOfTheSizeRangeInTheLabelStyle() {
+        rotate(landscape = false)
+        launchWith(
+            Board(
+                pages = listOf(labeledPage("T", rows = 1, columns = 1)),
+                labelStyle = LabelStyle(minSizeSp = 16f, maxSizeSp = 40f, allCaps = true)
+            )
+        )
+
+        composeRule.onNodeWithContentDescription("Menu").performClick()
+        composeRule.onNodeWithText("Settings").performClick()
+
+        composeRule.onNodeWithText("Preview").assertExists()
+        composeRule.onNodeWithText("Smallest (16 sp)").assertExists()
+        composeRule.onNodeWithText("Largest (40 sp)").assertExists()
+        // Below the fold in the scrolling dialog, so look these up directly rather than on-screen.
+        listOf("CALL THE DOCTOR" to 16f, "YES" to 40f).forEach { (text, size) ->
+            val results = mutableListOf<TextLayoutResult>()
+            composeRule.onNodeWithText(text, useUnmergedTree = true).fetchSemanticsNode()
+                .config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+            assertEquals(text, size, results.first().layoutInput.style.fontSize.value)
+        }
     }
 
     @Test

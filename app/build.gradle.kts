@@ -65,6 +65,13 @@ android {
     testOptions {
         unitTests.isIncludeAndroidResources = true
     }
+
+    // One set of fake Player/Recorder/Speaker for both the JVM unit tests and the
+    // on-device UI tests, so the two can't drift apart again (#167).
+    sourceSets {
+        getByName("test").kotlin.srcDir("src/sharedTest/java")
+        getByName("androidTest").kotlin.srcDir("src/sharedTest/java")
+    }
 }
 
 kotlin {

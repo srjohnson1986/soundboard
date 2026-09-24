@@ -30,6 +30,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class BoardViewModel(
@@ -616,13 +618,24 @@ class BoardViewModel(
         (before - after).forEach { player.unload(it) }
 
         viewModelScope.launch(ioDispatcher) {
-            repo.save(grown)
-            // A saved preset references sound files by name without copying them (see
-            // PresetRepository) — protect those from pruning too, or clearing/replacing a
-            // live tile could delete audio a saved preset still points at.
-            repo.pruneUnused(after + presetRepo.allReferencedFileNames())
+            // Back-to-back commits (e.g. Grid size's Apply) each launch a save on a pool
+            // thread; without the lock they can finish out of order and leave an older
+            // board on disk. Each save writes whatever is current, so the last one to run
+            // always persists the latest board — and prunes against its files, not a
+            // stale commit's that might not know about a sound added since.
+            saveMutex.withLock {
+                val latest = _board.value
+                repo.save(latest)
+                // A saved preset references sound files by name without copying them (see
+                // PresetRepository) — protect those from pruning too, or clearing/replacing a
+                // live tile could delete audio a saved preset still points at.
+                val keep = allTiles(latest).mapNotNull { it.fileName }.toSet()
+                repo.pruneUnused(keep + presetRepo.allReferencedFileNames())
+            }
         }
     }
+
+    private val saveMutex = Mutex()
 
     override fun onCleared() {
         recorder.cancel()

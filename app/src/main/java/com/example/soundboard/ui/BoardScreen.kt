@@ -870,19 +870,12 @@ fun BoardScreen(
                 .padding(insets)
                 .onSizeChanged { contentAreaHeightPx = it.height }
         ) {
-            // The actual effective column count PageGrid settled on for the currently
-            // active page — reported up via PageGrid's onEffectiveColumnsChanged so
-            // PinnedRow can match it exactly instead of guessing its own from screen
-            // height (which doesn't know about the top bar/tabs/pinned-row's own height).
-            var activePageColumns by remember { mutableStateOf<Int?>(null) }
             val homePage = board.homePage
             if (board.stickyHomeRowEnabled && homePage != null && board.currentPageIndex != board.homePageIndex) {
                 PinnedRow(
                     homePage = homePage,
-                    landscapeLayout = board.landscapeLayout,
                     boardRowHeight = board.rowHeight,
                     labelStyle = board.labelStyle,
-                    activeColumns = activePageColumns,
                     editMode = editMode,
                     pageColor = homePage.color?.let { Color(it) },
                     pageOpacity = homePage.opacity,
@@ -935,7 +928,6 @@ fun BoardScreen(
                         landscapeLayout = board.landscapeLayout,
                         boardRowHeight = board.rowHeight,
                         labelStyle = board.labelStyle,
-                        onEffectiveColumnsChanged = { activePageColumns = it },
                         referenceHeightPx = contentAreaHeightPx,
                         pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
                         onTap = { tile ->
@@ -1362,25 +1354,16 @@ private fun pageRowHeight(page: Page, boardRowHeight: RowHeight): Dp {
 }
 
 /**
- * The fixed row shown above every non-home page, mirroring the home page's own first
- * row — including how many tiles that "first row" holds. Under
- * [LandscapeLayout.PAGE_GRID], landscape shows the home page's own first landscape row
- * at its portrait row height, exactly as the home page itself draws it. Under
- * [LandscapeLayout.FIT_TO_SCREEN], [PageGrid] reflows whichever page is on screen into
- * more columns via [landscapeColumnCount]; this mirrors that count exactly (via
- * [activeColumns], reported up from that page's own [PageGrid] instance) so the pinned
- * row's tile size matches the grid underneath it, rather than staying stuck at the
- * portrait column count or guessing its own count from screen height (which doesn't
- * know about the top bar/tabs/pinned-row's own height the way [PageGrid] does when it
- * measures its actual content area).
+ * The fixed row shown above every non-home page, mirroring the home page's own pinned
+ * first row: its first portrait row ([Page.columns] tiles) in both orientations, so the
+ * same tiles stay pinned when the device rotates — stretched across the wider screen in
+ * landscape, at the page's standard row height. See [PageGrid]'s pinFirstRow.
  */
 @Composable
 private fun PinnedRow(
     homePage: Page,
-    landscapeLayout: LandscapeLayout,
     boardRowHeight: RowHeight,
     labelStyle: LabelStyle,
-    activeColumns: Int?,
     editMode: Boolean,
     pageColor: Color?,
     pageOpacity: Float?,
@@ -1395,22 +1378,13 @@ private fun PinnedRow(
     onPreviewSound: (Tile) -> Unit
 ) {
     val haptics = LocalHapticFeedback.current
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val usePageGrid = isLandscape && landscapeLayout == LandscapeLayout.PAGE_GRID
-    val baseColumns = homePage.columns
-    val columns = when {
-        usePageGrid -> homePage.effectiveLandscapeColumns
-        isLandscape -> (activeColumns ?: baseColumns).coerceAtLeast(baseColumns)
-        else -> baseColumns
-    }
-    val tiles = if (usePageGrid) homePage.landscapeTiles else homePage.visibleTiles
-    // Fit to screen sizes landscape tiles by their shape alone, as it always has.
-    val rowHeight = if (isLandscape && !usePageGrid) null else pageRowHeight(homePage, boardRowHeight)
+    val columns = homePage.columns
+    val tiles = homePage.visibleTiles.take(columns)
+    val rowHeight = pageRowHeight(homePage, boardRowHeight)
     val density = LocalDensity.current
     var rowWidthPx by remember { mutableIntStateOf(0) }
     val tileWidthPx = if (columns > 0) (rowWidthPx - with(density) { TILE_SPACING.toPx() } * (columns - 1)) / columns else 0f
-    val tileHeightPx = rowHeight?.let { with(density) { it.toPx() } } ?: (tileWidthPx / homePage.tileAspectRatio)
-    val labelTextStyle = rememberTilesLabelStyle(tiles.take(columns), tileWidthPx, tileHeightPx, labelStyle)
+    val labelTextStyle = rememberTilesLabelStyle(tiles, tileWidthPx, with(density) { rowHeight.toPx() }, labelStyle)
 
     Row(
         modifier = Modifier
@@ -1419,7 +1393,7 @@ private fun PinnedRow(
             .onSizeChanged { rowWidthPx = it.width },
         horizontalArrangement = Arrangement.spacedBy(TILE_SPACING)
     ) {
-        tiles.take(columns).forEach { tile ->
+        tiles.forEach { tile ->
             TileCard(
                 tile = tile,
                 editMode = editMode,
@@ -1455,10 +1429,11 @@ private fun PinnedRow(
  * actually on screen. Portrait shows [Page.visibleTiles]; landscape shows either
  * [Page.landscapeTiles] on the page's own landscape grid or the portrait tiles reflowed
  * to fit, per [landscapeLayout]. When [pinFirstRow] and the page has more than one row, its first
- * row renders fixed above a scrolling grid for the rest, instead of one plain grid —
- * see [Page.isHome]/`Board.stickyHomeRowEnabled`. Reordering across that boundary just
- * works: a tile is "pinned" purely by occupying one of the first row's slots in the
- * shown tiles, the same flat list [Page.moved] already reorders by index —
+ * portrait row ([Page.columns] tiles, in either orientation — the same tiles [PinnedRow]
+ * pins on other pages) renders fixed above a scrolling grid for the rest, instead of one
+ * plain grid — see [Page.isHome]/`Board.stickyHomeRowEnabled`. Reordering across that
+ * boundary just works: a tile is "pinned" purely by occupying one of the first
+ * [Page.columns] slots, the same flat list [Page.moved] already reorders by index —
  * no separate pinned-tile concept needed. The one visible seam is that
  * [Modifier.animateItem] only applies within the scrolling grid's own item scope, so a
  * reorder crossing the pinned/scrolling boundary pops instead of sliding.
@@ -1477,7 +1452,6 @@ private fun PageGrid(
     landscapeLayout: LandscapeLayout,
     boardRowHeight: RowHeight,
     labelStyle: LabelStyle,
-    onEffectiveColumnsChanged: (Int) -> Unit,
     // The height budget for the landscape column math — measured once, above the pager,
     // covering the space available before the sticky row (PinnedRow) is subtracted. Using
     // a shared reference instead of this page's own pager-remaining height keeps tile size
@@ -1517,9 +1491,6 @@ private fun PageGrid(
     val shownTiles = if (usePageGrid) page.landscapeTiles else page.visibleTiles
     // Fit to screen sizes landscape tiles by their shape alone, as it always has.
     val rowHeight = if (isLandscape && !usePageGrid) null else pageRowHeight(page, boardRowHeight)
-    LaunchedEffect(columns, isActive) {
-        if (isActive) onEffectiveColumnsChanged(columns)
-    }
     val tileWidthPx = if (columns > 0 && gridWidthPx > 0) {
         (gridWidthPx - spacingPx * (columns - 1)) / columns
     } else 0f
@@ -1527,6 +1498,9 @@ private fun PageGrid(
     val tileHeightPx = rowHeight?.let { with(density) { it.toPx() } } ?: (tileWidthPx / page.tileAspectRatio)
     val cellStepYPx = if (tileWidthPx > 0f) tileHeightPx + spacingPx else 0f
     val labelTextStyle = rememberTilesLabelStyle(shownTiles, tileWidthPx, tileHeightPx, labelStyle)
+
+    val pinnedCount = page.columns
+    val split = pinFirstRow && shownTiles.size > pinnedCount
 
     fun tileDragModifier(index: Int, tile: Tile): Modifier {
         val isDragged = index == draggedIndex
@@ -1580,8 +1554,14 @@ private fun PageGrid(
                         val colDelta = (dragOffset.x / cellStepXPx).roundToInt()
                         val rowDelta = (dragOffset.y / cellStepYPx).roundToInt()
                         if (colDelta == 0 && rowDelta == 0) return@detectDragGesturesAfterLongPress
-                        val target = (current + rowDelta * columns + colDelta)
-                            .coerceIn(0, shownTiles.lastIndex)
+                        val target = dragTargetIndex(
+                            index = current,
+                            rowDelta = rowDelta,
+                            colDelta = colDelta,
+                            columns = columns,
+                            pinnedCount = if (split) pinnedCount else 0,
+                            lastIndex = shownTiles.lastIndex
+                        )
                         if (target != current) {
                             onPreviewMove(current, target)
                             draggedIndex = target
@@ -1592,7 +1572,18 @@ private fun PageGrid(
             }
     }
 
-    val split = pinFirstRow && shownTiles.size > columns
+    // The pinned row keeps the page's standard row height in every layout, stretched
+    // across the width — Fit to screen's shape-sized tiles would be huge at 4 across.
+    val pinnedRowHeight = pageRowHeight(page, boardRowHeight)
+    // Sized on its own tiles, exactly as PinnedRow sizes the same row on other pages, so
+    // the pinned labels look the same wherever they show.
+    val pinnedTileWidthPx = if (gridWidthPx > 0) (gridWidthPx - spacingPx * (pinnedCount - 1)) / pinnedCount else 0f
+    val pinnedLabelTextStyle = rememberTilesLabelStyle(
+        shownTiles.take(pinnedCount),
+        pinnedTileWidthPx,
+        with(density) { pinnedRowHeight.toPx() },
+        labelStyle
+    )
     val pageColor = page.color?.let { Color(it) }
 
     Column(
@@ -1606,13 +1597,13 @@ private fun PageGrid(
                 modifier = Modifier.padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(TILE_SPACING)
             ) {
-                shownTiles.take(columns).forEachIndexed { index, tile ->
+                shownTiles.take(pinnedCount).forEachIndexed { index, tile ->
                     TileCard(
                         tile = tile,
                         editMode = editMode,
                         aspectRatio = page.tileAspectRatio,
-                        rowHeight = rowHeight,
-                        labelTextStyle = labelTextStyle,
+                        rowHeight = pinnedRowHeight,
+                        labelTextStyle = pinnedLabelTextStyle,
                         allCaps = labelStyle.allCaps,
                         pageColor = pageColor,
                         opacity = tile.opacity ?: page.opacity ?: globalTileOpacity,
@@ -1625,8 +1616,8 @@ private fun PageGrid(
                 }
             }
         }
-        val remainder = if (split) shownTiles.drop(columns) else shownTiles
-        val remainderStart = if (split) columns else 0
+        val remainder = if (split) shownTiles.drop(pinnedCount) else shownTiles
+        val remainderStart = if (split) pinnedCount else 0
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             modifier = Modifier

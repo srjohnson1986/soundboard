@@ -533,7 +533,13 @@ gesture.
   `homePage.tiles.take(homePage.columns)` — the home page's own first row —
   via the same `PinnedRow` composable the old board-wide pinned row used, the
   same "trailing entries hidden, not lost" idea `Page.visibleTiles` already
-  uses for width.
+  uses for width. That's the first **portrait** row in both orientations (#153),
+  so rotating never changes what's pinned: in landscape the same tiles stretch
+  across the width at the page's standard row height, and the home page's own
+  pinned row (`PageGrid`'s `pinFirstRow`) does the same, with the landscape
+  grid continuing below from tile `columns`. Drags across that boundary map
+  columns proportionally (`dragTargetIndex`), since the pinned row can hold
+  fewer, wider tiles than the rows under it.
 - **`editingTarget: EditTarget?`** (a `PageTile(id)` or `HomeRowTile(id)`
   sealed type) replaces a plain tile-id string precisely so the edit dialog
   knows which page to look the tile up in and which mutator group

@@ -67,3 +67,39 @@ internal fun cappedRowHeightPx(
     val standard = portraitRowHeightPx(portraitGridWidthPx, STANDARD_ROW_COLUMNS, aspectRatio, spacingPx)
     return minOf(natural, standard * maxScale)
 }
+
+/**
+ * The tile index a drag lands on after moving [rowDelta] rows and [colDelta] grid columns
+ * from [index]. The first [pinnedCount] tiles form their own pinned row above rows of
+ * [columns] (0 for a plain grid). The pinned row can hold fewer, wider tiles than the rows
+ * under it (landscape), so a column is carried between rows as a fraction of the width
+ * rather than as a raw index: a tile dragged straight down lands under where it was.
+ */
+internal fun dragTargetIndex(
+    index: Int,
+    rowDelta: Int,
+    colDelta: Int,
+    columns: Int,
+    pinnedCount: Int,
+    lastIndex: Int
+): Int {
+    if (columns <= 0 || lastIndex < 0) return index
+    fun rowOf(i: Int) = if (pinnedCount > 0) {
+        if (i < pinnedCount) 0 else 1 + (i - pinnedCount) / columns
+    } else {
+        i / columns
+    }
+    fun rowStart(row: Int) = if (pinnedCount > 0) {
+        if (row == 0) 0 else pinnedCount + (row - 1) * columns
+    } else {
+        row * columns
+    }
+    fun rowLength(row: Int) = if (pinnedCount > 0 && row == 0) pinnedCount else columns
+
+    val row = rowOf(index)
+    val fraction = (index - rowStart(row) + 0.5f) / rowLength(row) + colDelta.toFloat() / columns
+    val targetRow = (row + rowDelta).coerceAtLeast(0)
+    val targetLength = rowLength(targetRow)
+    val targetCol = kotlin.math.floor(fraction * targetLength).toInt().coerceIn(0, targetLength - 1)
+    return (rowStart(targetRow) + targetCol).coerceIn(0, lastIndex)
+}

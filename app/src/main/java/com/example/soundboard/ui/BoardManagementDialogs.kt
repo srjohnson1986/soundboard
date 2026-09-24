@@ -40,11 +40,7 @@ internal fun PresetPickerDialog(
                     )
                 }
                 if (factoryPresets.isEmpty() && savedPresets.isEmpty()) {
-                    Text(
-                        "No presets yet — use \"Save as preset\" to create one.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    HelperText("No presets yet — use \"Save as preset\" to create one.")
                 }
             }
         },

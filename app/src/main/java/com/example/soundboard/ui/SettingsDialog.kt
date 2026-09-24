@@ -1,6 +1,5 @@
 package com.example.soundboard.ui
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -13,24 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.RangeSlider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -40,18 +27,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.soundboard.BoardSettingsActions
+import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelFont
 import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.ThemeMode
-import com.example.soundboard.model.TileBorder
-import com.example.soundboard.ui.theme.presetColors
 import kotlin.math.roundToInt
 
 /** Choices offered for the auto-return-to-home idle timeout in [SettingsDialog]; 0 means "Off". */
@@ -99,28 +85,12 @@ private fun LabelStyleControls(labelStyle: LabelStyle, onChange: (LabelStyle) ->
             )
         }
     )
-    Text(
+    HelperText(
         "Each page's labels share the largest size that still fits all of its tiles, " +
-            "so labels grow on pages with fewer columns and never go below the smaller number.",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant
+            "so labels grow on pages with fewer columns and never go below the smaller number."
     )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("Bold")
-        Switch(checked = labelStyle.bold, onCheckedChange = { onChange(labelStyle.copy(bold = it)) })
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("All caps")
-        Switch(checked = labelStyle.allCaps, onCheckedChange = { onChange(labelStyle.copy(allCaps = it)) })
-    }
+    SwitchRow("Bold", labelStyle.bold, { onChange(labelStyle.copy(bold = it)) })
+    SwitchRow("All caps", labelStyle.allCaps, { onChange(labelStyle.copy(allCaps = it)) })
     Text(
         "Preview",
         style = MaterialTheme.typography.labelMedium,
@@ -195,52 +165,21 @@ private fun longPressDurationLabel(millis: Int) = when (millis) {
     else -> "Longer"
 }
 
-/** App-level preferences that aren't page content — see [com.example.soundboard.data.SettingsRepository]. */
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Board-wide settings. Everything here except Performance mode lives on the board itself,
+ * so it travels with a preset; Performance mode is per-device (see
+ * [com.example.soundboard.data.DevicePreferences]).
+ */
 @Composable
 internal fun SettingsDialog(
-    openOnHomePage: Boolean,
-    onOpenOnHomePageChange: (Boolean) -> Unit,
-    idleTimeoutMinutes: Int,
-    onIdleTimeoutMinutesChange: (Int) -> Unit,
-    longPressDurationMillis: Int,
-    onLongPressDurationMillisChange: (Int) -> Unit,
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
-    keepScreenAwake: Boolean,
-    onKeepScreenAwakeChange: (Boolean) -> Unit,
-    hapticFeedbackEnabled: Boolean,
-    onHapticFeedbackEnabledChange: (Boolean) -> Unit,
-    speakUnrecordedTilesEnabled: Boolean,
-    onSpeakUnrecordedTilesEnabledChange: (Boolean) -> Unit,
+    board: Board,
     performanceModeEnabled: Boolean,
-    onPerformanceModeEnabledChange: (Boolean) -> Unit,
-    stickyHomeRowEnabled: Boolean,
-    hasHomePage: Boolean,
-    onStickyHomeRowEnabledChange: (Boolean) -> Unit,
-    hideBlankTilesEnabled: Boolean,
-    onHideBlankTilesEnabledChange: (Boolean) -> Unit,
-    backgroundColorArgb: Int?,
-    hasBackgroundImage: Boolean,
-    onBackgroundColorChange: (Int?) -> Unit,
+    actions: BoardSettingsActions,
     onPickBackgroundImage: () -> Unit,
-    onClearBackground: () -> Unit,
-    tileOpacity: Float,
-    onTileOpacityChange: (Float) -> Unit,
-    tileBorder: TileBorder,
-    onTileBorderChange: (TileBorder) -> Unit,
-    defaultPageRows: Int,
-    onDefaultPageRowsChange: (Int) -> Unit,
-    defaultPageColumns: Int,
-    onDefaultPageColumnsChange: (Int) -> Unit,
-    landscapeLayout: LandscapeLayout,
-    onLandscapeLayoutChange: (LandscapeLayout) -> Unit,
-    rowHeight: RowHeight,
-    onRowHeightChange: (RowHeight) -> Unit,
-    labelStyle: LabelStyle,
-    onLabelStyleChange: (LabelStyle) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val hasHomePage = board.homePageIndex != null
+    val hasBackgroundImage = board.backgroundImageFileName != null
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Settings") },
@@ -249,193 +188,84 @@ internal fun SettingsDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Open on home page")
-                    Switch(checked = openOnHomePage, onCheckedChange = onOpenOnHomePageChange)
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                var idleTimeoutExpanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = idleTimeoutExpanded,
-                    onExpandedChange = { idleTimeoutExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        modifier = Modifier
-                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                            .fillMaxWidth(),
-                        value = idleTimeoutLabel(idleTimeoutMinutes),
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Auto-return to home page after") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = idleTimeoutExpanded) }
-                    )
-                    ExposedDropdownMenu(
-                        expanded = idleTimeoutExpanded,
-                        onDismissRequest = { idleTimeoutExpanded = false }
-                    ) {
-                        IDLE_TIMEOUT_OPTIONS_MINUTES.forEach { minutes ->
-                            DropdownMenuItem(
-                                text = { Text(idleTimeoutLabel(minutes)) },
-                                onClick = {
-                                    onIdleTimeoutMinutesChange(minutes)
-                                    idleTimeoutExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                var longPressExpanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = longPressExpanded,
-                    onExpandedChange = { longPressExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        modifier = Modifier
-                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                            .fillMaxWidth(),
-                        value = longPressDurationLabel(longPressDurationMillis),
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Long-press duration") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = longPressExpanded) }
-                    )
-                    ExposedDropdownMenu(
-                        expanded = longPressExpanded,
-                        onDismissRequest = { longPressExpanded = false }
-                    ) {
-                        LONG_PRESS_DURATION_OPTIONS_MILLIS.forEach { millis ->
-                            DropdownMenuItem(
-                                text = { Text(longPressDurationLabel(millis)) },
-                                onClick = {
-                                    onLongPressDurationMillisChange(millis)
-                                    longPressExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SwitchRow("Open on home page", board.openOnHomePage, actions::setOpenOnHomePage)
+                SectionDivider()
+                OptionDropdown(
+                    label = "Auto-return to home page after",
+                    selected = board.idleTimeoutMinutes,
+                    options = IDLE_TIMEOUT_OPTIONS_MINUTES,
+                    optionLabel = ::idleTimeoutLabel,
+                    onSelect = actions::setIdleTimeoutMinutes
+                )
+                SectionDivider()
+                OptionDropdown(
+                    label = "Long-press duration",
+                    selected = board.longPressDurationMillis,
+                    options = LONG_PRESS_DURATION_OPTIONS_MILLIS,
+                    optionLabel = ::longPressDurationLabel,
+                    onSelect = actions::setLongPressDurationMillis
+                )
+                SectionDivider()
                 Text("Theme", style = MaterialTheme.typography.bodyMedium)
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    ThemeMode.entries.forEachIndexed { index, mode ->
-                        SegmentedButton(
-                            selected = mode == themeMode,
-                            onClick = { onThemeModeChange(mode) },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = ThemeMode.entries.size)
-                        ) {
-                            Text(
-                                when (mode) {
-                                    ThemeMode.SYSTEM -> "System"
-                                    ThemeMode.LIGHT -> "Light"
-                                    ThemeMode.DARK -> "Dark"
-                                }
-                            )
+                SegmentedChoice(
+                    options = ThemeMode.entries,
+                    selected = board.themeMode,
+                    optionLabel = { mode ->
+                        when (mode) {
+                            ThemeMode.SYSTEM -> "System"
+                            ThemeMode.LIGHT -> "Light"
+                            ThemeMode.DARK -> "Dark"
                         }
-                    }
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Keep screen awake")
-                    Switch(checked = keepScreenAwake, onCheckedChange = onKeepScreenAwakeChange)
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Haptic feedback")
-                    Switch(checked = hapticFeedbackEnabled, onCheckedChange = onHapticFeedbackEnabledChange)
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Speak label when there's no clip", modifier = Modifier.weight(1f))
-                    Switch(checked = speakUnrecordedTilesEnabled, onCheckedChange = onSpeakUnrecordedTilesEnabledChange)
-                }
-                Text(
-                    "Reads a tile's name aloud if it has no recording or upload yet.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    onSelect = actions::setThemeMode,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Performance mode", modifier = Modifier.weight(1f))
-                    Switch(checked = performanceModeEnabled, onCheckedChange = onPerformanceModeEnabledChange)
-                }
-                Text(
-                    "Turns off tile shadows, tap ripples, and the drag-reorder scale " +
-                        "effect to help the board stay smooth on older devices.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                SectionDivider()
+                SwitchRow("Keep screen awake", board.keepScreenAwake, actions::setKeepScreenAwake)
+                SectionDivider()
+                SwitchRow("Haptic feedback", board.hapticFeedbackEnabled, actions::setHapticFeedbackEnabled)
+                SectionDivider()
+                SwitchRow(
+                    label = "Speak label when there's no clip",
+                    checked = board.speakUnrecordedTilesEnabled,
+                    onCheckedChange = actions::setSpeakUnrecordedTilesEnabled,
+                    supportingText = "Reads a tile's name aloud if it has no recording or upload yet."
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Sticky home row", modifier = Modifier.weight(1f))
-                    Switch(
-                        checked = stickyHomeRowEnabled,
-                        onCheckedChange = onStickyHomeRowEnabledChange,
-                        enabled = hasHomePage
-                    )
-                }
-                Text(
-                    if (hasHomePage) {
+                SectionDivider()
+                SwitchRow(
+                    label = "Performance mode",
+                    checked = performanceModeEnabled,
+                    onCheckedChange = actions::setPerformanceModeEnabled,
+                    supportingText = "Turns off tile shadows, tap ripples, and the drag-reorder scale " +
+                        "effect to help the board stay smooth on older devices."
+                )
+                SectionDivider()
+                SwitchRow(
+                    label = "Sticky home row",
+                    checked = board.stickyHomeRowEnabled,
+                    onCheckedChange = actions::setStickyHomeRowEnabled,
+                    enabled = hasHomePage,
+                    supportingText = if (hasHomePage) {
                         "Shows your home page's first row fixed at the top of every other " +
                             "page. Nothing is deleted — other pages' content just moves down a row."
                     } else {
                         "Set a home page (Page options) to use this."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Hide blank tiles", modifier = Modifier.weight(1f))
-                    Switch(checked = hideBlankTilesEnabled, onCheckedChange = onHideBlankTilesEnabledChange)
-                }
-                Text(
-                    "Only shown while editing.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Text("Background", style = MaterialTheme.typography.bodyMedium)
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    presetColors.forEach { color ->
-                        ColorSwatch(
-                            color = color,
-                            selected = !hasBackgroundImage && color?.toArgb() == backgroundColorArgb,
-                            onClick = { onBackgroundColorChange(color?.toArgb()) }
-                        )
                     }
-                }
+                )
+                SectionDivider()
+                SwitchRow(
+                    label = "Hide blank tiles",
+                    checked = board.hideBlankTilesEnabled,
+                    onCheckedChange = actions::setHideBlankTilesEnabled,
+                    supportingText = "Only shown while editing."
+                )
+                SectionDivider()
+                Text("Background", style = MaterialTheme.typography.bodyMedium)
+                ColorPicker(
+                    selectedArgb = board.backgroundColorArgb,
+                    onSelect = actions::setBackgroundColor,
+                    showSelection = !hasBackgroundImage
+                )
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -444,79 +274,67 @@ internal fun SettingsDialog(
                         Text("Set image")
                     }
                     OutlinedButton(
-                        onClick = onClearBackground,
-                        enabled = hasBackgroundImage || backgroundColorArgb != null,
+                        onClick = actions::clearBackground,
+                        enabled = hasBackgroundImage || board.backgroundColorArgb != null,
                         modifier = Modifier.weight(1f)
                     ) {
                         Text("Clear")
                     }
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SectionDivider()
                 Text("Tile opacity", style = MaterialTheme.typography.bodyMedium)
-                OpacityControls(tileOpacity) { it?.let(onTileOpacityChange) }
-                Text(
-                    "Overridable per page (Page options) and per tile (Edit tile). " +
-                        "Set to 100% automatically in Performance mode.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                OpacityControls(board.tileOpacity) { it?.let(actions::setTileOpacity) }
+                HelperText(
+                    "Overridable per page (Page appearance) and per tile (Edit tile). " +
+                        "Set to 100% automatically in Performance mode."
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SectionDivider()
                 Text("Tile border", style = MaterialTheme.typography.bodyMedium)
-                BorderControls(tileBorder, onTileBorderChange)
-                Text(
-                    "Overridable per page (Page options) and per tile (Edit tile). " +
-                        "Turned off automatically in Performance mode.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                BorderControls(board.tileBorder, actions::setTileBorder)
+                HelperText(
+                    "Overridable per page (Page appearance) and per tile (Edit tile). " +
+                        "Turned off automatically in Performance mode."
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SectionDivider()
                 Text("Default grid size for new pages", style = MaterialTheme.typography.bodyMedium)
-                Stepper("Rows", defaultPageRows, onDefaultPageRowsChange)
-                Stepper("Columns", defaultPageColumns, onDefaultPageColumnsChange)
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Stepper("Rows", board.defaultPageRows, actions::setDefaultPageRows)
+                Stepper("Columns", board.defaultPageColumns, actions::setDefaultPageColumns)
+                SectionDivider()
                 OptionDropdown(
                     label = "Max row height",
-                    selected = rowHeight,
+                    selected = board.rowHeight,
                     options = RowHeight.entries,
                     optionLabel = ::rowHeightLabel,
-                    onSelect = onRowHeightChange
+                    onSelect = actions::setRowHeight
                 )
-                Text(
+                HelperText(
                     "Standard is the height of a 4-column row, so pages with fewer columns " +
-                        "get wide bars instead of huge squares. Overridable per page (Grid size).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                        "get wide bars instead of huge squares. Overridable per page (Grid size)."
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                LabelStyleControls(labelStyle, onLabelStyleChange)
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SectionDivider()
+                LabelStyleControls(board.labelStyle, actions::setLabelStyle)
+                SectionDivider()
                 Text("Landscape layout", style = MaterialTheme.typography.bodyMedium)
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    LandscapeLayout.entries.forEachIndexed { index, layout ->
-                        SegmentedButton(
-                            selected = layout == landscapeLayout,
-                            onClick = { onLandscapeLayoutChange(layout) },
-                            shape = SegmentedButtonDefaults.itemShape(index = index, count = LandscapeLayout.entries.size)
-                        ) {
-                            Text(
-                                when (layout) {
-                                    LandscapeLayout.PAGE_GRID -> "Page grid"
-                                    LandscapeLayout.FIT_TO_SCREEN -> "Fit to screen"
-                                }
-                            )
+                SegmentedChoice(
+                    options = LandscapeLayout.entries,
+                    selected = board.landscapeLayout,
+                    optionLabel = { layout ->
+                        when (layout) {
+                            LandscapeLayout.PAGE_GRID -> "Page grid"
+                            LandscapeLayout.FIT_TO_SCREEN -> "Fit to screen"
                         }
-                    }
-                }
-                Text(
-                    when (landscapeLayout) {
+                    },
+                    onSelect = actions::setLandscapeLayout,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                HelperText(
+                    when (board.landscapeLayout) {
                         LandscapeLayout.PAGE_GRID ->
                             "Each page's own landscape grid — twice its columns unless set in Grid size. " +
                                 "Rows keep their portrait height."
                         LandscapeLayout.FIT_TO_SCREEN ->
                             "Adds columns until 4 rows fit on screen."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
             }
         },

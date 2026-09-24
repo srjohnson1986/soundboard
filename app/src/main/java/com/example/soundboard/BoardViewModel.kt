@@ -45,7 +45,7 @@ class BoardViewModel(
     private val devicePrefs: DevicePreferences,
     private val recentPresetsRepo: RecentPresetsRepository,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
-) : ViewModel() {
+) : ViewModel(), BoardSettingsActions {
 
     private val _board = MutableStateFlow(Board())
     val board: StateFlow<Board> = _board.asStateFlow()
@@ -189,31 +189,31 @@ class BoardViewModel(
     }
 
     /** Whether the home page's first row shows fixed above every other page. */
-    fun setStickyHomeRowEnabled(value: Boolean) {
+    override fun setStickyHomeRowEnabled(value: Boolean) {
         commit(_board.value.copy(stickyHomeRowEnabled = value))
     }
 
     /** Global tile opacity; overridden per-page by [setPageOpacity] and per-tile by [setOpacity]. */
-    fun setTileOpacity(value: Float) {
+    override fun setTileOpacity(value: Float) {
         commit(_board.value.copy(tileOpacity = value.coerceIn(0f, 1f)))
     }
 
     /** Global tile border; overridden per-page by [setPageBorder] and per-tile by [setBorder]. */
-    fun setTileBorder(value: TileBorder) {
+    override fun setTileBorder(value: TileBorder) {
         commit(_board.value.copy(tileBorder = value))
     }
 
     /** Disables tile shadows to help scrolling stay smooth on slower devices. */
-    fun setPerformanceModeEnabled(value: Boolean) {
+    override fun setPerformanceModeEnabled(value: Boolean) {
         devicePrefs.performanceModeEnabled = value
         _performanceModeEnabled.value = value
     }
 
-    fun setDefaultPageRows(value: Int) {
+    override fun setDefaultPageRows(value: Int) {
         commit(_board.value.copy(defaultPageRows = value))
     }
 
-    fun setDefaultPageColumns(value: Int) {
+    override fun setDefaultPageColumns(value: Int) {
         commit(_board.value.copy(defaultPageColumns = value))
     }
 
@@ -230,18 +230,18 @@ class BoardViewModel(
         commit(_board.value.updatingPage(index) { it.copy(landscapeRows = rows, landscapeColumns = columns) })
     }
 
-    fun setLandscapeLayout(layout: LandscapeLayout) {
+    override fun setLandscapeLayout(layout: LandscapeLayout) {
         commit(_board.value.copy(landscapeLayout = layout))
     }
 
     /** Tile label font/size/weight/case; the size range is kept in order (min never above max). */
-    fun setLabelStyle(style: LabelStyle) {
+    override fun setLabelStyle(style: LabelStyle) {
         val min = style.minSizeSp.coerceIn(LabelStyle.SIZE_RANGE_SP)
         val max = style.maxSizeSp.coerceIn(LabelStyle.SIZE_RANGE_SP).coerceAtLeast(min)
         commit(_board.value.copy(labelStyle = style.copy(minSizeSp = min, maxSizeSp = max)))
     }
 
-    fun setRowHeight(rowHeight: RowHeight) {
+    override fun setRowHeight(rowHeight: RowHeight) {
         commit(_board.value.copy(rowHeight = rowHeight))
     }
 
@@ -265,44 +265,44 @@ class BoardViewModel(
     }
 
     /** Whether a fresh launch jumps to the home page instead of resuming the last-viewed one. */
-    fun setOpenOnHomePage(value: Boolean) {
+    override fun setOpenOnHomePage(value: Boolean) {
         commit(_board.value.copy(openOnHomePage = value))
     }
 
     /** Minutes of inactivity before auto-return to home; 0 disables it. */
-    fun setIdleTimeoutMinutes(value: Int) {
+    override fun setIdleTimeoutMinutes(value: Int) {
         commit(_board.value.copy(idleTimeoutMinutes = value))
     }
 
     /** How long a page-tab press must be held before it counts as a long-press, in milliseconds. */
-    fun setLongPressDurationMillis(value: Int) {
+    override fun setLongPressDurationMillis(value: Int) {
         commit(_board.value.copy(longPressDurationMillis = value))
     }
 
-    fun setThemeMode(mode: ThemeMode) {
+    override fun setThemeMode(mode: ThemeMode) {
         commit(_board.value.copy(themeMode = mode))
     }
 
-    fun setKeepScreenAwake(value: Boolean) {
+    override fun setKeepScreenAwake(value: Boolean) {
         commit(_board.value.copy(keepScreenAwake = value))
     }
 
-    fun setHapticFeedbackEnabled(value: Boolean) {
+    override fun setHapticFeedbackEnabled(value: Boolean) {
         commit(_board.value.copy(hapticFeedbackEnabled = value))
     }
 
     /** Whether a tile with no sound file speaks its label via TTS on tap, even without its own speak-label switch on. */
-    fun setSpeakUnrecordedTilesEnabled(value: Boolean) {
+    override fun setSpeakUnrecordedTilesEnabled(value: Boolean) {
         commit(_board.value.copy(speakUnrecordedTilesEnabled = value))
     }
 
     /** Whether blank tiles are hidden (and untappable) outside of edit mode, to avoid a stray tap opening the editor. */
-    fun setHideBlankTilesEnabled(value: Boolean) {
+    override fun setHideBlankTilesEnabled(value: Boolean) {
         commit(_board.value.copy(hideBlankTilesEnabled = value))
     }
 
     /** Solid background color; setting one clears any background image. */
-    fun setBackgroundColor(argb: Int?) = replaceBackground(colorArgb = argb, imageFileName = null)
+    override fun setBackgroundColor(argb: Int?) = replaceBackground(colorArgb = argb, imageFileName = null)
 
     /** Background image picked from the gallery; replaces any solid background color. */
     fun setBackgroundImage(uri: Uri) {
@@ -313,7 +313,7 @@ class BoardViewModel(
     }
 
     /** Clears the background back to the plain theme surface. */
-    fun clearBackground() = replaceBackground(colorArgb = null, imageFileName = null)
+    override fun clearBackground() = replaceBackground(colorArgb = null, imageFileName = null)
 
     /**
      * Single write path for the background: at most one of color or image is ever set, and

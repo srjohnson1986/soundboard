@@ -9,9 +9,30 @@ built-in board is a full backup-shaped zip
 (`board.json` at the root plus every referenced sound under `sounds/`, the
 same format `BoardRepository.exportTo()`/`importFrom()` produce) bundled as
 an app asset, so it's self-contained and works on a device that has never
-recorded anything. All three zips here show up in the **☰** menu's **Open board...**
-picker automatically, labeled "Built-in," alongside whatever you've saved
-yourself.
+recorded anything. They show up in the **☰** menu's **Open board...** picker,
+labeled "Built-in," alongside whatever you've saved yourself: Jeremy's,
+Sarah's and the TTS board in every build, Steve's in debug builds only.
+
+## Keeping the bundled copies in sync
+
+This folder holds the source copy of every built-in board. The app ships
+copies of them, which must stay byte-for-byte identical to the ones here:
+
+| Board | Bundled copy |
+|---|---|
+| `jeremy-care-board.zip` | `app/src/main/assets/` (every build; also the fallback board) |
+| `sarah-care-board.zip` | `app/src/main/assets/` (every build) |
+| `tts-care-board.zip` | `app/src/main/assets/` (every build) |
+| `steve-care-board.zip` | `app/src/debug/assets/` (debug builds only) |
+
+After changing a zip here, copy it over the bundled one. To check they
+match, compare hashes; each pair should print the same hash:
+
+```bash
+md5sum presets/*.zip app/src/main/assets/*.zip app/src/debug/assets/*.zip | sort
+```
+
+The release checklist (`docs/RELEASING.md`) includes this check.
 
 A built-in board (or any backup zip, via **Import backup**) doesn't need
 every tile's clip actually present in `sounds/` — `BoardRepository.load()`
@@ -26,10 +47,10 @@ section in `docs/USER_GUIDE.md`.
 A short (~2s) chime, kept here as the canonical source so it's easy to find
 and swap later. Jeremy's, Sarah's, and Steve's boards all point their
 Trouble page's "Chime" tile at a copy of this file (`sounds/chime.wav`
-inside each preset zip) instead of shipping it as an unrecorded gap.
+inside each board's zip) instead of shipping it as an unrecorded gap.
 `tts-care-board.zip` is left as-is — it speaks the word "Chime" via
 text-to-speech, same as every other tile there, and adding a real audio
-file would break that preset's whole reason for existing (zero recording,
+file would break that board's whole reason for existing (zero recording,
 no `sounds/` directory at all).
 
 ## `steve-care-board.zip` — "Steve Draft Care Board"
@@ -74,8 +95,8 @@ backwards.
 Its `board.json` carries the name **"Steve Draft Care Board"** (the
 `Board.name` field), so once loaded it's clearly labeled — not mistaken for
 a finished or generic board — wherever the app shows the active board's
-name (currently the top bar's title; see
-[docs/USER_GUIDE.md](../docs/USER_GUIDE.md#what-board-is-loaded)).
+name (the **☰** menu's **Rename board (…)** item; see
+[docs/USER_GUIDE.md](../docs/USER_GUIDE.md#finding-your-way-around)).
 
 **Jeremy's board is the fallback for now instead (see below) — this one
 doesn't auto-load on install.** Only one board can be the fallback, but it's
@@ -132,8 +153,9 @@ Three things differ from Steve's board:
 
 Same three pages, layout, colors, and labels as `jeremy-care-board.zip`, but
 built for zero recording: every tile with a label speaks it via on-device
-text-to-speech (`speakLabel = true`, `fileName = null`) instead of playing a
-clip. There's no `sounds/` directory in this zip at all — nothing to copy —
+text-to-speech instead of playing a clip (`Tile.speakWhenNoSound` on and no
+`fileName`; in `board.json` that field is still stored under its original
+name, `"speakLabel": true`). There's no `sounds/` directory in this zip at all — nothing to copy —
 so it's a few KB instead of several megabytes.
 
 Bundled in every build (not debug-only), so it always shows up in **Open
@@ -147,8 +169,9 @@ to record Jeremy's and Steve's audio, matched to each tile by the fileName
 `jeremy-care-board.zip`'s corresponding tile uses. A few tiles have no real
 sentence to assign and just speak their plain label instead: Trouble's
 "Chime" (a physical sound, not a phrase), Trouble's two "Get ___" name
-templates (the script leaves the name blank), and Talking's "Ha!" (a real
-laugh, not a line). Because the script is matched by fileName rather than by
+templates (the script leaves the name blank), Talking's "Ha!" (a real
+laugh, not a line), and Talking's "Not that" (no clip was ever recorded
+for it, so there's no script line to borrow). Because the script is matched by fileName rather than by
 re-deriving from the label, it also carries over the one labeling quirk
 noted above verbatim — Talking's "Thanks (quick)" speaks "Thank you." here
 too, since that's what `thank_you_2.wav` actually says.
@@ -165,9 +188,12 @@ named contacts instead; no resize needed. Bundled in every build, same as
 Jeremy's and the TTS-only board — Jeremy's board remains the fallback that
 auto-imports on a fresh install.
 
-Every tile also carries a `ttsScript`, same treatment as `tts-care-board.zip`.
-One known gap: the script's `no_2.wav` ("Mm-mm") isn't in this recording
-batch, so that tile ships with no `fileName`, same as Talking's "Not that"
-gap on Jeremy's board. 23 of the batch's 92 clips aren't tiled anywhere in
+Almost every tile also carries a `ttsScript`, same treatment as
+`tts-care-board.zip` (Trouble's "Chime" is a sound, not a line). Three tiles
+ship with no clip: Needs' "Mm-mm" (the script's `no_2.wav` isn't in this
+recording batch), Talking's "Ha!" (a real laugh, which ElevenLabs didn't
+produce), and Talking's "Not that" (the same gap as Jeremy's board). With
+the board's default "speak label when there's no clip" setting, those three
+read their label aloud instead. 23 of the batch's 92 clips aren't tiled anywhere in
 this layout — the same "recorded but no slot yet" phrases documented for
 Jeremy's and Steve's boards above.

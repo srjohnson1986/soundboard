@@ -65,6 +65,11 @@ class BoardScreenTest {
         composeRule.setContent {
             BoardScreen(vm = vm)
         }
+        // The view model loads the board off the main thread, which Compose's idling doesn't
+        // track — on a slow emulator the first assertions would otherwise see the empty
+        // default board instead of this one.
+        composeRule.waitUntil(timeoutMillis = 5_000) { vm.board.value.pages.first().id == board.pages.first().id }
+        composeRule.waitForIdle()
     }
 
     @Test

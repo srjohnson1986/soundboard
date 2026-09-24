@@ -653,8 +653,12 @@ gesture.
 
 `./gradlew test` runs everything except the two `androidTest/` classes;
 `./gradlew connectedAndroidTest` runs those against a connected device or
-emulator. **CI only runs the former**, so run `connectedAndroidTest` on an
-emulator before a release. `LayoutAndLabelTest` rotates the device itself
+emulator. In CI, the **CI** workflow runs the former and gates merging. The
+separate **UI tests** workflow (`.github/workflows/ui-tests.yml`) runs the
+latter on an API 35 emulator for every PR, and on demand via **Run workflow**.
+It's advisory, not a merge gate, because emulators on shared runners
+occasionally flake on timing-sensitive gestures. Its HTML report is uploaded as
+the `ui-test-report` artifact. `LayoutAndLabelTest` rotates the device itself
 (`UiAutomation.setRotation`) and restores portrait afterwards.
 
 - **`FakePlayer`** (a `Player`) exists twice — once under `test/`, once under

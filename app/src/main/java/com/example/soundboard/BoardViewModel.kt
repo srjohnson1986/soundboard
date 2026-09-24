@@ -19,6 +19,7 @@ import com.example.soundboard.data.RecentPresetEntry
 import com.example.soundboard.data.RecentPresetsRepository
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Board
+import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.ThemeMode
@@ -313,6 +314,13 @@ class BoardViewModel(
 
     fun setLandscapeLayout(layout: LandscapeLayout) {
         commit(_board.value.copy(landscapeLayout = layout))
+    }
+
+    /** Tile label font/size/weight/case; the size range is kept in order (min never above max). */
+    fun setLabelStyle(style: LabelStyle) {
+        val min = style.minSizeSp.coerceIn(LabelStyle.SIZE_RANGE_SP)
+        val max = style.maxSizeSp.coerceIn(LabelStyle.SIZE_RANGE_SP).coerceAtLeast(min)
+        commit(_board.value.copy(labelStyle = style.copy(minSizeSp = min, maxSizeSp = max)))
     }
 
     fun setRowHeight(rowHeight: RowHeight) {

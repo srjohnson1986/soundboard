@@ -10,6 +10,8 @@ import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.data.RecentPresetsRepository
 import com.example.soundboard.model.Board
+import com.example.soundboard.model.LabelFont
+import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.RowHeight
@@ -893,6 +895,30 @@ class BoardViewModelTest {
         vm.setRowHeight(RowHeight.TALL)
 
         assertEquals(RowHeight.TALL, newViewModel().board.value.rowHeight)
+    }
+
+    @Test
+    fun `setLabelStyle persists across a fresh view model`() {
+        val vm = newViewModel()
+        assertEquals(LabelStyle(), vm.board.value.labelStyle)
+        val style = LabelStyle(minSizeSp = 16f, maxSizeSp = 40f, font = LabelFont.ATKINSON_HYPERLEGIBLE, bold = true, allCaps = true)
+
+        vm.setLabelStyle(style)
+
+        assertEquals(style, newViewModel().board.value.labelStyle)
+    }
+
+    @Test
+    fun `setLabelStyle keeps the size range in bounds and in order`() {
+        val vm = newViewModel()
+
+        vm.setLabelStyle(LabelStyle(minSizeSp = 30f, maxSizeSp = 20f))
+        assertEquals(30f, vm.board.value.labelStyle.minSizeSp)
+        assertEquals(30f, vm.board.value.labelStyle.maxSizeSp)
+
+        vm.setLabelStyle(LabelStyle(minSizeSp = 1f, maxSizeSp = 500f))
+        assertEquals(LabelStyle.SIZE_RANGE_SP.start, vm.board.value.labelStyle.minSizeSp)
+        assertEquals(LabelStyle.SIZE_RANGE_SP.endInclusive, vm.board.value.labelStyle.maxSizeSp)
     }
 
     @Test

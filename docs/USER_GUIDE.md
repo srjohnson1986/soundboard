@@ -96,6 +96,23 @@ in Grid size. A tile filled in landscape also shows up in portrait; the page
 simply gets another row. To go back to the old behavior of adding columns until
 4 rows fit on screen, set **Settings → Landscape layout** to **Fit to screen**.
 
+## Label text
+
+**Settings → Tile labels** controls how every tile label looks, board-wide.
+These settings are saved with presets.
+
+- **Font** — Default (Roboto), Roboto Condensed (fits longer phrases), Noto
+  Serif, or one of two fonts designed for easy reading: **Atkinson
+  Hyperlegible** and **Lexend**. Both are bundled with the app under the SIL
+  Open Font License; their license texts ship in `assets/licenses/`.
+- **Text size** — a smallest and a largest size. All labels on a page share
+  one size: the largest that still fits every tile on that page. Pages with
+  fewer, bigger tiles therefore get bigger text, and text never goes below the
+  smallest size. A label too long to fit even at the smallest size wraps to 3
+  lines and ends in "…", as before.
+- **Bold** and **All caps** — for extra legibility. The sample underneath
+  shows the result.
+
 ## Pages
 
 A board can hold more than one page — each its own grid of tiles, with its

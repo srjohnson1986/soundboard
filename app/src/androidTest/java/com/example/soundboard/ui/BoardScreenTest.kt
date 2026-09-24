@@ -23,6 +23,9 @@ import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.soundboard.BoardViewModel
+import com.example.soundboard.audio.FakePlayer
+import com.example.soundboard.audio.FakeRecorder
+import com.example.soundboard.audio.FakeSpeaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.SavedBoardRepository
@@ -80,7 +83,7 @@ class BoardScreenTest {
 
         composeRule.onNodeWithText("Air horn").performClick()
 
-        composeRule.waitUntil(timeoutMillis = 2_000) { player.played.contains("a.mp3") }
+        composeRule.waitUntil(timeoutMillis = 2_000) { player.playedKeys.contains("a.mp3") }
     }
 
     @Test
@@ -297,7 +300,7 @@ class BoardScreenTest {
         }
         composeRule.waitForIdle()
 
-        composeRule.waitUntil(timeoutMillis = 2_000) { player.played.contains("a.mp3") }
+        composeRule.waitUntil(timeoutMillis = 2_000) { player.playedKeys.contains("a.mp3") }
         assertEquals(listOf("A", "B"), vm.board.value.currentPage.visibleTiles.map { it.label }.filter { it.isNotEmpty() })
     }
 
@@ -339,7 +342,7 @@ class BoardScreenTest {
         }
         composeRule.waitForIdle()
 
-        composeRule.waitUntil(timeoutMillis = 2_000) { player.played.contains("hey.mp3") }
+        composeRule.waitUntil(timeoutMillis = 2_000) { player.playedKeys.contains("hey.mp3") }
         composeRule.onNodeWithText("Edit tile").assertDoesNotExist()
     }
 

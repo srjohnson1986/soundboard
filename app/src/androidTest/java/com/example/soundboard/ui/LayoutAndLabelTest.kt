@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.soundboard.BoardViewModel
+import com.example.soundboard.audio.FakePlayer
+import com.example.soundboard.audio.FakeRecorder
+import com.example.soundboard.audio.FakeSpeaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.SavedBoardRepository

@@ -6,6 +6,9 @@ import java.io.File
 class FakePlayer : Player {
     val loaded = mutableListOf<String>()
     val played = mutableListOf<Pair<String, Float>>()
+
+    /** Just the keys from [played], in order — for tests that don't care about volume. */
+    val playedKeys: List<String> get() = played.map { it.first }
     val unloaded = mutableListOf<String>()
     var cleared = false
     var released = false

@@ -5,7 +5,6 @@ import com.example.soundboard.model.Board
 import java.io.File
 import java.util.UUID
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 
 /** One saved preset's identity, without loading its full board content. */
 data class SavedPreset(val id: String, val name: String, val savedAt: Long)
@@ -24,11 +23,7 @@ class PresetRepository(context: Context) {
 
     private val presetsDir = File(context.filesDir, "presets")
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-        prettyPrint = true
-    }
+    private val json = BoardJson
 
     /** Every saved preset, newest first. Scans disk directly rather than keeping a separate index, so the list can never drift from what's actually there. */
     fun list(): List<SavedPreset> =
@@ -50,7 +45,7 @@ class PresetRepository(context: Context) {
     fun allReferencedFileNames(): Set<String> =
         presetFiles()
             .mapNotNull(::decode)
-            .flatMap { board -> board.pages.flatMap { it.tiles }.mapNotNull { it.fileName } }
+            .flatMap { it.soundFileNames }
             .toSet()
 
     private fun presetFiles(): List<File> =

@@ -4,12 +4,22 @@ import android.content.Context
 import java.io.File
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
+import kotlinx.serialization.SerialName
+
+/** Where a recent preset came from. Serialized as the lowercase strings older builds wrote. */
+@Serializable
+enum class RecentPresetKind {
+    /** A preset saved on this device; [RecentPresetEntry.id] names it. */
+    @SerialName("saved") SAVED,
+
+    /** A preset bundled with the app; [RecentPresetEntry.assetName] names it. */
+    @SerialName("factory") FACTORY
+}
 
 /** One preset that was actually loaded or saved, for the title bar's quick-switch dropdown. */
 @Serializable
 data class RecentPresetEntry(
-    val kind: String,
+    val kind: RecentPresetKind,
     val id: String? = null,
     val assetName: String? = null,
     val label: String,
@@ -27,10 +37,7 @@ class RecentPresetsRepository(context: Context) {
 
     private val file = File(context.filesDir, "recent_presets.json")
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
+    private val json = BoardJson
 
     /** Most recently used first, capped at [MAX_ENTRIES]. */
     fun recent(limit: Int = MAX_ENTRIES): List<RecentPresetEntry> = readAll().take(limit)

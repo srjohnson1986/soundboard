@@ -882,10 +882,7 @@ fun BoardScreen(
                     boardRowHeight = board.rowHeight,
                     labelStyle = board.labelStyle,
                     editMode = editMode,
-                    pageColor = homePage.color?.let { Color(it) },
-                    pageOpacity = homePage.opacity,
                     globalTileOpacity = if (performanceModeEnabled) 1f else board.tileOpacity,
-                    pageBorder = homePage.border,
                     globalTileBorder = if (performanceModeEnabled) TileBorder() else board.tileBorder,
                     hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                     performanceModeEnabled = performanceModeEnabled,
@@ -893,7 +890,7 @@ fun BoardScreen(
                     hideBlankTilesEnabled = board.hideBlankTilesEnabled,
                     onTap = { tile ->
                         touch()
-                        if (!isPlayable(tile, board.speakUnrecordedTilesEnabled) || editMode) {
+                        if (!tile.isPlayable(board.speakUnrecordedTilesEnabled) || editMode) {
                             editingTarget = EditTarget.HomeRowTile(tile.id)
                         } else {
                             vm.play(tile)
@@ -937,7 +934,7 @@ fun BoardScreen(
                         pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
                         onTap = { tile ->
                             touch()
-                            if (!isPlayable(tile, board.speakUnrecordedTilesEnabled) || editMode) {
+                            if (!tile.isPlayable(board.speakUnrecordedTilesEnabled) || editMode) {
                                 editingTarget = EditTarget.PageTile(tile.id)
                             } else {
                                 vm.play(tile)
@@ -1127,7 +1124,7 @@ pageOpacityDialogIndex?.let { index ->
 
     if (showPresetPickerDialog) {
         PresetPickerDialog(
-            factoryPresets = vm.factoryPresets(context),
+            factoryPresets = vm.factoryPresets(),
             savedPresets = presets,
             onSelect = { ref, label ->
                 showPresetPickerDialog = false
@@ -1268,10 +1265,6 @@ pageOpacityDialogIndex?.let { index ->
 
 }
 
-/** Whether tapping [tile] does anything — plays a clip, or (with the fallback setting) speaks its [Tile.speechText]. Mirrors [BoardViewModel.play]'s own condition. */
-private fun isPlayable(tile: Tile, speakUnrecordedTilesEnabled: Boolean): Boolean =
-    tile.fileName != null || ((tile.speakLabel || speakUnrecordedTilesEnabled) && tile.speechText.isNotBlank())
-
 /** Horizontal padding on each side of a page's grid (and the pinned row above it). */
 private val GRID_PADDING = 12.dp
 
@@ -1337,10 +1330,7 @@ private fun PinnedRow(
     boardRowHeight: RowHeight,
     labelStyle: LabelStyle,
     editMode: Boolean,
-    pageColor: Color?,
-    pageOpacity: Float?,
     globalTileOpacity: Float,
-    pageBorder: TileBorder?,
     globalTileBorder: TileBorder,
     hapticFeedbackEnabled: Boolean,
     performanceModeEnabled: Boolean,
@@ -1373,9 +1363,9 @@ private fun PinnedRow(
                 rowHeight = rowHeight,
                 labelTextStyle = labelTextStyle,
                 allCaps = labelStyle.allCaps,
-                pageColor = pageColor,
-                opacity = tile.opacity ?: pageOpacity ?: globalTileOpacity,
-                border = tile.border ?: pageBorder ?: globalTileBorder,
+                pageColor = homePage.color?.let { Color(it) },
+                opacity = homePage.opacityFor(tile, globalTileOpacity),
+                border = homePage.borderFor(tile, globalTileBorder),
                 performanceModeEnabled = performanceModeEnabled,
                 hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                 modifier = Modifier.weight(1f),
@@ -1383,7 +1373,7 @@ private fun PinnedRow(
                 // Long-press previews what a pad will say without "using" it for real,
                 // same as PageGrid's hold-without-moving (#4) — not offered in edit mode,
                 // where a tap already opens the editor's own Play/Preview button.
-                onLongClick = if (!editMode && isPlayable(tile, speakUnrecordedTilesEnabled)) {
+                onLongClick = if (!editMode && tile.isPlayable(speakUnrecordedTilesEnabled)) {
                     {
                         if (hapticFeedbackEnabled) {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1505,7 +1495,7 @@ private fun PageGrid(
                         // reorder at all — treat it as a request to preview what the tile
                         // says/plays without "using" it for real (#4), same as PinnedRow's
                         // dedicated onLongClick (which has no competing drag gesture to share it with).
-                        if (!editMode && draggedIndex == index && isPlayable(tile, speakUnrecordedTilesEnabled)) {
+                        if (!editMode && draggedIndex == index && tile.isPlayable(speakUnrecordedTilesEnabled)) {
                             onPreviewSound(tile)
                         }
                         draggedIndex = null
@@ -1578,8 +1568,8 @@ private fun PageGrid(
                         labelTextStyle = pinnedLabelTextStyle,
                         allCaps = labelStyle.allCaps,
                         pageColor = pageColor,
-                        opacity = tile.opacity ?: page.opacity ?: globalTileOpacity,
-                        border = tile.border ?: page.border ?: globalTileBorder,
+                        opacity = page.opacityFor(tile, globalTileOpacity),
+                        border = page.borderFor(tile, globalTileBorder),
                         performanceModeEnabled = performanceModeEnabled,
                         hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                         modifier = Modifier.weight(1f).then(tileDragModifier(index, tile)),
@@ -1609,8 +1599,8 @@ private fun PageGrid(
                     labelTextStyle = labelTextStyle,
                     allCaps = labelStyle.allCaps,
                     pageColor = pageColor,
-                    opacity = tile.opacity ?: page.opacity ?: globalTileOpacity,
-                    border = tile.border ?: page.border ?: globalTileBorder,
+                    opacity = page.opacityFor(tile, globalTileOpacity),
+                    border = page.borderFor(tile, globalTileBorder),
                     performanceModeEnabled = performanceModeEnabled,
                     hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
                     modifier = Modifier
@@ -1905,7 +1895,7 @@ private fun EditTileDialog(
                 ) {
                     OutlinedButton(
                         onClick = { onPlay(tile.copy(label = label, ttsScript = ttsScript)) },
-                        enabled = isPlayable(tile.copy(label = label, ttsScript = ttsScript), speakUnrecordedTilesEnabled) && !isRecording,
+                        enabled = tile.copy(label = label, ttsScript = ttsScript).isPlayable(speakUnrecordedTilesEnabled) && !isRecording,
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(

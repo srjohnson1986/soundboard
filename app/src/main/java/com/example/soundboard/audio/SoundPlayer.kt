@@ -14,14 +14,15 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class SoundPlayer(maxStreams: Int = 8, private val longClipThresholdBytes: Long = 300_000L) : Player {
 
+    /** Shared by both playback paths so short and long clips route and duck the same way. */
+    private val audioAttributes = AudioAttributes.Builder()
+        .setUsage(AudioAttributes.USAGE_MEDIA)
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .build()
+
     private val pool = SoundPool.Builder()
         .setMaxStreams(maxStreams)
-        .setAudioAttributes(
-            AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                .build()
-        )
+        .setAudioAttributes(audioAttributes)
         .build()
 
     private val soundIds = ConcurrentHashMap<String, Int>()
@@ -56,12 +57,7 @@ class SoundPlayer(maxStreams: Int = 8, private val longClipThresholdBytes: Long 
         if (longFile != null) {
             activePlayer = runCatching {
                 MediaPlayer().apply {
-                    setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_MEDIA)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .build()
-                    )
+                    setAudioAttributes(audioAttributes)
                     setDataSource(longFile.absolutePath)
                     setVolume(vol, vol)
                     setOnPreparedListener { it.start() }

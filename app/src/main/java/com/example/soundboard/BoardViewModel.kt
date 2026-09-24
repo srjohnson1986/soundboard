@@ -1,7 +1,6 @@
 package com.example.soundboard
 
 import android.app.Application
-import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -16,6 +15,7 @@ import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.data.RecentPresetEntry
+import com.example.soundboard.data.RecentPresetKind
 import com.example.soundboard.data.RecentPresetsRepository
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Board
@@ -94,12 +94,9 @@ class BoardViewModel(
     }
 
     fun play(tile: Tile) {
+        if (!tile.isPlayable(_board.value.speakUnrecordedTilesEnabled)) return
         val name = tile.fileName
-        if (name != null) {
-            player.play(name, tile.volume)
-        } else if (tile.speechText.isNotBlank() && (tile.speakLabel || _board.value.speakUnrecordedTilesEnabled)) {
-            speaker.speak(tile.speechText)
-        }
+        if (name != null) player.play(name, tile.volume) else speaker.speak(tile.speechText)
     }
 
     /** Speaks arbitrary text not tied to any tile — for a one-off phrase no pad covers. */
@@ -305,31 +302,28 @@ class BoardViewModel(
     }
 
     /** Solid background color; setting one clears any background image. */
-    fun setBackgroundColor(argb: Int?) {
-        val previousImage = _board.value.backgroundImageFileName
-        commit(_board.value.copy(backgroundColorArgb = argb, backgroundImageFileName = null))
-        if (previousImage != null) {
-            viewModelScope.launch(ioDispatcher) { repo.backgroundFile(previousImage).delete() }
-        }
-    }
+    fun setBackgroundColor(argb: Int?) = replaceBackground(colorArgb = argb, imageFileName = null)
 
     /** Background image picked from the gallery; replaces any solid background color. */
     fun setBackgroundImage(uri: Uri) {
-        val previousImage = _board.value.backgroundImageFileName
         viewModelScope.launch {
             val name = withContext(ioDispatcher) { repo.importBackgroundImage(uri) } ?: return@launch
-            commit(_board.value.copy(backgroundColorArgb = null, backgroundImageFileName = name))
-            if (previousImage != null) {
-                withContext(ioDispatcher) { repo.backgroundFile(previousImage).delete() }
-            }
+            replaceBackground(colorArgb = null, imageFileName = name)
         }
     }
 
     /** Clears the background back to the plain theme surface. */
-    fun clearBackground() {
+    fun clearBackground() = replaceBackground(colorArgb = null, imageFileName = null)
+
+    /**
+     * Single write path for the background: at most one of color or image is ever set, and
+     * the image file it replaces is deleted — nothing else points at it (backgrounds aren't
+     * shared with saved presets the way sounds are).
+     */
+    private fun replaceBackground(colorArgb: Int?, imageFileName: String?) {
         val previousImage = _board.value.backgroundImageFileName
-        commit(_board.value.copy(backgroundColorArgb = null, backgroundImageFileName = null))
-        if (previousImage != null) {
+        commit(_board.value.copy(backgroundColorArgb = colorArgb, backgroundImageFileName = imageFileName))
+        if (previousImage != null && previousImage != imageFileName) {
             viewModelScope.launch(ioDispatcher) { repo.backgroundFile(previousImage).delete() }
         }
     }
@@ -405,7 +399,7 @@ class BoardViewModel(
     fun refreshStrayClips() {
         viewModelScope.launch {
             _strayClips.value = withContext(ioDispatcher) {
-                val keep = allTiles(_board.value).mapNotNull { it.fileName }.toSet() + presetRepo.allReferencedFileNames()
+                val keep = _board.value.soundFileNames + presetRepo.allReferencedFileNames()
                 repo.strayFiles(keep).map { StrayClip(it.name, it.length()) }
             }
         }
@@ -455,7 +449,7 @@ class BoardViewModel(
             val id = withContext(ioDispatcher) { presetRepo.save(renamed) }
             commit(renamed)
             refreshPresets()
-            recordRecentlyUsed(RecentPresetEntry(kind = "saved", id = id, label = renamed.name, usedAt = System.currentTimeMillis()))
+            recordRecentlyUsed(RecentPresetEntry(kind = RecentPresetKind.SAVED, id = id, label = renamed.name, usedAt = System.currentTimeMillis()))
             _message.value = "Saved preset \"${renamed.name}\""
         }
     }
@@ -473,13 +467,13 @@ class BoardViewModel(
                     player.clear()
                     commit(loaded)
                     withContext(ioDispatcher) { loadSounds(loaded) }
-                    recordRecentlyUsed(RecentPresetEntry(kind = "saved", id = ref.id, label = loaded.name, usedAt = System.currentTimeMillis()))
+                    recordRecentlyUsed(RecentPresetEntry(kind = RecentPresetKind.SAVED, id = ref.id, label = loaded.name, usedAt = System.currentTimeMillis()))
                     _message.value = "Loaded \"${loaded.name}\""
                 }
                 is PresetRef.Factory -> {
                     val ok = withContext(ioDispatcher) { repo.importFromAsset(ref.assetName) }
                     if (ok) {
-                        recordRecentlyUsed(RecentPresetEntry(kind = "factory", assetName = ref.assetName, label = ref.label, usedAt = System.currentTimeMillis()))
+                        recordRecentlyUsed(RecentPresetEntry(kind = RecentPresetKind.FACTORY, assetName = ref.assetName, label = ref.label, usedAt = System.currentTimeMillis()))
                     }
                     replaceBoardAfterImport(ok, "Loaded \"${ref.label}\"", "Couldn't load preset")
                 }
@@ -496,19 +490,18 @@ class BoardViewModel(
 
     private fun RecentPresetEntry.toItem(): RecentPresetItem? {
         val ref = when (kind) {
-            "saved" -> id?.let { PresetRef.Saved(it) }
-            "factory" -> assetName?.let { PresetRef.Factory(it, label) }
-            else -> null
+            RecentPresetKind.SAVED -> id?.let { PresetRef.Saved(it) }
+            RecentPresetKind.FACTORY -> assetName?.let { PresetRef.Factory(it, label) }
         } ?: return null
         return RecentPresetItem(ref, label, usedAt)
     }
 
     /** Factory presets bundled with this build — Jeremy's, Sarah's, and the TTS-only board ship in every build; Steve's only where its asset is actually packaged (debug builds). */
-    fun factoryPresets(context: Context): List<PresetRef.Factory> = buildList {
+    fun factoryPresets(): List<PresetRef.Factory> = buildList {
         add(PresetRef.Factory(JEREMY_PRESET_ASSET, "Jeremy Draft Care Board"))
         add(PresetRef.Factory(SARAH_PRESET_ASSET, "Sarah (ElevenLabs) Care Board"))
         add(PresetRef.Factory(TTS_PRESET_ASSET, "TTS Care Board"))
-        if (runCatching { context.assets.open(STEVE_PRESET_ASSET).close() }.isSuccess) {
+        if (repo.hasAsset(STEVE_PRESET_ASSET)) {
             add(PresetRef.Factory(STEVE_PRESET_ASSET, "Steve Draft Care Board"))
         }
     }
@@ -530,7 +523,7 @@ class BoardViewModel(
     }
 
     private fun loadSounds(board: Board) {
-        allTiles(board).mapNotNull { it.fileName }.forEach { name ->
+        board.soundFileNames.forEach { name ->
             player.load(name, repo.soundFile(name))
         }
     }
@@ -539,17 +532,13 @@ class BoardViewModel(
         commit(_board.value.updatingTile(tileId, transform))
     }
 
-    /** Every tile a sound file can be referenced from: every page (the home row is just its first row). */
-    private fun allTiles(board: Board): List<Tile> = board.pages.flatMap { it.tiles }
-
     /** Single write path: update state, drop orphaned audio, persist. */
     private fun commit(board: Board) {
         val grown = board.normalized()
-        val before = allTiles(_board.value).mapNotNull { it.fileName }.toSet()
-        val after = allTiles(grown).mapNotNull { it.fileName }.toSet()
+        val removedSounds = _board.value.soundFileNames - grown.soundFileNames
         _board.value = grown
 
-        (before - after).forEach { player.unload(it) }
+        removedSounds.forEach { player.unload(it) }
 
         viewModelScope.launch(ioDispatcher) {
             // Back-to-back commits (e.g. Grid size's Apply) each launch a save on a pool
@@ -563,8 +552,7 @@ class BoardViewModel(
                 // A saved preset references sound files by name without copying them (see
                 // PresetRepository) — protect those from pruning too, or clearing/replacing a
                 // live tile could delete audio a saved preset still points at.
-                val keep = allTiles(latest).mapNotNull { it.fileName }.toSet()
-                repo.pruneUnused(keep + presetRepo.allReferencedFileNames())
+                repo.pruneUnused(latest.soundFileNames + presetRepo.allReferencedFileNames())
             }
         }
     }

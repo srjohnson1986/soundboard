@@ -9,7 +9,6 @@ import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -25,11 +24,7 @@ import java.util.zip.ZipOutputStream
 /** Board layout lives in board.json; audio lives in filesDir/sounds. Both are app-private. */
 class BoardRepository(private val context: Context) {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-        prettyPrint = true
-    }
+    private val json = BoardJson
 
     private val boardFile = File(context.filesDir, "board.json")
     private val soundsDir = File(context.filesDir, "sounds")
@@ -113,16 +108,7 @@ class BoardRepository(private val context: Context) {
      * Copying is what lets us skip storage permissions and survive the source
      * file being moved, renamed, or deleted later.
      */
-    fun importSound(uri: Uri): String? = runCatching {
-        soundsDir.mkdirs()
-        val ext = extensionFor(uri)
-        val name = UUID.randomUUID().toString() + if (ext.isBlank()) "" else ".$ext"
-        val target = File(soundsDir, name)
-        context.contentResolver.openInputStream(uri)!!.use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
-        }
-        name
-    }.getOrNull()
+    fun importSound(uri: Uri): String? = copyIntoAppStorage(uri, soundsDir)
 
     /** Every sound file not in [keep], without deleting anything — the "what's unused" query behind [pruneUnused] and the stray-clip cleanup UI. */
     fun strayFiles(keep: Set<String>): List<File> =
@@ -136,13 +122,15 @@ class BoardRepository(private val context: Context) {
     fun backgroundFile(name: String): File = File(backgroundsDir, name)
 
     /** Copies the picked image into app storage and returns its local file name — same reasoning as [importSound]. */
-    fun importBackgroundImage(uri: Uri): String? = runCatching {
-        backgroundsDir.mkdirs()
+    fun importBackgroundImage(uri: Uri): String? = copyIntoAppStorage(uri, backgroundsDir)
+
+    /** Copies [uri]'s content into [dir] under a fresh random name, keeping its extension; returns that name, or null on failure. */
+    private fun copyIntoAppStorage(uri: Uri, dir: File): String? = runCatching {
+        dir.mkdirs()
         val ext = extensionFor(uri)
         val name = UUID.randomUUID().toString() + if (ext.isBlank()) "" else ".$ext"
-        val target = File(backgroundsDir, name)
         context.contentResolver.openInputStream(uri)!!.use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
+            File(dir, name).outputStream().use { output -> input.copyTo(output) }
         }
         name
     }.getOrNull()
@@ -157,14 +145,7 @@ class BoardRepository(private val context: Context) {
         val out = context.contentResolver.openOutputStream(uri) ?: error("no output stream")
         out.use { stream ->
             ZipOutputStream(stream).use { zip ->
-                fileNames.forEach { name ->
-                    val file = soundFile(name)
-                    if (file.exists()) {
-                        zip.putNextEntry(ZipEntry(name))
-                        file.inputStream().use { it.copyTo(zip) }
-                        zip.closeEntry()
-                    }
-                }
+                fileNames.map(::soundFile).filter { it.exists() }.forEach { zip.putFile(it.name, it) }
             }
         }
     }.isSuccess
@@ -178,17 +159,8 @@ class BoardRepository(private val context: Context) {
                 zip.write(boardFile.readBytes())
                 zip.closeEntry()
 
-                soundsDir.listFiles()?.forEach { file ->
-                    zip.putNextEntry(ZipEntry("sounds/${file.name}"))
-                    file.inputStream().use { it.copyTo(zip) }
-                    zip.closeEntry()
-                }
-
-                backgroundsDir.listFiles()?.forEach { file ->
-                    zip.putNextEntry(ZipEntry("background/${file.name}"))
-                    file.inputStream().use { it.copyTo(zip) }
-                    zip.closeEntry()
-                }
+                soundsDir.listFiles()?.forEach { zip.putFile("$ZIP_SOUNDS_DIR${it.name}", it) }
+                backgroundsDir.listFiles()?.forEach { zip.putFile("$ZIP_BACKGROUNDS_DIR${it.name}", it) }
             }
         }
     }.isSuccess
@@ -216,12 +188,12 @@ class BoardRepository(private val context: Context) {
             while (entry != null) {
                 when {
                     entry.name == "board.json" -> boardFile.outputStream().use { zip.copyTo(it) }
-                    entry.name.startsWith("sounds/") && !entry.isDirectory -> {
-                        val target = File(soundsDir, entry.name.removePrefix("sounds/"))
+                    entry.name.startsWith(ZIP_SOUNDS_DIR) && !entry.isDirectory -> {
+                        val target = File(soundsDir, entry.name.removePrefix(ZIP_SOUNDS_DIR))
                         target.outputStream().use { zip.copyTo(it) }
                     }
-                    entry.name.startsWith("background/") && !entry.isDirectory -> {
-                        val target = File(backgroundsDir, entry.name.removePrefix("background/"))
+                    entry.name.startsWith(ZIP_BACKGROUNDS_DIR) && !entry.isDirectory -> {
+                        val target = File(backgroundsDir, entry.name.removePrefix(ZIP_BACKGROUNDS_DIR))
                         target.outputStream().use { zip.copyTo(it) }
                     }
                 }
@@ -229,6 +201,15 @@ class BoardRepository(private val context: Context) {
                 entry = zip.nextEntry
             }
         }
+    }
+
+    /** Whether [assetName] is packaged in this build — some presets only ship in debug builds. */
+    fun hasAsset(assetName: String): Boolean = runCatching { context.assets.open(assetName).close() }.isSuccess
+
+    private fun ZipOutputStream.putFile(entryName: String, file: File) {
+        putNextEntry(ZipEntry(entryName))
+        file.inputStream().use { it.copyTo(this) }
+        closeEntry()
     }
 
     private fun extensionFor(uri: Uri): String {
@@ -241,6 +222,12 @@ class BoardRepository(private val context: Context) {
             ?.use { if (it.moveToFirst()) it.getString(0) else null }
 
         return displayName?.substringAfterLast('.', "").orEmpty()
+    }
+
+    private companion object {
+        /** Folder prefixes inside a backup zip. "background/" is singular unlike the on-device "backgrounds" dir; kept as-is so existing backups and bundled presets still import. */
+        const val ZIP_SOUNDS_DIR = "sounds/"
+        const val ZIP_BACKGROUNDS_DIR = "background/"
     }
 }
 

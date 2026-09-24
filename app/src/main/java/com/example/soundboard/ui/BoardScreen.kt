@@ -61,6 +61,8 @@ internal sealed interface BoardDialog {
     data class EditTile(val tileId: String, val fromStickyRow: Boolean) : BoardDialog
     data object Speak : BoardDialog
     data object Settings : BoardDialog
+    /** One group of Settings, opened from the Settings list; Back returns to that list. */
+    data class SettingsGroupDetail(val group: SettingsGroup) : BoardDialog
     data object RenameBoard : BoardDialog
     data object SaveBoardAs : BoardDialog
     data object OpenBoard : BoardDialog
@@ -388,10 +390,19 @@ fun BoardScreen(
         BoardDialog.Settings -> SettingsDialog(
             board = board,
             performanceModeEnabled = performanceModeEnabled,
+            onOpenGroup = { showDialog(BoardDialog.SettingsGroupDetail(it)) },
+            onDismiss = ::closeDialog
+        )
+
+        is BoardDialog.SettingsGroupDetail -> SettingsGroupDialog(
+            group = dialog.group,
+            board = board,
+            performanceModeEnabled = performanceModeEnabled,
             actions = vm,
             onPickBackgroundImage = {
                 backgroundImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             },
+            onBack = { showDialog(BoardDialog.Settings) },
             onDismiss = ::closeDialog
         )
 

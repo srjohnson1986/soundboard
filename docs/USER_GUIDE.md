@@ -83,8 +83,8 @@ cramped third line. This is a per-page setting, alongside rows/columns.
 
 **Max row height** — rows never grow taller than a 4-column row of the same
 tile shape (**Standard**). A 1- or 2-column page gets full-width bars instead
-of giant squares. Change the limit for the whole board in **Settings → Max row
-height**: **Short**, **Standard**, **Tall**, **Extra tall**, or **No limit**
+of giant squares. Change the limit for the whole board in **Settings → Grid layout →
+Max row height**: **Short**, **Standard**, **Tall**, **Extra tall**, or **No limit**
 (the old behavior). To give one page its own limit, set it in that page's
 **Grid size**. Pages with 4 or more columns are already under the Standard
 limit, so only **Short** changes them.
@@ -95,7 +95,28 @@ a few blank tiles ready to fill. Rows stay the same height as in portrait. To
 pick a different landscape size for a page, turn on **Custom landscape size**
 in Grid size. A tile filled in landscape also shows up in portrait; the page
 simply gets another row. To go back to the old behavior of adding columns until
-4 rows fit on screen, set **Settings → Landscape layout** to **Fit to screen**.
+4 rows fit on screen, set **Settings → Grid layout → Landscape layout** to **Fit to screen**.
+
+## Settings
+
+**Settings** (in the **☰** menu) is a short list of groups. Each shows a
+one-line summary of its current values; tap one to change them, then **Back**
+to return to the list or **Done** to close Settings.
+
+- **Home page** — open on the home page, auto-return to it after a few idle
+  minutes, and the sticky home row (see below).
+- **Look** — theme (system, light or dark), background color or image, and
+  the board-wide tile opacity and border.
+- **Tile labels** — font, text size, bold and all caps (see "Label text").
+- **Grid layout** — the grid size new pages start at, the max row height, and
+  the landscape layout.
+- **Tapping & speech** — speak a tile's name when it has no recording, hide
+  blank tiles outside edit mode, how long to hold a page tab to open its
+  options, and haptic feedback.
+- **Screen** — keep the screen awake, and Performance mode (applies to this
+  device only).
+
+Everything except Performance mode is saved with the board.
 
 ## Label text
 
@@ -147,7 +168,7 @@ wrong page.
 
 ### A sticky row that stays on every other page
 
-**Sticky home row** (a switch in **Settings**) shows your home page's own
+**Sticky home row** (a switch in **Settings → Home page**) shows your home page's own
 first row of tiles fixed above whichever other page you're looking at — the
 same tiles, in the same place, no matter which page you're on. It's meant
 for anything you need reachable no matter where the board happens to be — a

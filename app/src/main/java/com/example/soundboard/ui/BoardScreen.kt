@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
@@ -130,9 +131,11 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -143,6 +146,7 @@ import com.example.soundboard.BoardViewModel
 import com.example.soundboard.PresetRef
 import com.example.soundboard.StrayClip
 import com.example.soundboard.data.SavedPreset
+import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
@@ -708,11 +712,10 @@ fun BoardScreen(
             val homePage = board.homePage
             if (board.stickyHomeRowEnabled && homePage != null && board.currentPageIndex != board.homePageIndex) {
                 PinnedRow(
-                    tiles = homePage.visibleTiles,
-                    baseColumns = homePage.columns,
+                    homePage = homePage,
+                    landscapeLayout = board.landscapeLayout,
                     activeColumns = activePageColumns,
                     editMode = editMode,
-                    aspectRatio = homePage.tileAspectRatio,
                     pageColor = homePage.color?.let { Color(it) },
                     pageOpacity = homePage.opacity,
                     globalTileOpacity = if (performanceModeEnabled) 1f else board.tileOpacity,
@@ -761,6 +764,7 @@ fun BoardScreen(
                         hideBlankTilesEnabled = board.hideBlankTilesEnabled,
                         globalTileOpacity = if (performanceModeEnabled) 1f else board.tileOpacity,
                         globalTileBorder = if (performanceModeEnabled) TileBorder() else board.tileBorder,
+                        landscapeLayout = board.landscapeLayout,
                         onEffectiveColumnsChanged = { activePageColumns = it },
                         referenceHeightPx = contentAreaHeightPx,
                         pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
@@ -857,9 +861,13 @@ fun BoardScreen(
                 rows = page.rows,
                 columns = page.columns,
                 aspectRatio = page.tileAspectRatio,
-                onConfirm = { r, c, ratio ->
+                landscapeRows = page.landscapeRows,
+                landscapeColumns = page.landscapeColumns,
+                pageGridActive = board.landscapeLayout == LandscapeLayout.PAGE_GRID,
+                onConfirm = { r, c, ratio, landscapeRows, landscapeColumns ->
                     vm.resize(index, r, c)
                     vm.setTileAspectRatio(index, ratio)
+                    vm.setLandscapeGrid(index, landscapeRows, landscapeColumns)
                     gridDialogIndex = null
                 },
                 onDismiss = { gridDialogIndex = null }
@@ -935,6 +943,8 @@ pageOpacityDialogIndex?.let { index ->
             onDefaultPageRowsChange = vm::setDefaultPageRows,
             defaultPageColumns = board.defaultPageColumns,
             onDefaultPageColumnsChange = vm::setDefaultPageColumns,
+            landscapeLayout = board.landscapeLayout,
+            onLandscapeLayoutChange = vm::setLandscapeLayout,
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1041,7 +1051,11 @@ pageOpacityDialogIndex?.let { index ->
             PageOptionsDialog(
                 pageName = page.name,
                 isHome = page.isHome,
-                gridSize = "${page.rows}x${page.columns}",
+                gridSize = if (board.landscapeLayout == LandscapeLayout.PAGE_GRID) {
+                    "${page.rows}x${page.columns}, landscape ${page.configuredLandscapeRows}x${page.effectiveLandscapeColumns}"
+                } else {
+                    "${page.rows}x${page.columns}"
+                },
                 canMoveLeft = index > 0,
                 canMoveRight = index < board.pages.lastIndex,
                 canDelete = board.pages.size > 1,
@@ -1117,25 +1131,52 @@ pageOpacityDialogIndex?.let { index ->
 private fun isPlayable(tile: Tile, speakUnrecordedTilesEnabled: Boolean): Boolean =
     tile.fileName != null || ((tile.speakLabel || speakUnrecordedTilesEnabled) && tile.speechText.isNotBlank())
 
+/** Horizontal padding on each side of a page's grid (and the pinned row above it). */
+private val GRID_PADDING = 12.dp
+
+/** Gap between neighboring tiles, both across and down. */
+private val TILE_SPACING = 8.dp
+
+/**
+ * The row height [page] has in portrait, for landscape's page grid to reuse so rows
+ * keep the same height in both orientations. Portrait's grid width is taken from the
+ * window's shorter side, since that's the side that's horizontal in portrait — this
+ * works even when the app was launched straight into landscape.
+ */
+@Composable
+private fun portraitRowHeight(page: Page): Dp {
+    val density = LocalDensity.current
+    val window = LocalWindowInfo.current.containerSize
+    return with(density) {
+        val portraitGridWidthPx = minOf(window.width, window.height) - (GRID_PADDING * 2).toPx()
+        portraitRowHeightPx(
+            portraitGridWidthPx = portraitGridWidthPx,
+            columns = page.columns,
+            aspectRatio = page.tileAspectRatio,
+            spacingPx = TILE_SPACING.toPx()
+        ).toDp()
+    }
+}
+
 /**
  * The fixed row shown above every non-home page, mirroring the home page's own first
- * row — including how many tiles that "first row" holds. In landscape, [PageGrid]
- * reflows whichever page is on screen into more columns via [landscapeColumnCount];
- * this mirrors that count exactly (via [activeColumns], reported up from that page's
- * own [PageGrid] instance) so the pinned row's tile size matches the grid underneath
- * it, rather than staying stuck at the portrait [baseColumns] or guessing its own
- * count from screen height (which doesn't know about the top bar/tabs/pinned-row's
- * own height the way [PageGrid] does when it measures its actual content area).
- * [tiles] should be the home page's full [Page.visibleTiles], not pre-sliced to one
- * row — the actual row length is computed here from the live column count.
+ * row — including how many tiles that "first row" holds. Under
+ * [LandscapeLayout.PAGE_GRID], landscape shows the home page's own first landscape row
+ * at its portrait row height, exactly as the home page itself draws it. Under
+ * [LandscapeLayout.FIT_TO_SCREEN], [PageGrid] reflows whichever page is on screen into
+ * more columns via [landscapeColumnCount]; this mirrors that count exactly (via
+ * [activeColumns], reported up from that page's own [PageGrid] instance) so the pinned
+ * row's tile size matches the grid underneath it, rather than staying stuck at the
+ * portrait column count or guessing its own count from screen height (which doesn't
+ * know about the top bar/tabs/pinned-row's own height the way [PageGrid] does when it
+ * measures its actual content area).
  */
 @Composable
 private fun PinnedRow(
-    tiles: List<Tile>,
-    baseColumns: Int,
+    homePage: Page,
+    landscapeLayout: LandscapeLayout,
     activeColumns: Int?,
     editMode: Boolean,
-    aspectRatio: Float,
     pageColor: Color?,
     pageOpacity: Float?,
     globalTileOpacity: Float,
@@ -1150,23 +1191,28 @@ private fun PinnedRow(
 ) {
     val haptics = LocalHapticFeedback.current
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val columns = if (isLandscape) {
-        (activeColumns ?: baseColumns).coerceAtLeast(baseColumns)
-    } else {
-        baseColumns
+    val usePageGrid = isLandscape && landscapeLayout == LandscapeLayout.PAGE_GRID
+    val baseColumns = homePage.columns
+    val columns = when {
+        usePageGrid -> homePage.effectiveLandscapeColumns
+        isLandscape -> (activeColumns ?: baseColumns).coerceAtLeast(baseColumns)
+        else -> baseColumns
     }
+    val tiles = if (usePageGrid) homePage.landscapeTiles else homePage.visibleTiles
+    val rowHeight = if (usePageGrid) portraitRowHeight(homePage) else null
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(horizontal = GRID_PADDING, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(TILE_SPACING)
     ) {
         tiles.take(columns).forEach { tile ->
             TileCard(
                 tile = tile,
                 editMode = editMode,
-                aspectRatio = aspectRatio,
+                aspectRatio = homePage.tileAspectRatio,
+                rowHeight = rowHeight,
                 pageColor = pageColor,
                 opacity = tile.opacity ?: pageOpacity ?: globalTileOpacity,
                 border = tile.border ?: pageBorder ?: globalTileBorder,
@@ -1192,11 +1238,13 @@ private fun PinnedRow(
 
 /**
  * One page's scrollable grid. Drag-to-reorder only attaches when [isActive] — the page
- * actually on screen. When [pinFirstRow] and the page has more than one row, its first
+ * actually on screen. Portrait shows [Page.visibleTiles]; landscape shows either
+ * [Page.landscapeTiles] on the page's own landscape grid or the portrait tiles reflowed
+ * to fit, per [landscapeLayout]. When [pinFirstRow] and the page has more than one row, its first
  * row renders fixed above a scrolling grid for the rest, instead of one plain grid —
  * see [Page.isHome]/`Board.stickyHomeRowEnabled`. Reordering across that boundary just
- * works: a tile is "pinned" purely by occupying one of the first [Page.columns] slots
- * in [Page.visibleTiles], the same flat list [Page.moved] already reorders by index —
+ * works: a tile is "pinned" purely by occupying one of the first row's slots in the
+ * shown tiles, the same flat list [Page.moved] already reorders by index —
  * no separate pinned-tile concept needed. The one visible seam is that
  * [Modifier.animateItem] only applies within the scrolling grid's own item scope, so a
  * reorder crossing the pinned/scrolling boundary pops instead of sliding.
@@ -1212,6 +1260,7 @@ private fun PageGrid(
     hideBlankTilesEnabled: Boolean,
     globalTileOpacity: Float,
     globalTileBorder: TileBorder,
+    landscapeLayout: LandscapeLayout,
     onEffectiveColumnsChanged: (Int) -> Unit,
     // The height budget for the landscape column math — measured once, above the pager,
     // covering the space available before the sticky row (PinnedRow) is subtracted. Using
@@ -1235,9 +1284,11 @@ private fun PageGrid(
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
     val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val spacingPx = with(density) { 8.dp.toPx() }
-    val columns = if (isLandscape && gridWidthPx > 0 && referenceHeightPx > 0) {
-        landscapeColumnCount(
+    val usePageGrid = isLandscape && landscapeLayout == LandscapeLayout.PAGE_GRID
+    val spacingPx = with(density) { TILE_SPACING.toPx() }
+    val columns = when {
+        usePageGrid -> page.effectiveLandscapeColumns
+        isLandscape && gridWidthPx > 0 && referenceHeightPx > 0 -> landscapeColumnCount(
             baseColumns = page.columns,
             aspectRatio = page.tileAspectRatio,
             widthPx = gridWidthPx.toFloat(),
@@ -1245,15 +1296,22 @@ private fun PageGrid(
             spacingPx = spacingPx,
             minTileWidthPx = with(density) { 56.dp.toPx() }
         )
-    } else {
-        page.columns
+        else -> page.columns
     }
+    val shownTiles = if (usePageGrid) page.landscapeTiles else page.visibleTiles
+    val rowHeight = if (usePageGrid) portraitRowHeight(page) else null
     LaunchedEffect(columns, isActive) {
         if (isActive) onEffectiveColumnsChanged(columns)
     }
-    val cellStepPx = if (columns > 0 && gridWidthPx > 0) {
-        (gridWidthPx - spacingPx * (columns - 1)) / columns + spacingPx
+    val tileWidthPx = if (columns > 0 && gridWidthPx > 0) {
+        (gridWidthPx - spacingPx * (columns - 1)) / columns
     } else 0f
+    val cellStepXPx = if (tileWidthPx > 0f) tileWidthPx + spacingPx else 0f
+    val cellStepYPx = when {
+        tileWidthPx <= 0f -> 0f
+        rowHeight != null -> with(density) { rowHeight.toPx() } + spacingPx
+        else -> tileWidthPx / page.tileAspectRatio + spacingPx
+    }
 
     fun tileDragModifier(index: Int, tile: Tile): Modifier {
         val isDragged = index == draggedIndex
@@ -1303,41 +1361,42 @@ private fun PageGrid(
                         change.consume()
                         dragOffset += amount
                         val current = draggedIndex ?: return@detectDragGesturesAfterLongPress
-                        if (cellStepPx <= 0f) return@detectDragGesturesAfterLongPress
-                        val colDelta = (dragOffset.x / cellStepPx).roundToInt()
-                        val rowDelta = (dragOffset.y / cellStepPx).roundToInt()
+                        if (cellStepXPx <= 0f || cellStepYPx <= 0f) return@detectDragGesturesAfterLongPress
+                        val colDelta = (dragOffset.x / cellStepXPx).roundToInt()
+                        val rowDelta = (dragOffset.y / cellStepYPx).roundToInt()
                         if (colDelta == 0 && rowDelta == 0) return@detectDragGesturesAfterLongPress
                         val target = (current + rowDelta * columns + colDelta)
-                            .coerceIn(0, page.visibleTiles.lastIndex)
+                            .coerceIn(0, shownTiles.lastIndex)
                         if (target != current) {
                             onPreviewMove(current, target)
                             draggedIndex = target
-                            dragOffset -= Offset(colDelta * cellStepPx, rowDelta * cellStepPx)
+                            dragOffset -= Offset(colDelta * cellStepXPx, rowDelta * cellStepYPx)
                         }
                     }
                 )
             }
     }
 
-    val split = pinFirstRow && page.visibleTiles.size > columns
+    val split = pinFirstRow && shownTiles.size > columns
     val pageColor = page.color?.let { Color(it) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 12.dp)
+            .padding(horizontal = GRID_PADDING)
             .onSizeChanged { gridSizePx = it }
     ) {
         if (split) {
             Row(
                 modifier = Modifier.padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(TILE_SPACING)
             ) {
-                page.visibleTiles.take(columns).forEachIndexed { index, tile ->
+                shownTiles.take(columns).forEachIndexed { index, tile ->
                     TileCard(
                         tile = tile,
                         editMode = editMode,
                         aspectRatio = page.tileAspectRatio,
+                        rowHeight = rowHeight,
                         pageColor = pageColor,
                         opacity = tile.opacity ?: page.opacity ?: globalTileOpacity,
                         border = tile.border ?: page.border ?: globalTileBorder,
@@ -1349,15 +1408,15 @@ private fun PageGrid(
                 }
             }
         }
-        val remainder = if (split) page.visibleTiles.drop(columns) else page.visibleTiles
+        val remainder = if (split) shownTiles.drop(columns) else shownTiles
         val remainderStart = if (split) columns else 0
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(TILE_SPACING),
+            verticalArrangement = Arrangement.spacedBy(TILE_SPACING)
         ) {
             itemsIndexed(remainder, key = { _, tile -> tile.id }) { i, tile ->
                 val index = remainderStart + i
@@ -1366,6 +1425,7 @@ private fun PageGrid(
                     tile = tile,
                     editMode = editMode,
                     aspectRatio = page.tileAspectRatio,
+                    rowHeight = rowHeight,
                     pageColor = pageColor,
                     opacity = tile.opacity ?: page.opacity ?: globalTileOpacity,
                     border = tile.border ?: page.border ?: globalTileBorder,
@@ -1392,15 +1452,19 @@ private fun TileCard(
     border: TileBorder,
     performanceModeEnabled: Boolean,
     hidden: Boolean = false,
+    // A fixed row height, overriding [aspectRatio] — landscape's page grid keeps rows at
+    // their portrait height even though its tiles are a different width.
+    rowHeight: Dp? = null,
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
     onLongClick: (() -> Unit)? = null
 ) {
+    val sizeModifier = if (rowHeight != null) Modifier.height(rowHeight) else Modifier.aspectRatio(aspectRatio)
     if (hidden) {
         // Not just invisible — no Card, no border, no combinedClickable, so a stray
         // tap in this grid cell reaches no callback at all. Keeping the same modifier
-        // (and thus aspectRatio/weight) preserves every other tile's exact position.
-        Spacer(modifier = modifier.aspectRatio(aspectRatio))
+        // (and thus size/weight) preserves every other tile's exact position.
+        Spacer(modifier = modifier.then(sizeModifier))
         return
     }
 
@@ -1425,7 +1489,7 @@ private fun TileCard(
     val interactionSource = remember { MutableInteractionSource() }
     Card(
         modifier = modifier
-            .aspectRatio(aspectRatio)
+            .then(sizeModifier)
             .alpha(opacity)
             .combinedClickable(
                 interactionSource = interactionSource,
@@ -1861,26 +1925,82 @@ private fun GridSizeDialog(
     rows: Int,
     columns: Int,
     aspectRatio: Float,
-    onConfirm: (Int, Int, Float) -> Unit,
+    landscapeRows: Int?,
+    landscapeColumns: Int?,
+    // Whether Settings' landscape layout is the per-page grid, i.e. whether the
+    // landscape values here actually apply — they're still editable either way.
+    pageGridActive: Boolean,
+    onConfirm: (rows: Int, columns: Int, aspectRatio: Float, landscapeRows: Int?, landscapeColumns: Int?) -> Unit,
     onDismiss: () -> Unit
 ) {
     var r by remember { mutableIntStateOf(rows) }
     var c by remember { mutableIntStateOf(columns) }
     var wide by remember { mutableStateOf(aspectRatio != 1f) }
+    var customLandscape by remember { mutableStateOf(landscapeRows != null || landscapeColumns != null) }
+    // The derived defaults track the portrait steppers live, so switching to custom
+    // starts from exactly what landscape was about to show.
+    val defaultLandscapeRows = Page.defaultLandscapeRows(r)
+    val defaultLandscapeColumns = Page.defaultLandscapeColumns(c)
+    var lr by remember { mutableIntStateOf(landscapeRows ?: defaultLandscapeRows) }
+    var lc by remember { mutableIntStateOf(landscapeColumns ?: defaultLandscapeColumns) }
     val shrinking = r * c < rows * columns
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Grid size (portrait)") },
+        title = { Text("Grid size") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text("Portrait", style = MaterialTheme.typography.labelMedium)
                 Stepper("Rows", r) { r = it }
                 Stepper("Columns", c) { c = it }
+                if (shrinking) {
+                    Text(
+                        "Shrinking only hides blank tiles — rows stop at the last " +
+                            "tile with a sound or label.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Custom landscape size", modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = customLandscape,
+                        onCheckedChange = { on ->
+                            if (on) {
+                                lr = defaultLandscapeRows
+                                lc = defaultLandscapeColumns
+                            }
+                            customLandscape = on
+                        }
+                    )
+                }
+                if (customLandscape) {
+                    Stepper("Landscape rows", lr) { lr = it }
+                    Stepper("Landscape columns", lc) { lc = it }
+                } else {
+                    Text(
+                        "Landscape: $defaultLandscapeRows rows x $defaultLandscapeColumns columns (twice the columns).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Text(
-                    "Landscape may show more columns automatically to fill the screen.",
+                    if (pageGridActive) {
+                        "Rows keep their portrait height in landscape, and grow to show every tile with a sound or label."
+                    } else {
+                        "Settings has landscape set to Fit to screen, so this only applies once it's switched to Page grid."
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -1899,18 +2019,18 @@ private fun GridSizeDialog(
                         ) { Text("Wide") }
                     }
                 }
-                if (shrinking) {
-                    Text(
-                        "Shrinking just hides the last tiles — their sounds " +
-                            "stay put and come back if you grow the grid again.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(r, c, if (wide) 4f / 3f else 1f) }) { Text("Apply") }
+            TextButton(onClick = {
+                onConfirm(
+                    r,
+                    c,
+                    if (wide) 4f / 3f else 1f,
+                    lr.takeIf { customLandscape },
+                    lc.takeIf { customLandscape }
+                )
+            }) { Text("Apply") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
@@ -2027,6 +2147,8 @@ private fun SettingsDialog(
     onDefaultPageRowsChange: (Int) -> Unit,
     defaultPageColumns: Int,
     onDefaultPageColumnsChange: (Int) -> Unit,
+    landscapeLayout: LandscapeLayout,
+    onLandscapeLayoutChange: (LandscapeLayout) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -2261,6 +2383,35 @@ private fun SettingsDialog(
                 Text("Default grid size for new pages", style = MaterialTheme.typography.bodyMedium)
                 Stepper("Rows", defaultPageRows, onDefaultPageRowsChange)
                 Stepper("Columns", defaultPageColumns, onDefaultPageColumnsChange)
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                Text("Landscape layout", style = MaterialTheme.typography.bodyMedium)
+                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                    LandscapeLayout.entries.forEachIndexed { index, layout ->
+                        SegmentedButton(
+                            selected = layout == landscapeLayout,
+                            onClick = { onLandscapeLayoutChange(layout) },
+                            shape = SegmentedButtonDefaults.itemShape(index = index, count = LandscapeLayout.entries.size)
+                        ) {
+                            Text(
+                                when (layout) {
+                                    LandscapeLayout.PAGE_GRID -> "Page grid"
+                                    LandscapeLayout.FIT_TO_SCREEN -> "Fit to screen"
+                                }
+                            )
+                        }
+                    }
+                }
+                Text(
+                    when (landscapeLayout) {
+                        LandscapeLayout.PAGE_GRID ->
+                            "Each page's own landscape grid — twice its columns unless set in Grid size. " +
+                                "Rows keep their portrait height."
+                        LandscapeLayout.FIT_TO_SCREEN ->
+                            "Adds columns until 4 rows fit on screen."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
@@ -2375,7 +2526,7 @@ private fun PageOptionsDialog(
                 )
                 HorizontalDivider()
                 DropdownMenuItem(
-                    text = { Text("Grid size (portrait) ($gridSize)") },
+                    text = { Text("Grid size ($gridSize)") },
                     leadingIcon = { Icon(Icons.Filled.GridView, contentDescription = null) },
                     onClick = onGridSize
                 )

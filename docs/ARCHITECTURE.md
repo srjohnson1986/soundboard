@@ -104,17 +104,32 @@ the home page usually isn't the page you're looking at when you tap its
 banner. There's no separate width setting either — the banner is simply as
 wide as the home page's own `columns`.
 
-**Invariant: `tiles.size` is always `>= rows * columns`, per page.**
-`Page.resized()` only ever grows the list; shrinking the grid just lowers
-`rows`/`columns`; the now-hidden tiles stay in `tiles`, unreachable except
-through `visibleTiles = tiles.take(rows * columns)`. Growing back reveals
-them again. This is why `BoardScreen` renders `board.currentPage.visibleTiles`,
-not `.tiles` — rendering the full list would show hidden tiles that shrinking
-was supposed to tuck away.
+**Each orientation shows a prefix of one shared `tiles` list.** Portrait
+shows `visibleTiles = tiles.take(rows * columns)`. Landscape (under
+`Board.landscapeLayout == PAGE_GRID`) shows `landscapeTiles`, a prefix
+`effectiveLandscapeColumns` wide and `shownLandscapeRows` tall. Unset
+`Page.landscapeColumns`/`landscapeRows` default to `columns * 2` and
+`ceil(rows / 2) + 1`. Landscape rows keep their portrait height
+(`portraitRowHeightPx`, measured against the window's shorter side), so a
+landscape tile is a different shape from its portrait self. Under
+`FIT_TO_SCREEN` landscape instead reflows `visibleTiles` into however many
+columns fit 4 rows (`landscapeColumnCount`), the original behavior.
 
-`Page.moved(fromIndex, toIndex)` is the same idea applied to drag-reorder: it
-only ever touches the first `rows * columns` entries, leaving hidden tiles in
-place at the end of the list.
+**Invariant: no tile with content is ever hidden, in either orientation.**
+Every write goes through `Board.normalized()` (`BoardViewModel.commit` and
+`BoardRepository.load`), which for each page:
+1. grows `rows` to reach the last tile with a sound or label (`Tile.hasContent`),
+   e.g. one filled in a landscape-only slot;
+2. adds a blank portrait row once the last one is full (`withAutoGrownTrailingRow`),
+   and does the same for an overridden `landscapeRows`;
+3. pads `tiles` with blanks to cover every landscape slot.
+
+`shownLandscapeRows` also extends past a too-small override at read time.
+`Page.resized()` never drops tiles. Shrinking therefore only hides trailing
+*blank* tiles; rows stop at the last tile with content.
+
+`Page.moved(fromIndex, toIndex)` indexes into the full `tiles` list, since
+portrait and landscape each show a different-length prefix of it.
 
 Both `resized()` and `moved()` return `this` unchanged on invalid input
 (out-of-range indices, no-op moves) rather than throwing — callers don't need

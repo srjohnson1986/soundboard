@@ -52,7 +52,7 @@ class BoardRepositoryTest {
                     )
                 )
             )
-        )
+        ).normalized()
 
         repo.save(board)
         val loaded = repo.load()
@@ -98,7 +98,7 @@ class BoardRepositoryTest {
         val loaded = repo.load()
 
         assertEquals(2, loaded.currentPage.rows)
-        assertEquals(4, loaded.currentPage.tiles.size)
+        assertEquals(4, loaded.currentPage.visibleTiles.size)
         assertTrue(loaded.currentPage.tiles.drop(2).all { it.isEmpty })
     }
 
@@ -107,7 +107,7 @@ class BoardRepositoryTest {
         val board = Board(
             pages = listOf(Page(name = "Requests"), Page(name = "Feelings")),
             currentPageIndex = 1
-        )
+        ).normalized()
 
         repo.save(board)
         val loaded = repo.load()
@@ -128,7 +128,7 @@ class BoardRepositoryTest {
                 )
             ),
             stickyHomeRowEnabled = true
-        )
+        ).normalized()
 
         repo.save(board)
         val loaded = repo.load()
@@ -292,7 +292,7 @@ class BoardRepositoryTest {
         assertEquals(0, loaded.currentPageIndex)
         assertEquals(1, loaded.currentPage.rows)
         assertEquals(2, loaded.currentPage.columns)
-        assertEquals(listOf("x", "y"), loaded.currentPage.tiles.map { it.id })
+        assertEquals(listOf("x", "y"), loaded.currentPage.visibleTiles.map { it.id })
         assertNull(loaded.currentPage.tiles[1].colorArgb)
     }
 
@@ -420,10 +420,10 @@ class BoardRepositoryTest {
         // The home page carries an extra sticky first row (4 tiles), so it's one row taller.
         board.pages.forEachIndexed { index, page ->
             if (index == board.homePageIndex) {
-                assertEquals(28, page.tiles.size)
+                assertEquals(28, page.visibleTiles.size)
                 assertEquals(7, page.rows)
             } else {
-                assertEquals(24, page.tiles.size)
+                assertEquals(24, page.visibleTiles.size)
                 assertEquals(6, page.rows)
             }
             assertEquals(4, page.columns)
@@ -491,16 +491,16 @@ class BoardRepositoryTest {
         board.pages.forEachIndexed { index, page ->
             when {
                 index == board.homePageIndex -> {
-                    assertEquals(28, page.tiles.size)
+                    assertEquals(28, page.visibleTiles.size)
                     assertEquals(7, page.rows)
                 }
                 page.name == "Trouble" -> {
-                    assertEquals(28, page.tiles.size)
+                    assertEquals(28, page.visibleTiles.size)
                     assertEquals(7, page.rows)
-                    assertTrue(page.tiles.drop(24).all { it.isEmpty })
+                    assertTrue(page.visibleTiles.drop(24).all { it.isEmpty })
                 }
                 else -> {
-                    assertEquals(24, page.tiles.size)
+                    assertEquals(24, page.visibleTiles.size)
                     assertEquals(6, page.rows)
                 }
             }
@@ -546,10 +546,10 @@ class BoardRepositoryTest {
         assertTrue(board.stickyHomeRowEnabled)
         board.pages.forEachIndexed { index, page ->
             if (index == board.homePageIndex) {
-                assertEquals(28, page.tiles.size)
+                assertEquals(28, page.visibleTiles.size)
                 assertEquals(7, page.rows)
             } else {
-                assertEquals(24, page.tiles.size)
+                assertEquals(24, page.visibleTiles.size)
                 assertEquals(6, page.rows)
             }
             assertEquals(4, page.columns)

@@ -77,4 +77,17 @@ class GridLayoutTest {
         )
         assertTrue(withFloor < withoutFloor)
     }
+
+    @Test
+    fun `portrait row height is the portrait tile width divided by the aspect ratio`() {
+        // 4 columns across 424px with 8px gaps: (424 - 24) / 4 = 100px wide.
+        assertEquals(100f, portraitRowHeightPx(portraitGridWidthPx = 424f, columns = 4, aspectRatio = 1f, spacingPx = 8f), 0.001f)
+        assertEquals(75f, portraitRowHeightPx(portraitGridWidthPx = 424f, columns = 4, aspectRatio = 4f / 3f, spacingPx = 8f), 0.001f)
+    }
+
+    @Test
+    fun `portrait row height is zero for degenerate input`() {
+        assertEquals(0f, portraitRowHeightPx(portraitGridWidthPx = 0f, columns = 4, aspectRatio = 1f, spacingPx = 8f), 0f)
+        assertEquals(0f, portraitRowHeightPx(portraitGridWidthPx = 400f, columns = 0, aspectRatio = 1f, spacingPx = 8f), 0f)
+    }
 }

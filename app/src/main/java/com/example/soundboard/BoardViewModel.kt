@@ -19,6 +19,7 @@ import com.example.soundboard.data.RecentPresetEntry
 import com.example.soundboard.data.RecentPresetsRepository
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Board
+import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
@@ -29,6 +30,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class BoardViewModel(
@@ -300,6 +303,15 @@ class BoardViewModel(
 
     fun setTileAspectRatio(index: Int, ratio: Float) {
         commit(_board.value.updatingPage(index) { it.copy(tileAspectRatio = ratio) })
+    }
+
+    /** Per-page landscape grid; null for either dimension derives it from the portrait grid. */
+    fun setLandscapeGrid(index: Int, rows: Int?, columns: Int?) {
+        commit(_board.value.updatingPage(index) { it.copy(landscapeRows = rows, landscapeColumns = columns) })
+    }
+
+    fun setLandscapeLayout(layout: LandscapeLayout) {
+        commit(_board.value.copy(landscapeLayout = layout))
     }
 
     fun setPageColor(index: Int, colorArgb: Int?) {
@@ -598,7 +610,7 @@ class BoardViewModel(
 
     /** Single write path: update state, drop orphaned audio, persist. */
     private fun commit(board: Board) {
-        val grown = board.copy(pages = board.pages.map { it.withAutoGrownTrailingRow() })
+        val grown = board.normalized()
         val before = allTiles(_board.value).mapNotNull { it.fileName }.toSet()
         val after = allTiles(grown).mapNotNull { it.fileName }.toSet()
         _board.value = grown
@@ -606,13 +618,24 @@ class BoardViewModel(
         (before - after).forEach { player.unload(it) }
 
         viewModelScope.launch(ioDispatcher) {
-            repo.save(grown)
-            // A saved preset references sound files by name without copying them (see
-            // PresetRepository) — protect those from pruning too, or clearing/replacing a
-            // live tile could delete audio a saved preset still points at.
-            repo.pruneUnused(after + presetRepo.allReferencedFileNames())
+            // Back-to-back commits (e.g. Grid size's Apply) each launch a save on a pool
+            // thread; without the lock they can finish out of order and leave an older
+            // board on disk. Each save writes whatever is current, so the last one to run
+            // always persists the latest board — and prunes against its files, not a
+            // stale commit's that might not know about a sound added since.
+            saveMutex.withLock {
+                val latest = _board.value
+                repo.save(latest)
+                // A saved preset references sound files by name without copying them (see
+                // PresetRepository) — protect those from pruning too, or clearing/replacing a
+                // live tile could delete audio a saved preset still points at.
+                val keep = allTiles(latest).mapNotNull { it.fileName }.toSet()
+                repo.pruneUnused(keep + presetRepo.allReferencedFileNames())
+            }
         }
     }
+
+    private val saveMutex = Mutex()
 
     override fun onCleared() {
         recorder.cancel()

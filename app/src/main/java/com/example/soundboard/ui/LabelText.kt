@@ -27,7 +27,7 @@ internal const val LABEL_MAX_LINES = 3
 internal fun tileDisplayText(tile: Tile, allCaps: Boolean): String {
     val text = when {
         tile.label.isNotBlank() -> tile.label
-        !tile.isEmpty -> "Unnamed"
+        tile.hasSound -> "Unnamed"
         else -> "+"
     }
     return if (allCaps) text.uppercase() else text

@@ -74,6 +74,9 @@ private val GRID_PADDING = 12.dp
 /** Gap between neighboring tiles, both across and down. */
 internal val TILE_SPACING = 8.dp
 
+/** Narrowest a tile gets when Fit to screen adds landscape columns — a comfortable touch target. */
+private val MIN_FIT_TO_SCREEN_TILE_WIDTH = 56.dp
+
 /** Inset between a tile's edge and its label. */
 internal val TILE_CONTENT_PADDING = 6.dp
 
@@ -170,7 +173,7 @@ internal fun PinnedRow(
                 opacity = homePage.opacityFor(tile, globalTileOpacity),
                 border = homePage.borderFor(tile, globalTileBorder),
                 performanceModeEnabled = performanceModeEnabled,
-                hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
+                hidden = !tile.hasSound && hideBlankTilesEnabled && !editMode,
                 modifier = Modifier.weight(1f),
                 onTap = { onTap(tile) },
                 // Long-press previews what a pad will say without "using" it for real,
@@ -198,7 +201,7 @@ internal fun PinnedRow(
  * pins on other pages) renders fixed above a scrolling grid for the rest, instead of one
  * plain grid — see [Page.isHome]/`Board.stickyHomeRowEnabled`. Reordering across that
  * boundary just works: a tile is "pinned" purely by occupying one of the first
- * [Page.columns] slots, the same flat list [Page.moved] already reorders by index —
+ * [Page.columns] slots, the same flat list [Page.withTileMoved] already reorders by index —
  * no separate pinned-tile concept needed. The one visible seam is that
  * [Modifier.animateItem] only applies within the scrolling grid's own item scope, so a
  * reorder crossing the pinned/scrolling boundary pops instead of sliding.
@@ -249,7 +252,7 @@ internal fun PageGrid(
             widthPx = gridWidthPx.toFloat(),
             heightPx = referenceHeightPx.toFloat(),
             spacingPx = spacingPx,
-            minTileWidthPx = with(density) { 56.dp.toPx() }
+            minTileWidthPx = with(density) { MIN_FIT_TO_SCREEN_TILE_WIDTH.toPx() }
         )
         else -> page.columns
     }
@@ -265,7 +268,9 @@ internal fun PageGrid(
     val labelTextStyle = rememberTilesLabelStyle(shownTiles, tileWidthPx, tileHeightPx, labelStyle)
 
     val pinnedCount = page.columns
-    val split = pinFirstRow && shownTiles.size > pinnedCount
+    // The first row is drawn fixed above a scrolling grid of the rest, rather than as
+    // one plain grid; with a single row there's nothing below it to scroll.
+    val showPinnedRowSeparately = pinFirstRow && shownTiles.size > pinnedCount
 
     fun tileDragModifier(index: Int, tile: Tile): Modifier {
         val isDragged = index == draggedIndex
@@ -324,7 +329,7 @@ internal fun PageGrid(
                             rowDelta = rowDelta,
                             colDelta = colDelta,
                             columns = columns,
-                            pinnedCount = if (split) pinnedCount else 0,
+                            pinnedCount = if (showPinnedRowSeparately) pinnedCount else 0,
                             lastIndex = shownTiles.lastIndex
                         )
                         if (target != current) {
@@ -357,7 +362,7 @@ internal fun PageGrid(
             .padding(horizontal = GRID_PADDING)
             .onSizeChanged { gridSizePx = it }
     ) {
-        if (split) {
+        if (showPinnedRowSeparately) {
             Row(
                 modifier = Modifier.padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(TILE_SPACING)
@@ -374,15 +379,15 @@ internal fun PageGrid(
                         opacity = page.opacityFor(tile, globalTileOpacity),
                         border = page.borderFor(tile, globalTileBorder),
                         performanceModeEnabled = performanceModeEnabled,
-                        hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
+                        hidden = !tile.hasSound && hideBlankTilesEnabled && !editMode,
                         modifier = Modifier.weight(1f).then(tileDragModifier(index, tile)),
                         onTap = { onTap(tile) }
                     )
                 }
             }
         }
-        val remainder = if (split) shownTiles.drop(pinnedCount) else shownTiles
-        val remainderStart = if (split) pinnedCount else 0
+        val scrollingTiles = if (showPinnedRowSeparately) shownTiles.drop(pinnedCount) else shownTiles
+        val scrollingStartIndex = if (showPinnedRowSeparately) pinnedCount else 0
         LazyVerticalGrid(
             columns = GridCells.Fixed(columns),
             modifier = Modifier
@@ -391,8 +396,8 @@ internal fun PageGrid(
             horizontalArrangement = Arrangement.spacedBy(TILE_SPACING),
             verticalArrangement = Arrangement.spacedBy(TILE_SPACING)
         ) {
-            itemsIndexed(remainder, key = { _, tile -> tile.id }) { i, tile ->
-                val index = remainderStart + i
+            itemsIndexed(scrollingTiles, key = { _, tile -> tile.id }) { i, tile ->
+                val index = scrollingStartIndex + i
                 val isDragged = index == draggedIndex
                 TileCard(
                     tile = tile,
@@ -405,7 +410,7 @@ internal fun PageGrid(
                     opacity = page.opacityFor(tile, globalTileOpacity),
                     border = page.borderFor(tile, globalTileBorder),
                     performanceModeEnabled = performanceModeEnabled,
-                    hidden = tile.isEmpty && hideBlankTilesEnabled && !editMode,
+                    hidden = !tile.hasSound && hideBlankTilesEnabled && !editMode,
                     modifier = Modifier
                         .then(if (isDragged) Modifier else Modifier.animateItem())
                         .then(tileDragModifier(index, tile)),
@@ -447,11 +452,11 @@ private fun TileCard(
         return
     }
 
-    val filled = !tile.isEmpty
+    val filled = tile.hasSound
     // A preset can ship a tile with a label but no recording yet (see
     // BoardRepository.sanitizeMissingSounds) — flag that distinctly from a
     // plain blank tile so it reads as "still needs recording," not "empty."
-    val needsRecording = tile.isEmpty && tile.label.isNotBlank()
+    val needsRecording = !tile.hasSound && tile.label.isNotBlank()
     val customColor = tile.colorArgb?.let { Color(it) }
     val defaultColor = pageColor.takeIf { filled }
     val containerColor = customColor ?: defaultColor ?: if (filled) {
@@ -537,11 +542,11 @@ private fun TileCard(
  * keeps every custom color readable regardless of theme.
  */
 private fun textColorFor(background: Color): Color {
-    val bg = background.luminance()
+    val luminance = background.luminance()
     // WCAG contrast ratio: (lighter + 0.05) / (darker + 0.05). Comparing against
     // black (luminance 0) and white (luminance 1) picks whichever contrasts more;
-    // the crossover is at bg ≈ 0.179, not the naive halfway point of 0.5.
-    val contrastWithBlack = (bg + 0.05f) / 0.05f
-    val contrastWithWhite = 1.05f / (bg + 0.05f)
+    // the crossover is at luminance ≈ 0.179, not the naive halfway point of 0.5.
+    val contrastWithBlack = (luminance + 0.05f) / 0.05f
+    val contrastWithWhite = 1.05f / (luminance + 0.05f)
     return if (contrastWithBlack >= contrastWithWhite) Color.Black else Color.White
 }

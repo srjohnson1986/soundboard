@@ -91,9 +91,9 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `play on a tile with speakLabel set but no sound speaks its label`() {
+    fun `play on a tile with speakWhenNoSound set but no sound speaks its label`() {
         val vm = newViewModel()
-        val tile = Tile(id = "a", label = "I need water", speakLabel = true)
+        val tile = Tile(id = "a", label = "I need water", speakWhenNoSound = true)
 
         vm.play(tile)
 
@@ -102,9 +102,9 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `play prefers a sound file over speaking even when speakLabel is set`() {
+    fun `play prefers a sound file over speaking even when speakWhenNoSound is set`() {
         val vm = newViewModel()
-        val tile = Tile(id = "a", label = "Air horn", fileName = "a.mp3", speakLabel = true)
+        val tile = Tile(id = "a", label = "Air horn", fileName = "a.mp3", speakWhenNoSound = true)
 
         vm.play(tile)
 
@@ -113,9 +113,9 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `play on a speakLabel tile with a blank label does nothing`() {
+    fun `play on a speakWhenNoSound tile with a blank label does nothing`() {
         val vm = newViewModel()
-        val tile = Tile(id = "a", label = "", speakLabel = true)
+        val tile = Tile(id = "a", label = "", speakWhenNoSound = true)
 
         vm.play(tile)
 
@@ -125,7 +125,7 @@ class BoardViewModelTest {
     @Test
     fun `play speaks ttsScript instead of the label when set`() {
         val vm = newViewModel()
-        val tile = Tile(id = "a", label = "Water", ttsScript = "I would like a glass of water please", speakLabel = true)
+        val tile = Tile(id = "a", label = "Water", ttsScript = "I would like a glass of water please", speakWhenNoSound = true)
 
         vm.play(tile)
 
@@ -135,7 +135,7 @@ class BoardViewModelTest {
     @Test
     fun `play falls back to the label when ttsScript is null`() {
         val vm = newViewModel()
-        val tile = Tile(id = "a", label = "Water", speakLabel = true)
+        val tile = Tile(id = "a", label = "Water", speakWhenNoSound = true)
 
         vm.play(tile)
 
@@ -143,8 +143,8 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `a speakLabel tile is not empty`() {
-        assertFalse(Tile(speakLabel = true).isEmpty)
+    fun `a speakWhenNoSound tile has sound`() {
+        assertTrue(Tile(speakWhenNoSound = true).hasSound)
     }
 
     @Test
@@ -169,18 +169,18 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setSpeakLabel updates only the target tile`() {
+    fun `setSpeakWhenNoSound updates only the target tile`() {
         repo.save(boardWith(Tile(id = "a"), Tile(id = "b")))
         val vm = newViewModel()
 
-        vm.setSpeakLabel("a", true)
+        vm.setSpeakWhenNoSound("a", true)
 
-        assertTrue(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakLabel)
-        assertFalse(vm.board.value.currentPage.tiles.first { it.id == "b" }.speakLabel)
+        assertTrue(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakWhenNoSound)
+        assertFalse(vm.board.value.currentPage.tiles.first { it.id == "b" }.speakWhenNoSound)
     }
 
     @Test
-    fun `setSpeakLabel edits a home page tile from another page and leaves the current page alone`() {
+    fun `setSpeakWhenNoSound edits a home page tile from another page and leaves the current page alone`() {
         repo.save(
             Board(
                 pages = listOf(
@@ -192,10 +192,10 @@ class BoardViewModelTest {
         )
         val vm = newViewModel()
 
-        vm.setSpeakLabel("hey", true)
+        vm.setSpeakWhenNoSound("hey", true)
 
-        assertTrue(vm.board.value.homePage!!.tiles.first { it.id == "hey" }.speakLabel)
-        assertFalse(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakLabel)
+        assertTrue(vm.board.value.homePage!!.tiles.first { it.id == "hey" }.speakWhenNoSound)
+        assertFalse(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakWhenNoSound)
     }
 
     @Test
@@ -239,28 +239,28 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `clearTile also turns off speakLabel`() {
-        repo.save(boardWith(Tile(id = "a", label = "Water", speakLabel = true)))
+    fun `clearTile also turns off speakWhenNoSound`() {
+        repo.save(boardWith(Tile(id = "a", label = "Water", speakWhenNoSound = true)))
         val vm = newViewModel()
 
         vm.clearTile("a")
 
-        assertFalse(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakLabel)
+        assertFalse(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakWhenNoSound)
     }
 
     @Test
-    fun `clearTile on a home page tile also turns off speakLabel`() {
-        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", speakLabel = true)), isHome = true))))
+    fun `clearTile on a home page tile also turns off speakWhenNoSound`() {
+        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", speakWhenNoSound = true)), isHome = true))))
         val vm = newViewModel()
 
         vm.clearTile("hey")
 
-        assertFalse(vm.board.value.homePage!!.tiles.first { it.id == "hey" }.speakLabel)
+        assertFalse(vm.board.value.homePage!!.tiles.first { it.id == "hey" }.speakWhenNoSound)
     }
 
     @Test
-    fun `removeSound clears the file but keeps the label and speakLabel`() {
-        repo.save(boardWith(Tile(id = "a", label = "Water", fileName = "a.mp3", speakLabel = true)))
+    fun `removeSound clears the file but keeps the label and speakWhenNoSound`() {
+        repo.save(boardWith(Tile(id = "a", label = "Water", fileName = "a.mp3", speakWhenNoSound = true)))
         val vm = newViewModel()
 
         vm.removeSound("a")
@@ -268,15 +268,15 @@ class BoardViewModelTest {
         val tile = vm.board.value.currentPage.tiles.first { it.id == "a" }
         assertNull(tile.fileName)
         assertEquals("Water", tile.label)
-        assertTrue(tile.speakLabel)
+        assertTrue(tile.speakWhenNoSound)
     }
 
     @Test
-    fun `removeSound on a home page tile clears the file but keeps the label and speakLabel`() {
+    fun `removeSound on a home page tile clears the file but keeps the label and speakWhenNoSound`() {
         repo.save(
             Board(
                 pages = listOf(
-                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3", speakLabel = true)), isHome = true)
+                    Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3", speakWhenNoSound = true)), isHome = true)
                 )
             )
         )
@@ -287,7 +287,7 @@ class BoardViewModelTest {
         val tile = vm.board.value.homePage!!.tiles.first { it.id == "hey" }
         assertNull(tile.fileName)
         assertEquals("Hey", tile.label)
-        assertTrue(tile.speakLabel)
+        assertTrue(tile.speakWhenNoSound)
     }
 
     @Test
@@ -312,14 +312,14 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setSpeakLabel persists across a fresh view model`() {
+    fun `setSpeakWhenNoSound persists across a fresh view model`() {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
-        vm.setSpeakLabel("a", true)
+        vm.setSpeakWhenNoSound("a", true)
 
         val second = newViewModel()
-        assertTrue(second.board.value.currentPage.tiles.first { it.id == "a" }.speakLabel)
+        assertTrue(second.board.value.currentPage.tiles.first { it.id == "a" }.speakWhenNoSound)
     }
 
     @Test
@@ -360,7 +360,7 @@ class BoardViewModelTest {
         val page = vm.board.value.currentPage
         assertEquals(2, page.rows)
         assertEquals(2, page.visibleTiles.size)
-        assertTrue(page.visibleTiles[1].isEmpty)
+        assertFalse(page.visibleTiles[1].hasSound)
     }
 
     @Test
@@ -476,7 +476,7 @@ class BoardViewModelTest {
 
     @Test
     fun `shrinking the grid never hides or drops a tile with a sound`() {
-        // Page.resized() never drops a tile, and Page.normalized() keeps rows from
+        // Page.withGridSize() never drops a tile, and Page.normalized() keeps rows from
         // shrinking past the last tile with content — so a sound is never hidden in
         // either orientation, and survives until the tile is cleared directly.
         repo.save(
@@ -947,10 +947,10 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setTileOpacity persists across a fresh view model`() {
+    fun `setBoardTileOpacity persists across a fresh view model`() {
         val vm = newViewModel()
 
-        vm.setTileOpacity(0.5f)
+        vm.setBoardTileOpacity(0.5f)
 
         assertEquals(0.5f, vm.board.value.tileOpacity)
         val second = newViewModel()
@@ -958,10 +958,10 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setTileOpacity coerces into the 0 to 1 range`() {
+    fun `setBoardTileOpacity coerces into the 0 to 1 range`() {
         val vm = newViewModel()
 
-        vm.setTileOpacity(5f)
+        vm.setBoardTileOpacity(5f)
 
         assertEquals(1f, vm.board.value.tileOpacity)
     }
@@ -1070,10 +1070,10 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setTileBorder persists across a fresh view model`() {
+    fun `setBoardTileBorder persists across a fresh view model`() {
         val vm = newViewModel()
 
-        vm.setTileBorder(TileBorder(enabled = true, colorArgb = 0xFF00FF00.toInt(), widthDp = 2f))
+        vm.setBoardTileBorder(TileBorder(enabled = true, colorArgb = 0xFF00FF00.toInt(), widthDp = 2f))
 
         assertEquals(TileBorder(enabled = true, colorArgb = 0xFF00FF00.toInt(), widthDp = 2f), vm.board.value.tileBorder)
         val second = newViewModel()

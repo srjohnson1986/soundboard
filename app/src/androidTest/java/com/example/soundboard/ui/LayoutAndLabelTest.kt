@@ -266,7 +266,7 @@ class LayoutAndLabelTest {
         rotate(landscape = true)
         launchWith(Board(pages = listOf(labeledPage("T", rows = 4, columns = 4)), hideBlankTilesEnabled = true))
 
-        assertTrue(vm.board.value.currentPage.landscapeTiles.any { it.isEmpty })
+        assertTrue(vm.board.value.currentPage.landscapeTiles.any { !it.hasSound })
         assertEquals(0, displayedCount("+"))
     }
 

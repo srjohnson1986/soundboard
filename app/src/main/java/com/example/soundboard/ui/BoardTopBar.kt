@@ -64,15 +64,18 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.soundboard.BuildConfig
 import com.example.soundboard.PresetRef
 import com.example.soundboard.RecentPresetItem
 import com.example.soundboard.model.Board
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** Update alongside each tagged release — [RELEASE_URL] points at this tag's own notes. */
-private const val APP_VERSION = "v0.2.1"
+/** Shown at the bottom of the menu; comes from `versionName` in app/build.gradle.kts, so there's one place to bump per release. */
+private const val APP_VERSION = "v${BuildConfig.VERSION_NAME}"
 
 private const val RELEASES_BASE_URL = "https://github.com/srjohnson1986/soundboard/releases"
+
+/** This version's own release notes, rather than the bare releases list. */
 private const val RELEASE_URL = "$RELEASES_BASE_URL/tag/$APP_VERSION"
 
 /**
@@ -353,7 +356,8 @@ private fun PageTabs(
                 onClick = { onSelectPage(index) },
                 // Long-press detection must run on the Initial (outside-in) pointer
                 // pass and win the race against Tab's own click before it can consume
-                // the eventual up event on the Main pass — see the note above. Attached
+                // the eventual up event on the Main pass (the race itself is explained
+                // inside awaitEachGesture below). Attached
                 // to Tab's own modifier (rather than an outer Box) so Tab stays the
                 // direct child PrimaryScrollableTabRow measures for its selection
                 // indicator — wrapping it in a separate Box threw off the indicator's

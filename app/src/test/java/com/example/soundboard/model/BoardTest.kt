@@ -14,26 +14,26 @@ class BoardTest {
     }
 
     @Test
-    fun `addPage appends a page and switches to it`() {
+    fun `withPageAdded appends a page and switches to it`() {
         val board = Board(pages = listOf(Page(name = "First")))
 
-        val result = board.addPage("Second")
+        val result = board.withPageAdded("Second")
 
         assertEquals(listOf("First", "Second"), result.pages.map { it.name })
         assertEquals(1, result.currentPageIndex)
     }
 
     @Test
-    fun `addPage defaults to a numbered name when none is given`() {
+    fun `withPageAdded defaults to a numbered name when none is given`() {
         val board = Board(pages = listOf(Page(name = "First")))
 
-        val result = board.addPage()
+        val result = board.withPageAdded()
 
         assertEquals("Page 2", result.pages[1].name)
     }
 
     @Test
-    fun `addPage uses the board's configured default grid size, tiles included`() {
+    fun `withPageAdded uses the board's configured default grid size, tiles included`() {
         // 6x6 = 36 tiles, deliberately more than Page's own 16-tile default — a naive
         // Page(rows=6, columns=6) with no explicit tiles would under-fill the grid.
         val board = Board(
@@ -42,7 +42,7 @@ class BoardTest {
             defaultPageColumns = 6
         )
 
-        val result = board.addPage("Second")
+        val result = board.withPageAdded("Second")
 
         val added = result.pages[1]
         assertEquals(6, added.rows)
@@ -52,60 +52,60 @@ class BoardTest {
     }
 
     @Test
-    fun `removePage is a no-op when only one page remains`() {
+    fun `withPageRemoved is a no-op when only one page remains`() {
         val board = Board(pages = listOf(Page(name = "Only")))
 
-        val result = board.removePage(0)
+        val result = board.withPageRemoved(0)
 
         assertEquals(board, result)
     }
 
     @Test
-    fun `removePage drops the page and clamps the current index`() {
+    fun `withPageRemoved drops the page and clamps the current index`() {
         val board = Board(
             pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")),
             currentPageIndex = 2
         )
 
-        val result = board.removePage(2)
+        val result = board.withPageRemoved(2)
 
         assertEquals(listOf("A", "B"), result.pages.map { it.name })
         assertEquals(1, result.currentPageIndex)
     }
 
     @Test
-    fun `renamePage updates only the target page`() {
+    fun `withPageRenamed updates only the target page`() {
         val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
 
-        val result = board.renamePage(1, "Renamed")
+        val result = board.withPageRenamed(1, "Renamed")
 
         assertEquals("A", result.pages[0].name)
         assertEquals("Renamed", result.pages[1].name)
     }
 
     @Test
-    fun `renamePage falls back to the existing name when given a blank name`() {
+    fun `withPageRenamed falls back to the existing name when given a blank name`() {
         val board = Board(pages = listOf(Page(name = "A")))
 
-        val result = board.renamePage(0, "   ")
+        val result = board.withPageRenamed(0, "   ")
 
         assertEquals("A", result.pages[0].name)
     }
 
     @Test
-    fun `switchTo changes the current page index`() {
+    fun `withCurrentPage changes the current page index`() {
         val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
 
-        val result = board.switchTo(1)
+        val result = board.withCurrentPage(1)
 
         assertEquals(1, result.currentPageIndex)
     }
 
     @Test
-    fun `switchTo out of range is a no-op`() {
+    fun `withCurrentPage out of range is a no-op`() {
         val board = Board(pages = listOf(Page(name = "A")))
 
-        val result = board.switchTo(5)
+        val result = board.withCurrentPage(5)
 
         assertEquals(board, result)
     }
@@ -178,21 +178,21 @@ class BoardTest {
     }
 
     @Test
-    fun `removePage clears the home index when the home page itself is removed`() {
+    fun `withPageRemoved clears the home index when the home page itself is removed`() {
         val board = Board(pages = listOf(Page(name = "A"), Page(name = "B", isHome = true)))
 
-        val result = board.removePage(1)
+        val result = board.withPageRemoved(1)
 
         assertEquals(null, result.homePageIndex)
     }
 
     @Test
-    fun `removePage shifts the home index down when a page before it is removed`() {
+    fun `withPageRemoved shifts the home index down when a page before it is removed`() {
         val board = Board(
             pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C", isHome = true))
         )
 
-        val result = board.removePage(0)
+        val result = board.withPageRemoved(0)
 
         assertEquals(1, result.homePageIndex)
     }
@@ -259,54 +259,54 @@ class BoardTest {
     }
 
     @Test
-    fun `movedPage reorders pages`() {
+    fun `withPageMoved reorders pages`() {
         val board = Board(pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")))
 
-        val result = board.movedPage(0, 2)
+        val result = board.withPageMoved(0, 2)
 
         assertEquals(listOf("B", "C", "A"), result.pages.map { it.name })
     }
 
     @Test
-    fun `movedPage out of range is a no-op`() {
+    fun `withPageMoved out of range is a no-op`() {
         val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
 
-        val result = board.movedPage(0, 5)
+        val result = board.withPageMoved(0, 5)
 
         assertEquals(board, result)
     }
 
     @Test
-    fun `movedPage keeps the current page selected as it shifts left`() {
+    fun `withPageMoved keeps the current page selected as it shifts left`() {
         val board = Board(
             pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")),
             currentPageIndex = 2
         )
 
-        val result = board.movedPage(0, 2)
+        val result = board.withPageMoved(0, 2)
 
         assertEquals("C", result.pages[result.currentPageIndex].name)
     }
 
     @Test
-    fun `movedPage keeps the current page selected as it shifts right`() {
+    fun `withPageMoved keeps the current page selected as it shifts right`() {
         val board = Board(
             pages = listOf(Page(name = "A"), Page(name = "B"), Page(name = "C")),
             currentPageIndex = 0
         )
 
-        val result = board.movedPage(0, 2)
+        val result = board.withPageMoved(0, 2)
 
         assertEquals("A", result.pages[result.currentPageIndex].name)
     }
 
     @Test
-    fun `movedPage follows the home page along with its page`() {
+    fun `withPageMoved follows the home page along with its page`() {
         val board = Board(
             pages = listOf(Page(name = "A", isHome = true), Page(name = "B"), Page(name = "C"))
         )
 
-        val result = board.movedPage(0, 2)
+        val result = board.withPageMoved(0, 2)
 
         assertEquals("A", result.pages[result.homePageIndex!!].name)
     }
@@ -354,16 +354,16 @@ class BoardTest {
     }
 
     @Test
-    fun `isPlayable speaks a labeled tile only when speakLabel or the board fallback is on`() {
+    fun `isPlayable speaks a labeled tile only when speakWhenNoSound or the board fallback is on`() {
         val unrecorded = Tile(label = "Water")
         assertTrue(unrecorded.isPlayable(speakUnrecordedTilesEnabled = true))
         assertFalse(unrecorded.isPlayable(speakUnrecordedTilesEnabled = false))
-        assertTrue(unrecorded.copy(speakLabel = true).isPlayable(speakUnrecordedTilesEnabled = false))
+        assertTrue(unrecorded.copy(speakWhenNoSound = true).isPlayable(speakUnrecordedTilesEnabled = false))
     }
 
     @Test
     fun `isPlayable is false with nothing to say`() {
-        assertFalse(Tile(label = "", speakLabel = true).isPlayable(speakUnrecordedTilesEnabled = true))
+        assertFalse(Tile(label = "", speakWhenNoSound = true).isPlayable(speakUnrecordedTilesEnabled = true))
     }
 
     @Test

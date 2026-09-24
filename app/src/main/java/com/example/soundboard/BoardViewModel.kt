@@ -37,7 +37,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 class BoardViewModel(
-    private val repo: BoardRepository,
+    private val boardRepo: BoardRepository,
     private val player: Player,
     private val recorder: Recorder,
     private val presetRepo: PresetRepository,
@@ -78,13 +78,13 @@ class BoardViewModel(
     init {
         viewModelScope.launch {
             withContext(ioDispatcher) {
-                if (!repo.hasSavedBoard()) repo.importFromAsset(FALLBACK_PRESET_ASSET)
+                if (!boardRepo.hasSavedBoard()) boardRepo.importFromAsset(FALLBACK_PRESET_ASSET)
             }
-            val loaded = withContext(ioDispatcher) { repo.load() }
+            val loaded = withContext(ioDispatcher) { boardRepo.load() }
             // Only overrides where the pager starts, not what's saved to disk — a plain
             // switchTo(), same as any other in-session page switch, see BoardViewModel.switchPage.
             val initial = if (loaded.openOnHomePage) {
-                loaded.homePageIndex?.let { loaded.switchTo(it) } ?: loaded
+                loaded.homePageIndex?.let { loaded.withCurrentPage(it) } ?: loaded
             } else {
                 loaded
             }
@@ -123,26 +123,26 @@ class BoardViewModel(
     /** Per-tile border override; null inherits the page's, then the board's. */
     fun setBorder(tileId: String, border: TileBorder?) = updateTile(tileId) { it.copy(border = border) }
 
-    fun setSpeakLabel(tileId: String, value: Boolean) = updateTile(tileId) { it.copy(speakLabel = value) }
+    fun setSpeakWhenNoSound(tileId: String, value: Boolean) = updateTile(tileId) { it.copy(speakWhenNoSound = value) }
 
     fun assignSound(tileId: String, uri: Uri) {
         viewModelScope.launch {
-            val name = withContext(ioDispatcher) { repo.importSound(uri) } ?: return@launch
-            withContext(ioDispatcher) { player.load(name, repo.soundFile(name)) }
+            val name = withContext(ioDispatcher) { boardRepo.importSound(uri) } ?: return@launch
+            withContext(ioDispatcher) { player.load(name, boardRepo.soundFile(name)) }
             updateTile(tileId) { it.copy(fileName = name) }
         }
     }
 
-    fun clearTile(tileId: String) = updateTile(tileId) { it.copy(label = "", fileName = null, speakLabel = false) }
+    fun clearTile(tileId: String) = updateTile(tileId) { it.copy(label = "", fileName = null, speakWhenNoSound = false) }
 
-    /** Detaches a tile's sound without touching its label or [Tile.speakLabel]. */
+    /** Detaches a tile's sound without touching its label or [Tile.speakWhenNoSound]. */
     fun removeSound(tileId: String) = updateTile(tileId) { it.copy(fileName = null) }
 
     /** Starts recording into a fresh file; call [stopRecording] or [cancelRecording] to end it. */
     fun startRecording() {
         if (_isRecording.value) return
         viewModelScope.launch {
-            val file = withContext(ioDispatcher) { repo.newRecordingFile() }
+            val file = withContext(ioDispatcher) { boardRepo.newRecordingFile() }
             val started = withContext(ioDispatcher) { recorder.start(file) }
             if (started) {
                 pendingRecordingFile = file
@@ -194,12 +194,12 @@ class BoardViewModel(
     }
 
     /** Global tile opacity; overridden per-page by [setPageOpacity] and per-tile by [setOpacity]. */
-    override fun setTileOpacity(value: Float) {
+    override fun setBoardTileOpacity(value: Float) {
         commit(_board.value.copy(tileOpacity = value.coerceIn(0f, 1f)))
     }
 
     /** Global tile border; overridden per-page by [setPageBorder] and per-tile by [setBorder]. */
-    override fun setTileBorder(value: TileBorder) {
+    override fun setBoardTileBorder(value: TileBorder) {
         commit(_board.value.copy(tileBorder = value))
     }
 
@@ -218,7 +218,7 @@ class BoardViewModel(
     }
 
     fun resize(index: Int, rows: Int, columns: Int) {
-        commit(_board.value.updatingPage(index) { it.resized(rows, columns) })
+        commit(_board.value.updatingPage(index) { it.withGridSize(rows, columns) })
     }
 
     fun setTileAspectRatio(index: Int, ratio: Float) {
@@ -307,7 +307,7 @@ class BoardViewModel(
     /** Background image picked from the gallery; replaces any solid background color. */
     fun setBackgroundImage(uri: Uri) {
         viewModelScope.launch {
-            val name = withContext(ioDispatcher) { repo.importBackgroundImage(uri) } ?: return@launch
+            val name = withContext(ioDispatcher) { boardRepo.importBackgroundImage(uri) } ?: return@launch
             replaceBackground(colorArgb = null, imageFileName = name)
         }
     }
@@ -324,12 +324,12 @@ class BoardViewModel(
         val previousImage = _board.value.backgroundImageFileName
         commit(_board.value.copy(backgroundColorArgb = colorArgb, backgroundImageFileName = imageFileName))
         if (previousImage != null && previousImage != imageFileName) {
-            viewModelScope.launch(ioDispatcher) { repo.backgroundFile(previousImage).delete() }
+            viewModelScope.launch(ioDispatcher) { boardRepo.backgroundFile(previousImage).delete() }
         }
     }
 
     /** File backing [Board.backgroundImageFileName], for the UI to decode and render. */
-    fun backgroundImageFile(name: String): File = repo.backgroundFile(name)
+    fun backgroundImageFile(name: String): File = boardRepo.backgroundFile(name)
 
     fun renameBoard(name: String) {
         commit(_board.value.copy(name = name.ifBlank { "New Board" }))
@@ -340,33 +340,33 @@ class BoardViewModel(
     }
 
     fun clearHomePage() {
-        commit(_board.value.clearingHomePage())
+        commit(_board.value.withoutHomePage())
     }
 
     fun addPage(name: String) {
-        commit(_board.value.addPage(name.ifBlank { "Page ${_board.value.pages.size + 1}" }))
+        commit(_board.value.withPageAdded(name.ifBlank { "Page ${_board.value.pages.size + 1}" }))
     }
 
     fun renamePage(index: Int, name: String) {
-        commit(_board.value.renamePage(index, name))
+        commit(_board.value.withPageRenamed(index, name))
     }
 
     fun deletePage(index: Int) {
-        commit(_board.value.removePage(index))
+        commit(_board.value.withPageRemoved(index))
     }
 
     fun movePage(fromIndex: Int, toIndex: Int) {
-        commit(_board.value.movedPage(fromIndex, toIndex))
+        commit(_board.value.withPageMoved(fromIndex, toIndex))
     }
 
     /** Switches the active page without touching disk — nothing about the board changed. */
     fun switchPage(index: Int) {
-        _board.value = _board.value.switchTo(index)
+        _board.value = _board.value.withCurrentPage(index)
     }
 
     /** Live-reorders tiles during a drag without touching disk; see [commitOrder]. */
     fun previewMove(fromIndex: Int, toIndex: Int) {
-        _board.value = _board.value.updatingCurrentPage { it.moved(fromIndex, toIndex) }
+        _board.value = _board.value.updatingCurrentPage { it.withTileMoved(fromIndex, toIndex) }
     }
 
     /** Persists whatever order a drag gesture has left the board in. */
@@ -376,14 +376,14 @@ class BoardViewModel(
 
     fun exportBoard(uri: Uri) {
         viewModelScope.launch {
-            val ok = withContext(ioDispatcher) { repo.exportTo(uri) }
+            val ok = withContext(ioDispatcher) { boardRepo.exportTo(uri) }
             _message.value = if (ok) "Exported backup" else "Export failed"
         }
     }
 
     fun importBoard(uri: Uri) {
         viewModelScope.launch {
-            val ok = withContext(ioDispatcher) { repo.importFrom(uri) }
+            val ok = withContext(ioDispatcher) { boardRepo.importFrom(uri) }
             replaceBoardAfterImport(ok, "Imported backup", "Import failed")
         }
     }
@@ -400,7 +400,7 @@ class BoardViewModel(
         viewModelScope.launch {
             _strayClips.value = withContext(ioDispatcher) {
                 val keep = _board.value.soundFileNames + presetRepo.allReferencedFileNames()
-                repo.strayFiles(keep).map { StrayClip(it.name, it.length()) }
+                boardRepo.strayFiles(keep).map { StrayClip(it.name, it.length()) }
             }
         }
     }
@@ -409,9 +409,9 @@ class BoardViewModel(
     fun exportAndDeleteStrayClips(uri: Uri) {
         val fileNames = _strayClips.value.map { it.fileName }
         viewModelScope.launch {
-            val ok = withContext(ioDispatcher) { repo.exportFiles(fileNames, uri) }
+            val ok = withContext(ioDispatcher) { boardRepo.exportFiles(fileNames, uri) }
             if (ok) {
-                withContext(ioDispatcher) { repo.deleteFiles(fileNames) }
+                withContext(ioDispatcher) { boardRepo.deleteFiles(fileNames) }
                 _strayClips.value = emptyList()
                 _message.value = "Exported and deleted ${fileNames.size} unused clip(s)"
             } else {
@@ -424,7 +424,7 @@ class BoardViewModel(
     fun deleteStrayClips() {
         val fileNames = _strayClips.value.map { it.fileName }
         viewModelScope.launch {
-            withContext(ioDispatcher) { repo.deleteFiles(fileNames) }
+            withContext(ioDispatcher) { boardRepo.deleteFiles(fileNames) }
             _strayClips.value = emptyList()
             _message.value = "Deleted ${fileNames.size} unused clip(s)"
         }
@@ -471,7 +471,7 @@ class BoardViewModel(
                     _message.value = "Loaded \"${loaded.name}\""
                 }
                 is PresetRef.Factory -> {
-                    val ok = withContext(ioDispatcher) { repo.importFromAsset(ref.assetName) }
+                    val ok = withContext(ioDispatcher) { boardRepo.importFromAsset(ref.assetName) }
                     if (ok) {
                         recordRecentlyUsed(RecentPresetEntry(kind = RecentPresetKind.FACTORY, assetName = ref.assetName, label = ref.label, usedAt = System.currentTimeMillis()))
                     }
@@ -501,7 +501,7 @@ class BoardViewModel(
         add(PresetRef.Factory(JEREMY_PRESET_ASSET, "Jeremy Draft Care Board"))
         add(PresetRef.Factory(SARAH_PRESET_ASSET, "Sarah (ElevenLabs) Care Board"))
         add(PresetRef.Factory(TTS_PRESET_ASSET, "TTS Care Board"))
-        if (repo.hasAsset(STEVE_PRESET_ASSET)) {
+        if (boardRepo.hasAsset(STEVE_PRESET_ASSET)) {
             add(PresetRef.Factory(STEVE_PRESET_ASSET, "Steve Draft Care Board"))
         }
     }
@@ -509,7 +509,7 @@ class BoardViewModel(
     private suspend fun replaceBoardAfterImport(imported: Boolean, successMessage: String, failureMessage: String) {
         if (imported) {
             player.clear()
-            val loaded = withContext(ioDispatcher) { repo.load() }
+            val loaded = withContext(ioDispatcher) { boardRepo.load() }
             _board.value = loaded
             withContext(ioDispatcher) { loadSounds(loaded) }
             _message.value = successMessage
@@ -524,7 +524,7 @@ class BoardViewModel(
 
     private fun loadSounds(board: Board) {
         board.soundFileNames.forEach { name ->
-            player.load(name, repo.soundFile(name))
+            player.load(name, boardRepo.soundFile(name))
         }
     }
 
@@ -534,9 +534,9 @@ class BoardViewModel(
 
     /** Single write path: update state, drop orphaned audio, persist. */
     private fun commit(board: Board) {
-        val grown = board.normalized()
-        val removedSounds = _board.value.soundFileNames - grown.soundFileNames
-        _board.value = grown
+        val next = board.normalized()
+        val removedSounds = _board.value.soundFileNames - next.soundFileNames
+        _board.value = next
 
         removedSounds.forEach { player.unload(it) }
 
@@ -548,11 +548,11 @@ class BoardViewModel(
             // stale commit's that might not know about a sound added since.
             saveMutex.withLock {
                 val latest = _board.value
-                repo.save(latest)
+                boardRepo.save(latest)
                 // A saved preset references sound files by name without copying them (see
                 // PresetRepository) — protect those from pruning too, or clearing/replacing a
                 // live tile could delete audio a saved preset still points at.
-                repo.pruneUnused(latest.soundFileNames + presetRepo.allReferencedFileNames())
+                boardRepo.pruneUnused(latest.soundFileNames + presetRepo.allReferencedFileNames())
             }
         }
     }

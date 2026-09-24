@@ -1,6 +1,7 @@
 package com.example.soundboard.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,24 +14,24 @@ class PageTest {
     fun `growing keeps existing tiles and appends empty ones`() {
         val original = Page(rows = 4, columns = 4, tiles = (0 until 16).map { tile("t$it") })
 
-        val grown = original.resized(4, 5)
+        val grown = original.withGridSize(4, 5)
 
         assertEquals(4, grown.rows)
         assertEquals(5, grown.columns)
         assertEquals(original.tiles, grown.tiles.take(16))
         assertEquals(20, grown.tiles.size)
-        assertEquals(4, grown.tiles.drop(16).count { it.isEmpty })
+        assertEquals(4, grown.tiles.drop(16).count { !it.hasSound })
     }
 
     @Test
     fun `shrinking keeps the first tiles in order and drops the rest`() {
         val original = Page(rows = 4, columns = 4, tiles = (0 until 16).map { tile("t$it") })
 
-        val shrunk = original.resized(3, 3)
+        val shrunk = original.withGridSize(3, 3)
 
         assertEquals(3, shrunk.rows)
         assertEquals(3, shrunk.columns)
-        // resized() never drops tiles from the backing list, only the visible window.
+        // withGridSize() never drops tiles from the backing list, only the visible window.
         assertEquals(original.tiles, shrunk.tiles)
         assertEquals(original.tiles.take(9), shrunk.visibleTiles)
     }
@@ -39,7 +40,7 @@ class PageTest {
     fun `resizing to the same dimensions is a no-op`() {
         val original = Page(rows = 4, columns = 4, tiles = (0 until 16).map { tile("t$it") })
 
-        val result = original.resized(4, 4)
+        val result = original.withGridSize(4, 4)
 
         assertEquals(original, result)
     }
@@ -48,7 +49,7 @@ class PageTest {
     fun `1x1 page works`() {
         val original = Page(rows = 1, columns = 1, tiles = listOf(tile("only")))
 
-        val result = original.resized(1, 1)
+        val result = original.withGridSize(1, 1)
 
         assertEquals(1, result.rows)
         assertEquals(1, result.columns)
@@ -59,7 +60,7 @@ class PageTest {
     fun `rows and columns are updated not just tile count`() {
         val original = Page(rows = 2, columns = 2, tiles = (0 until 4).map { tile("t$it") })
 
-        val result = original.resized(1, 8)
+        val result = original.withGridSize(1, 8)
 
         assertEquals(1, result.rows)
         assertEquals(8, result.columns)
@@ -100,7 +101,7 @@ class PageTest {
         assertEquals(2, result.columns)
         assertEquals(4, result.tiles.size)
         assertEquals(listOf(filledTile("a"), filledTile("b")), result.tiles.take(2))
-        assertTrue(result.tiles.drop(2).all { it.isEmpty })
+        assertTrue(result.tiles.drop(2).none { it.hasSound })
     }
 
     @Test
@@ -149,7 +150,7 @@ class PageTest {
         val tiles = (0 until 16).map { if (it == 13) filledTile("t$it") else tile("t$it") }
         val page = Page(rows = 4, columns = 4, tiles = tiles)
 
-        val result = page.resized(2, 4).normalized()
+        val result = page.withGridSize(2, 4).normalized()
 
         assertEquals(4, result.rows)
         assertTrue(result.visibleTiles.any { it.id == "t13" })
@@ -159,7 +160,7 @@ class PageTest {
     fun `a label still awaiting a recording counts as content`() {
         val tiles = (0 until 16).map { if (it == 13) tile("t$it", label = "Water") else tile("t$it") }
 
-        val result = Page(rows = 4, columns = 4, tiles = tiles).resized(2, 4).normalized()
+        val result = Page(rows = 4, columns = 4, tiles = tiles).withGridSize(2, 4).normalized()
 
         assertEquals(4, result.rows)
     }
@@ -168,7 +169,7 @@ class PageTest {
     fun `shrinking still hides trailing blank tiles`() {
         val page = Page(rows = 4, columns = 4, tiles = (0 until 16).map { tile("t$it") })
 
-        val result = page.resized(2, 4).normalized()
+        val result = page.withGridSize(2, 4).normalized()
 
         assertEquals(2, result.rows)
         assertEquals(8, result.visibleTiles.size)
@@ -191,7 +192,7 @@ class PageTest {
         val result = page.normalized()
 
         assertEquals(2, result.landscapeRows)
-        assertTrue(result.landscapeTiles.last().isEmpty)
+        assertFalse(result.landscapeTiles.last().hasSound)
     }
 
     @Test
@@ -203,10 +204,10 @@ class PageTest {
     }
 
     @Test
-    fun `moved can reach tiles past the portrait grid`() {
+    fun `withTileMoved can reach tiles past the portrait grid`() {
         val page = Page(rows = 1, columns = 2, tiles = (0 until 4).map { tile("t$it") })
 
-        val result = page.moved(0, 3)
+        val result = page.withTileMoved(0, 3)
 
         assertEquals(listOf("t1", "t2", "t3", "t0"), result.tiles.map { it.id })
     }

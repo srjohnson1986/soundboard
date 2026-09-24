@@ -283,14 +283,14 @@ internal fun SettingsDialog(
                 }
                 SectionDivider()
                 Text("Tile opacity", style = MaterialTheme.typography.bodyMedium)
-                OpacityControls(board.tileOpacity) { it?.let(actions::setTileOpacity) }
+                OpacityControls(board.tileOpacity) { it?.let(actions::setBoardTileOpacity) }
                 HelperText(
                     "Overridable per page (Page appearance) and per tile (Edit tile). " +
                         "Set to 100% automatically in Performance mode."
                 )
                 SectionDivider()
                 Text("Tile border", style = MaterialTheme.typography.bodyMedium)
-                BorderControls(board.tileBorder, actions::setTileBorder)
+                BorderControls(board.tileBorder, actions::setBoardTileBorder)
                 HelperText(
                     "Overridable per page (Page appearance) and per tile (Edit tile). " +
                         "Turned off automatically in Performance mode."

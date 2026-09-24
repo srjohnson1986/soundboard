@@ -47,9 +47,16 @@ never `assembleRelease`, so it doesn't need this file at all).
 
 ## Every release
 
-1. Read through `docs/USER_GUIDE.md` with the new build in hand and fix
-   anything that no longer matches the app (menu names, where a setting
-   lives, new features). Land any fixes before tagging, like any other change.
+1. Check the docs against the new build, and land any fixes before tagging
+   like any other change:
+   - **`docs/USER_GUIDE.md`**: menu names, where each setting lives, new
+     features.
+   - **`README.md`**: the feature summary, install link, build and test
+     commands.
+   - **`presets/README.md`**: if a built-in board changed, its description,
+     and that the bundled copies still match (see its "Keeping the bundled
+     copies in sync" section, which has a one-line hash check).
+   - **`docs/ARCHITECTURE.md`**: anything the release restructured.
 2. Bump `versionName` (and `versionCode`) in `app/build.gradle.kts`, through
    the usual issue/branch/PR flow. The in-app version label (`APP_VERSION` in
    `ui/BoardTopBar.kt`) and its release-notes link read `versionName` via

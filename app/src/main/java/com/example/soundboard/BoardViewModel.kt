@@ -13,11 +13,11 @@ import com.example.soundboard.audio.Speaker
 import com.example.soundboard.audio.TtsSpeaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
-import com.example.soundboard.data.PresetRepository
-import com.example.soundboard.data.RecentPresetEntry
-import com.example.soundboard.data.RecentPresetKind
-import com.example.soundboard.data.RecentPresetsRepository
-import com.example.soundboard.data.SavedPreset
+import com.example.soundboard.data.SavedBoardRepository
+import com.example.soundboard.data.RecentBoardEntry
+import com.example.soundboard.data.RecentBoardKind
+import com.example.soundboard.data.RecentBoardsRepository
+import com.example.soundboard.data.SavedBoard
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
@@ -40,10 +40,10 @@ class BoardViewModel(
     private val boardRepo: BoardRepository,
     private val player: Player,
     private val recorder: Recorder,
-    private val presetRepo: PresetRepository,
+    private val savedBoardRepo: SavedBoardRepository,
     private val speaker: Speaker,
     private val devicePrefs: DevicePreferences,
-    private val recentPresetsRepo: RecentPresetsRepository,
+    private val recentBoardsRepo: RecentBoardsRepository,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel(), BoardSettingsActions {
 
@@ -58,16 +58,16 @@ class BoardViewModel(
     private val _performanceModeEnabled = MutableStateFlow(devicePrefs.performanceModeEnabled)
     val performanceModeEnabled: StateFlow<Boolean> = _performanceModeEnabled.asStateFlow()
 
-    private val _presets = MutableStateFlow<List<SavedPreset>>(emptyList())
-    val presets: StateFlow<List<SavedPreset>> = _presets.asStateFlow()
+    private val _savedBoards = MutableStateFlow<List<SavedBoard>>(emptyList())
+    val savedBoards: StateFlow<List<SavedBoard>> = _savedBoards.asStateFlow()
 
-    /** Sound files not referenced by any tile on the live board or any saved preset — see [refreshStrayClips]. */
+    /** Sound files not referenced by any tile on the live board or any saved board — see [refreshStrayClips]. */
     private val _strayClips = MutableStateFlow<List<StrayClip>>(emptyList())
     val strayClips: StateFlow<List<StrayClip>> = _strayClips.asStateFlow()
 
-    /** Presets actually loaded/saved recently, newest first — see [RecentPresetsRepository]. */
-    private val _recentPresets = MutableStateFlow<List<RecentPresetItem>>(emptyList())
-    val recentPresets: StateFlow<List<RecentPresetItem>> = _recentPresets.asStateFlow()
+    /** Boards actually opened/saved recently, newest first — see [RecentBoardsRepository]. */
+    private val _recentBoards = MutableStateFlow<List<RecentBoardItem>>(emptyList())
+    val recentBoards: StateFlow<List<RecentBoardItem>> = _recentBoards.asStateFlow()
 
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
@@ -78,7 +78,7 @@ class BoardViewModel(
     init {
         viewModelScope.launch {
             withContext(ioDispatcher) {
-                if (!boardRepo.hasSavedBoard()) boardRepo.importFromAsset(FALLBACK_PRESET_ASSET)
+                if (!boardRepo.hasSavedBoard()) boardRepo.importFromAsset(FALLBACK_BOARD_ASSET)
             }
             val loaded = withContext(ioDispatcher) { boardRepo.load() }
             // Only overrides where the pager starts, not what's saved to disk — a plain
@@ -318,7 +318,7 @@ class BoardViewModel(
     /**
      * Single write path for the background: at most one of color or image is ever set, and
      * the image file it replaces is deleted — nothing else points at it (backgrounds aren't
-     * shared with saved presets the way sounds are).
+     * shared with saved boards the way sounds are).
      */
     private fun replaceBackground(colorArgb: Int?, imageFileName: String?) {
         val previousImage = _board.value.backgroundImageFileName
@@ -388,10 +388,10 @@ class BoardViewModel(
         }
     }
 
-    /** Refreshes [presets] from disk; call before showing a preset picker. */
-    fun refreshPresets() {
+    /** Refreshes [savedBoards] from disk; call before showing the Open board picker. */
+    fun refreshSavedBoards() {
         viewModelScope.launch {
-            _presets.value = withContext(ioDispatcher) { presetRepo.list() }
+            _savedBoards.value = withContext(ioDispatcher) { savedBoardRepo.list() }
         }
     }
 
@@ -399,7 +399,7 @@ class BoardViewModel(
     fun refreshStrayClips() {
         viewModelScope.launch {
             _strayClips.value = withContext(ioDispatcher) {
-                val keep = _board.value.soundFileNames + presetRepo.allReferencedFileNames()
+                val keep = _board.value.soundFileNames + savedBoardRepo.allReferencedFileNames()
                 boardRepo.strayFiles(keep).map { StrayClip(it.name, it.length()) }
             }
         }
@@ -430,79 +430,79 @@ class BoardViewModel(
         }
     }
 
-    /** Refreshes [recentPresets] from disk; call before showing the title bar's quick-switch dropdown. */
-    fun refreshRecentPresets() {
+    /** Refreshes [recentBoards] from disk; call before showing the title bar's quick-switch dropdown. */
+    fun refreshRecentBoards() {
         viewModelScope.launch {
-            _recentPresets.value = withContext(ioDispatcher) { recentPresetsRepo.recent().mapNotNull { it.toItem() } }
+            _recentBoards.value = withContext(ioDispatcher) { recentBoardsRepo.recent().mapNotNull { it.toItem() } }
         }
     }
 
     /**
-     * Snapshots the current board as a brand-new saved preset and renames the
+     * Snapshots the current board as a brand-new saved board and renames the
      * live board to match — same-device version history, not a portable
-     * backup (see [PresetRepository]). [exportBoard] is still what carries a
+     * backup (see [SavedBoardRepository]). [exportBoard] is still what carries a
      * board's audio off-device.
      */
-    fun saveAsPreset(name: String) {
+    fun saveBoardAs(name: String) {
         val renamed = _board.value.copy(name = name.ifBlank { _board.value.name })
         viewModelScope.launch {
-            val id = withContext(ioDispatcher) { presetRepo.save(renamed) }
+            val id = withContext(ioDispatcher) { savedBoardRepo.save(renamed) }
             commit(renamed)
-            refreshPresets()
-            recordRecentlyUsed(RecentPresetEntry(kind = RecentPresetKind.SAVED, id = id, label = renamed.name, usedAt = System.currentTimeMillis()))
-            _message.value = "Saved preset \"${renamed.name}\""
+            refreshSavedBoards()
+            recordRecentlyUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = id, label = renamed.name, usedAt = System.currentTimeMillis()))
+            _message.value = "Saved board \"${renamed.name}\""
         }
     }
 
     /** Replaces the live board with [ref]'s content. Caller is responsible for confirming this is wanted first. */
-    fun applyPreset(ref: PresetRef) {
+    fun openBoard(ref: BoardRef) {
         viewModelScope.launch {
             when (ref) {
-                is PresetRef.Saved -> {
-                    val loaded = withContext(ioDispatcher) { presetRepo.load(ref.id) }
+                is BoardRef.Saved -> {
+                    val loaded = withContext(ioDispatcher) { savedBoardRepo.load(ref.id) }
                     if (loaded == null) {
-                        _message.value = "Couldn't load preset"
+                        _message.value = "Couldn't open board"
                         return@launch
                     }
                     player.clear()
                     commit(loaded)
                     withContext(ioDispatcher) { loadSounds(loaded) }
-                    recordRecentlyUsed(RecentPresetEntry(kind = RecentPresetKind.SAVED, id = ref.id, label = loaded.name, usedAt = System.currentTimeMillis()))
+                    recordRecentlyUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = ref.id, label = loaded.name, usedAt = System.currentTimeMillis()))
                     _message.value = "Loaded \"${loaded.name}\""
                 }
-                is PresetRef.Factory -> {
+                is BoardRef.BuiltIn -> {
                     val ok = withContext(ioDispatcher) { boardRepo.importFromAsset(ref.assetName) }
                     if (ok) {
-                        recordRecentlyUsed(RecentPresetEntry(kind = RecentPresetKind.FACTORY, assetName = ref.assetName, label = ref.label, usedAt = System.currentTimeMillis()))
+                        recordRecentlyUsed(RecentBoardEntry(kind = RecentBoardKind.BUILT_IN, assetName = ref.assetName, label = ref.label, usedAt = System.currentTimeMillis()))
                     }
-                    replaceBoardAfterImport(ok, "Loaded \"${ref.label}\"", "Couldn't load preset")
+                    replaceBoardAfterImport(ok, "Loaded \"${ref.label}\"", "Couldn't open board")
                 }
             }
         }
     }
 
-    private suspend fun recordRecentlyUsed(entry: RecentPresetEntry) {
-        _recentPresets.value = withContext(ioDispatcher) {
-            recentPresetsRepo.recordUsed(entry)
-            recentPresetsRepo.recent()
+    private suspend fun recordRecentlyUsed(entry: RecentBoardEntry) {
+        _recentBoards.value = withContext(ioDispatcher) {
+            recentBoardsRepo.recordUsed(entry)
+            recentBoardsRepo.recent()
         }.mapNotNull { it.toItem() }
     }
 
-    private fun RecentPresetEntry.toItem(): RecentPresetItem? {
+    private fun RecentBoardEntry.toItem(): RecentBoardItem? {
         val ref = when (kind) {
-            RecentPresetKind.SAVED -> id?.let { PresetRef.Saved(it) }
-            RecentPresetKind.FACTORY -> assetName?.let { PresetRef.Factory(it, label) }
+            RecentBoardKind.SAVED -> id?.let { BoardRef.Saved(it) }
+            RecentBoardKind.BUILT_IN -> assetName?.let { BoardRef.BuiltIn(it, label) }
         } ?: return null
-        return RecentPresetItem(ref, label, usedAt)
+        return RecentBoardItem(ref, label, usedAt)
     }
 
-    /** Factory presets bundled with this build — Jeremy's, Sarah's, and the TTS-only board ship in every build; Steve's only where its asset is actually packaged (debug builds). */
-    fun factoryPresets(): List<PresetRef.Factory> = buildList {
-        add(PresetRef.Factory(JEREMY_PRESET_ASSET, "Jeremy Draft Care Board"))
-        add(PresetRef.Factory(SARAH_PRESET_ASSET, "Sarah (ElevenLabs) Care Board"))
-        add(PresetRef.Factory(TTS_PRESET_ASSET, "TTS Care Board"))
-        if (boardRepo.hasAsset(STEVE_PRESET_ASSET)) {
-            add(PresetRef.Factory(STEVE_PRESET_ASSET, "Steve Draft Care Board"))
+    /** Built-in boards bundled with this build — Jeremy's, Sarah's, and the TTS-only board ship in every build; Steve's only where its asset is actually packaged (debug builds). */
+    fun builtInBoards(): List<BoardRef.BuiltIn> = buildList {
+        add(BoardRef.BuiltIn(JEREMY_BOARD_ASSET, "Jeremy Draft Care Board"))
+        add(BoardRef.BuiltIn(SARAH_BOARD_ASSET, "Sarah (ElevenLabs) Care Board"))
+        add(BoardRef.BuiltIn(TTS_BOARD_ASSET, "TTS Care Board"))
+        if (boardRepo.hasAsset(STEVE_BOARD_ASSET)) {
+            add(BoardRef.BuiltIn(STEVE_BOARD_ASSET, "Steve Draft Care Board"))
         }
     }
 
@@ -549,10 +549,10 @@ class BoardViewModel(
             saveMutex.withLock {
                 val latest = _board.value
                 boardRepo.save(latest)
-                // A saved preset references sound files by name without copying them (see
-                // PresetRepository) — protect those from pruning too, or clearing/replacing a
-                // live tile could delete audio a saved preset still points at.
-                boardRepo.pruneUnused(latest.soundFileNames + presetRepo.allReferencedFileNames())
+                // A saved board references sound files by name without copying them (see
+                // SavedBoardRepository) — protect those from pruning too, or clearing/replacing a
+                // live tile could delete audio a saved board still points at.
+                boardRepo.pruneUnused(latest.soundFileNames + savedBoardRepo.allReferencedFileNames())
             }
         }
     }
@@ -574,40 +574,40 @@ class BoardViewModel(
                 BoardRepository(app),
                 SoundPlayer(),
                 AudioRecorder(app),
-                PresetRepository(app),
+                SavedBoardRepository(app),
                 TtsSpeaker(app),
                 DevicePreferences(app),
-                RecentPresetsRepository(app)
+                RecentBoardsRepository(app)
             ) as T
         }
     }
 
     companion object {
         /** Bundled in every build (src/main/assets/); see [BoardRepository.importFromAsset]. */
-        private const val JEREMY_PRESET_ASSET = "jeremy-care-board.zip"
+        private const val JEREMY_BOARD_ASSET = "jeremy-care-board.zip"
 
         /** Shipped as the default/fallback board for now. */
-        private const val FALLBACK_PRESET_ASSET = JEREMY_PRESET_ASSET
+        private const val FALLBACK_BOARD_ASSET = JEREMY_BOARD_ASSET
 
         /** Same layout as Jeremy's board, but every tile speaks instead of playing audio — bundled in every build. */
-        private const val TTS_PRESET_ASSET = "tts-care-board.zip"
+        private const val TTS_BOARD_ASSET = "tts-care-board.zip"
 
         /** Same layout as Jeremy's board, recorded with ElevenLabs' Sarah voice — bundled in every build. */
-        private const val SARAH_PRESET_ASSET = "sarah-care-board.zip"
+        private const val SARAH_BOARD_ASSET = "sarah-care-board.zip"
 
         /** Debug-only (src/debug/assets/) — only actually available where that asset is packaged. */
-        private const val STEVE_PRESET_ASSET = "steve-care-board.zip"
+        private const val STEVE_BOARD_ASSET = "steve-care-board.zip"
     }
 }
 
-/** A preset the "Load preset" picker can apply — either bundled with the app or saved on-device. */
-sealed interface PresetRef {
-    data class Saved(val id: String) : PresetRef
-    data class Factory(val assetName: String, val label: String) : PresetRef
+/** A board the "Open board" picker can open — either built into the app or saved on this device. */
+sealed interface BoardRef {
+    data class Saved(val id: String) : BoardRef
+    data class BuiltIn(val assetName: String, val label: String) : BoardRef
 }
 
-/** One entry in the title bar's quick-switch dropdown — see [BoardViewModel.recentPresets]. */
-data class RecentPresetItem(val ref: PresetRef, val label: String, val usedAt: Long)
+/** One entry in the title bar's quick-switch dropdown — see [BoardViewModel.recentBoards]. */
+data class RecentBoardItem(val ref: BoardRef, val label: String, val usedAt: Long)
 
 /** One unused sound file found by [BoardViewModel.refreshStrayClips]. */
 data class StrayClip(val fileName: String, val sizeBytes: Long)

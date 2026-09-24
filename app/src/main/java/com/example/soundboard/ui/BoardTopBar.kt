@@ -65,8 +65,8 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.soundboard.BuildConfig
-import com.example.soundboard.PresetRef
-import com.example.soundboard.RecentPresetItem
+import com.example.soundboard.BoardRef
+import com.example.soundboard.RecentBoardItem
 import com.example.soundboard.model.Board
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -86,25 +86,25 @@ private const val RELEASE_URL = "$RELEASES_BASE_URL/tag/$APP_VERSION"
 @Composable
 internal fun BoardTopBar(
     board: Board,
-    recentPresets: List<RecentPresetItem>,
+    recentBoards: List<RecentBoardItem>,
     editMode: Boolean,
     onEditModeChange: (Boolean) -> Unit,
     onSelectPage: (Int) -> Unit,
     onOpenDialog: (BoardDialog) -> Unit,
-    onShowRecentPresets: () -> Unit,
-    onApplyPreset: (PresetRef, String) -> Unit,
+    onShowRecentBoards: () -> Unit,
+    onOpenBoard: (BoardRef, String) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit
 ) {
     val menu: @Composable () -> Unit = {
         HamburgerMenu(
             board = board,
-            recentPresets = recentPresets,
+            recentBoards = recentBoards,
             editMode = editMode,
             onEditModeChange = onEditModeChange,
             onOpenDialog = onOpenDialog,
-            onShowRecentPresets = onShowRecentPresets,
-            onApplyPreset = onApplyPreset,
+            onShowRecentBoards = onShowRecentBoards,
+            onOpenBoard = onOpenBoard,
             onExportBackup = onExportBackup,
             onImportBackup = onImportBackup
         )
@@ -150,18 +150,18 @@ internal fun BoardTopBar(
 @Composable
 private fun HamburgerMenu(
     board: Board,
-    recentPresets: List<RecentPresetItem>,
+    recentBoards: List<RecentBoardItem>,
     editMode: Boolean,
     onEditModeChange: (Boolean) -> Unit,
     onOpenDialog: (BoardDialog) -> Unit,
-    onShowRecentPresets: () -> Unit,
-    onApplyPreset: (PresetRef, String) -> Unit,
+    onShowRecentBoards: () -> Unit,
+    onOpenBoard: (BoardRef, String) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit
 ) {
     val context = LocalContext.current
     var showMenu by remember { mutableStateOf(false) }
-    var showRecentPresetsMenu by remember { mutableStateOf(false) }
+    var showRecentBoardsMenu by remember { mutableStateOf(false) }
 
     /** Closes the menu, then runs [action] — every entry except Recent boards and Edit mode. */
     fun menuAction(action: () -> Unit): () -> Unit = {
@@ -192,53 +192,65 @@ private fun HamburgerMenu(
                     text = { Text("Recent boards") },
                     leadingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
                     onClick = {
-                        onShowRecentPresets()
-                        showRecentPresetsMenu = true
+                        onShowRecentBoards()
+                        showRecentBoardsMenu = true
                     }
                 )
                 DropdownMenu(
-                    expanded = showRecentPresetsMenu,
-                    onDismissRequest = { showRecentPresetsMenu = false },
+                    expanded = showRecentBoardsMenu,
+                    onDismissRequest = { showRecentBoardsMenu = false },
                     modifier = Modifier.widthIn(min = 240.dp)
                 ) {
-                    if (recentPresets.isEmpty()) {
+                    if (recentBoards.isEmpty()) {
                         DropdownMenuItem(
                             text = { Text("No recent boards yet") },
                             enabled = false,
                             onClick = {}
                         )
                     } else {
-                        recentPresets.forEach { item ->
+                        recentBoards.forEach { item ->
                             DropdownMenuItem(
                                 text = {
                                     Column {
                                         Text(item.label)
                                         Text(
-                                            "${if (item.ref is PresetRef.Factory) "Factory" else "Saved"} · ${relativeSavedAt(item.usedAt)}",
+                                            "${if (item.ref is BoardRef.BuiltIn) "Built-in" else "Saved"} · ${relativeSavedAt(item.usedAt)}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 },
                                 onClick = {
-                                    showRecentPresetsMenu = false
+                                    showRecentBoardsMenu = false
                                     showMenu = false
-                                    onApplyPreset(item.ref, item.label)
+                                    onOpenBoard(item.ref, item.label)
                                 }
                             )
                         }
                     }
                     HorizontalDivider()
                     DropdownMenuItem(
-                        text = { Text("See all presets...") },
+                        text = { Text("See all boards...") },
                         onClick = {
-                            showRecentPresetsMenu = false
+                            showRecentBoardsMenu = false
                             showMenu = false
-                            onOpenDialog(BoardDialog.PresetPicker)
+                            onOpenDialog(BoardDialog.OpenBoard)
                         }
                     )
                 }
             }
+            // Saving a board keeps a same-device copy (see SavedBoardRepository) — lighter
+            // than a backup, which also carries the audio off the device.
+            DropdownMenuItem(
+                text = { Text("Save board as...") },
+                leadingIcon = { Icon(Icons.Filled.Save, contentDescription = null) },
+                onClick = menuAction { onOpenDialog(BoardDialog.SaveBoardAs) }
+            )
+            DropdownMenuItem(
+                text = { Text("Open board...") },
+                leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                onClick = menuAction { onOpenDialog(BoardDialog.OpenBoard) }
+            )
             HorizontalDivider()
             // Mode
             Row(
@@ -281,19 +293,6 @@ private fun HamburgerMenu(
                 text = { Text("Page options (${board.currentPage.name})") },
                 leadingIcon = { Icon(Icons.Filled.MoreHoriz, contentDescription = null) },
                 onClick = menuAction { onOpenDialog(BoardDialog.PageOptions(board.currentPageIndex)) }
-            )
-            HorizontalDivider()
-            // Presets — lightweight, same-device version history (see PresetRepository)
-            MenuSectionHeader("Presets")
-            DropdownMenuItem(
-                text = { Text("Save as preset") },
-                leadingIcon = { Icon(Icons.Filled.Save, contentDescription = null) },
-                onClick = menuAction { onOpenDialog(BoardDialog.SavePreset) }
-            )
-            DropdownMenuItem(
-                text = { Text("Load preset") },
-                leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
-                onClick = menuAction { onOpenDialog(BoardDialog.PresetPicker) }
             )
             HorizontalDivider()
             // Backup — full, portable, self-contained (structure + audio)

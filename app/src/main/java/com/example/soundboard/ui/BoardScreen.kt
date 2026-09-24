@@ -37,7 +37,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.soundboard.BoardViewModel
-import com.example.soundboard.PresetRef
+import com.example.soundboard.BoardRef
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.TileBorder
@@ -62,9 +62,9 @@ internal sealed interface BoardDialog {
     data object Speak : BoardDialog
     data object Settings : BoardDialog
     data object RenameBoard : BoardDialog
-    data object SavePreset : BoardDialog
-    data object PresetPicker : BoardDialog
-    data class ConfirmApplyPreset(val ref: PresetRef, val label: String) : BoardDialog
+    data object SaveBoardAs : BoardDialog
+    data object OpenBoard : BoardDialog
+    data class ConfirmOpenBoard(val ref: BoardRef, val label: String) : BoardDialog
     data object StrayCleanup : BoardDialog
     data object AddPage : BoardDialog
     data class PageOptions(val pageIndex: Int) : BoardDialog
@@ -83,9 +83,9 @@ fun BoardScreen(
     val board by vm.board.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
-    val presets by vm.presets.collectAsStateWithLifecycle()
+    val savedBoards by vm.savedBoards.collectAsStateWithLifecycle()
     val strayClips by vm.strayClips.collectAsStateWithLifecycle()
-    val recentPresets by vm.recentPresets.collectAsStateWithLifecycle()
+    val recentBoards by vm.recentBoards.collectAsStateWithLifecycle()
     val performanceModeEnabled by vm.performanceModeEnabled.collectAsStateWithLifecycle()
     var openDialog by remember { mutableStateOf<BoardDialog?>(null) }
     var editMode by remember { mutableStateOf(false) }
@@ -101,7 +101,7 @@ fun BoardScreen(
     /** Opens [dialog], first refreshing whatever list it shows from disk. */
     fun showDialog(dialog: BoardDialog) {
         when (dialog) {
-            BoardDialog.PresetPicker -> vm.refreshPresets()
+            BoardDialog.OpenBoard -> vm.refreshSavedBoards()
             BoardDialog.StrayCleanup -> vm.refreshStrayClips()
             else -> Unit
         }
@@ -124,13 +124,13 @@ fun BoardScreen(
         }
     }
 
-    // Applying a preset over a board with any sound needs an explicit confirm — same
+    // Opening another board over one with any sound needs an explicit confirm — same
     // reasoning as page deletion, just board-wide instead of one page.
-    fun requestApplyPreset(ref: PresetRef, label: String) {
+    fun requestOpenBoard(ref: BoardRef, label: String) {
         if (board.hasAnySound) {
-            showDialog(BoardDialog.ConfirmApplyPreset(ref, label))
+            showDialog(BoardDialog.ConfirmOpenBoard(ref, label))
         } else {
-            vm.applyPreset(ref)
+            vm.openBoard(ref)
             closeDialog()
         }
     }
@@ -245,7 +245,7 @@ fun BoardScreen(
             topBar = {
                 BoardTopBar(
                     board = board,
-                    recentPresets = recentPresets,
+                    recentBoards = recentBoards,
                     editMode = editMode,
                     onEditModeChange = { editMode = it },
                     onSelectPage = { index ->
@@ -253,11 +253,11 @@ fun BoardScreen(
                         vm.switchPage(index)
                     },
                     onOpenDialog = ::showDialog,
-                    onShowRecentPresets = {
-                        vm.refreshRecentPresets()
-                        vm.refreshPresets()
+                    onShowRecentBoards = {
+                        vm.refreshRecentBoards()
+                        vm.refreshSavedBoards()
                     },
-                    onApplyPreset = ::requestApplyPreset,
+                    onOpenBoard = ::requestOpenBoard,
                     onExportBackup = { exportLauncher.launch("soundboard-backup.zip") },
                     onImportBackup = { importLauncher.launch(arrayOf("application/zip")) }
                 )
@@ -351,7 +351,7 @@ fun BoardScreen(
         }
     }
 
-    // A page-scoped dialog whose page has since gone (deleted, or a preset loaded over
+    // A page-scoped dialog whose page has since gone (deleted, or another board opened over
     // it) simply doesn't show, same as a tile editor whose tile no longer exists.
     fun pageAt(index: Int) = board.pages.getOrNull(index)
 
@@ -406,28 +406,28 @@ fun BoardScreen(
             onDismiss = ::closeDialog
         )
 
-        BoardDialog.SavePreset -> TextInputDialog(
-            title = "Save as preset",
-            label = "Preset name",
+        BoardDialog.SaveBoardAs -> TextInputDialog(
+            title = "Save board as",
+            label = "Board name",
             initial = board.name,
             onConfirm = {
-                vm.saveAsPreset(it.trim())
+                vm.saveBoardAs(it.trim())
                 closeDialog()
             },
             onDismiss = ::closeDialog
         )
 
-        BoardDialog.PresetPicker -> PresetPickerDialog(
-            factoryPresets = vm.factoryPresets(),
-            savedPresets = presets,
-            onSelect = ::requestApplyPreset,
+        BoardDialog.OpenBoard -> OpenBoardDialog(
+            builtInBoards = vm.builtInBoards(),
+            savedBoards = savedBoards,
+            onSelect = ::requestOpenBoard,
             onDismiss = ::closeDialog
         )
 
-        is BoardDialog.ConfirmApplyPreset -> ConfirmApplyPresetDialog(
+        is BoardDialog.ConfirmOpenBoard -> ConfirmOpenBoardDialog(
             label = dialog.label,
             onConfirm = {
-                vm.applyPreset(dialog.ref)
+                vm.openBoard(dialog.ref)
                 closeDialog()
             },
             onDismiss = ::closeDialog

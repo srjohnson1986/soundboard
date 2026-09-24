@@ -167,7 +167,7 @@ private fun longPressDurationLabel(millis: Int) = when (millis) {
 
 /**
  * Board-wide settings. Everything here except Performance mode lives on the board itself,
- * so it travels with a preset; Performance mode is per-device (see
+ * so it travels with the board when it's saved or opened; Performance mode is per-device (see
  * [com.example.soundboard.data.DevicePreferences]).
  */
 @Composable

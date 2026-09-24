@@ -7,8 +7,8 @@ import com.example.soundboard.audio.FakeRecorder
 import com.example.soundboard.audio.FakeSpeaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
-import com.example.soundboard.data.PresetRepository
-import com.example.soundboard.data.RecentPresetsRepository
+import com.example.soundboard.data.SavedBoardRepository
+import com.example.soundboard.data.RecentBoardsRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelFont
 import com.example.soundboard.model.LabelStyle
@@ -45,13 +45,13 @@ class BoardViewModelTest {
     private lateinit var repo: BoardRepository
     private lateinit var player: FakePlayer
     private lateinit var recorder: FakeRecorder
-    private lateinit var presetRepo: PresetRepository
+    private lateinit var savedBoardRepo: SavedBoardRepository
     private lateinit var speaker: FakeSpeaker
     private lateinit var devicePrefs: DevicePreferences
-    private lateinit var recentPresetsRepo: RecentPresetsRepository
+    private lateinit var recentBoardsRepo: RecentBoardsRepository
 
     private fun newViewModel() =
-        BoardViewModel(repo, player, recorder, presetRepo, speaker, devicePrefs, recentPresetsRepo, ioDispatcher = UnconfinedTestDispatcher())
+        BoardViewModel(repo, player, recorder, savedBoardRepo, speaker, devicePrefs, recentBoardsRepo, ioDispatcher = UnconfinedTestDispatcher())
 
     @Before
     fun setUp() {
@@ -59,9 +59,9 @@ class BoardViewModelTest {
         repo = BoardRepository(context)
         player = FakePlayer()
         recorder = FakeRecorder()
-        presetRepo = PresetRepository(context)
+        savedBoardRepo = SavedBoardRepository(context)
         speaker = FakeSpeaker()
-        recentPresetsRepo = RecentPresetsRepository(context)
+        recentBoardsRepo = RecentBoardsRepository(context)
         devicePrefs = DevicePreferences(context)
     }
 
@@ -751,13 +751,13 @@ class BoardViewModelTest {
         val vm = newViewModel()
         vm.setPerformanceModeEnabled(true)
 
-        vm.applyPreset(PresetRef.Saved(presetRepo.save(Board(name = "Other"))))
+        vm.openBoard(BoardRef.Saved(savedBoardRepo.save(Board(name = "Other"))))
 
         assertTrue(vm.performanceModeEnabled.value)
     }
 
     @Test
-    fun `settings are captured by saveAsPreset and restored by applyPreset`() {
+    fun `settings are captured by saveBoardAs and restored by openBoard`() {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
         vm.setOpenOnHomePage(true)
@@ -770,8 +770,8 @@ class BoardViewModelTest {
         vm.setDefaultPageRows(2)
         vm.setDefaultPageColumns(6)
 
-        vm.saveAsPreset("Version 1")
-        val savedId = vm.presets.value.first().id
+        vm.saveBoardAs("Version 1")
+        val savedId = vm.savedBoards.value.first().id
         vm.setOpenOnHomePage(false)
         vm.setIdleTimeoutMinutes(5)
         vm.setLongPressDurationMillis(500)
@@ -782,7 +782,7 @@ class BoardViewModelTest {
         vm.setDefaultPageRows(4)
         vm.setDefaultPageColumns(4)
 
-        vm.applyPreset(PresetRef.Saved(savedId))
+        vm.openBoard(BoardRef.Saved(savedId))
 
         assertTrue(vm.board.value.openOnHomePage)
         assertEquals(2, vm.board.value.idleTimeoutMinutes)
@@ -796,7 +796,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `layout and label settings are captured by saveAsPreset and restored by applyPreset`() {
+    fun `layout and label settings are captured by saveBoardAs and restored by openBoard`() {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
         val labelStyle = LabelStyle(minSizeSp = 18f, maxSizeSp = 40f, font = LabelFont.LEXEND, bold = true, allCaps = true)
@@ -806,15 +806,15 @@ class BoardViewModelTest {
         vm.setPageRowHeight(0, RowHeight.SHORT)
         vm.setLabelStyle(labelStyle)
 
-        vm.saveAsPreset("Version 1")
-        val savedId = vm.presets.value.first().id
+        vm.saveBoardAs("Version 1")
+        val savedId = vm.savedBoards.value.first().id
         vm.setLandscapeLayout(LandscapeLayout.PAGE_GRID)
         vm.setLandscapeGrid(0, null, null)
         vm.setRowHeight(RowHeight.STANDARD)
         vm.setPageRowHeight(0, null)
         vm.setLabelStyle(LabelStyle())
 
-        vm.applyPreset(PresetRef.Saved(savedId))
+        vm.openBoard(BoardRef.Saved(savedId))
 
         val board = vm.board.value
         assertEquals(LandscapeLayout.FIT_TO_SCREEN, board.landscapeLayout)
@@ -830,7 +830,7 @@ class BoardViewModelTest {
         // Regression for the save race fixed in #144: each commit launches its own save,
         // and on a real thread pool they used to be able to finish out of order.
         repo.save(boardWith(Tile(id = "a")))
-        val vm = BoardViewModel(repo, player, recorder, presetRepo, speaker, devicePrefs, recentPresetsRepo, ioDispatcher = Dispatchers.IO)
+        val vm = BoardViewModel(repo, player, recorder, savedBoardRepo, speaker, devicePrefs, recentBoardsRepo, ioDispatcher = Dispatchers.IO)
         waitUntil { vm.board.value.currentPage.tiles.any { it.id == "a" } }
 
         repeat(40) { i ->
@@ -1193,10 +1193,10 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `applyPreset with a factory ref loads the bundled asset`() {
+    fun `openBoard with a factory ref loads the bundled asset`() {
         val vm = newViewModel()
 
-        vm.applyPreset(PresetRef.Factory("jeremy-care-board.zip", "Jeremy Draft Care Board"))
+        vm.openBoard(BoardRef.BuiltIn("jeremy-care-board.zip", "Jeremy Draft Care Board"))
 
         assertEquals("Jeremy Draft Care Board", vm.board.value.name)
         assertEquals(listOf("Trouble", "Needs", "Talking"), vm.board.value.pages.map { it.name })
@@ -1204,13 +1204,13 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `applyPreset with a factory ref records it in recentPresets`() {
+    fun `openBoard with a factory ref records it in recentBoards`() {
         val vm = newViewModel()
 
-        vm.applyPreset(PresetRef.Factory("jeremy-care-board.zip", "Jeremy Draft Care Board"))
+        vm.openBoard(BoardRef.BuiltIn("jeremy-care-board.zip", "Jeremy Draft Care Board"))
 
-        assertEquals(listOf("Jeremy Draft Care Board"), vm.recentPresets.value.map { it.label })
-        assertEquals(PresetRef.Factory("jeremy-care-board.zip", "Jeremy Draft Care Board"), vm.recentPresets.value.first().ref)
+        assertEquals(listOf("Jeremy Draft Care Board"), vm.recentBoards.value.map { it.label })
+        assertEquals(BoardRef.BuiltIn("jeremy-care-board.zip", "Jeremy Draft Care Board"), vm.recentBoards.value.first().ref)
     }
 
     @Test
@@ -1218,58 +1218,58 @@ class BoardViewModelTest {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
-        vm.applyPreset(PresetRef.Factory("jeremy-care-board.zip", "Jeremy Draft Care Board"))
-        vm.saveAsPreset("Other Board")
-        vm.applyPreset(PresetRef.Factory("jeremy-care-board.zip", "Jeremy Draft Care Board"))
+        vm.openBoard(BoardRef.BuiltIn("jeremy-care-board.zip", "Jeremy Draft Care Board"))
+        vm.saveBoardAs("Other Board")
+        vm.openBoard(BoardRef.BuiltIn("jeremy-care-board.zip", "Jeremy Draft Care Board"))
 
-        assertEquals(2, vm.recentPresets.value.size)
-        assertEquals("Jeremy Draft Care Board", vm.recentPresets.value.first().label)
+        assertEquals(2, vm.recentBoards.value.size)
+        assertEquals("Jeremy Draft Care Board", vm.recentBoards.value.first().label)
     }
 
     @Test
-    fun `saveAsPreset renames the board and appears in presets`() {
+    fun `saveBoardAs renames the board and appears in presets`() {
         repo.save(boardWith(Tile(id = "a", label = "old")))
         val vm = newViewModel()
 
-        vm.saveAsPreset("My Layout")
+        vm.saveBoardAs("My Layout")
 
         assertEquals("My Layout", vm.board.value.name)
-        assertEquals(listOf("My Layout"), vm.presets.value.map { it.name })
+        assertEquals(listOf("My Layout"), vm.savedBoards.value.map { it.name })
     }
 
     @Test
-    fun `saveAsPreset records the new preset in recentPresets`() {
+    fun `saveBoardAs records the new preset in recentBoards`() {
         repo.save(boardWith(Tile(id = "a", label = "old")))
         val vm = newViewModel()
 
-        vm.saveAsPreset("My Layout")
+        vm.saveBoardAs("My Layout")
 
-        assertEquals(listOf("My Layout"), vm.recentPresets.value.map { it.label })
-        assertTrue(vm.recentPresets.value.first().ref is PresetRef.Saved)
+        assertEquals(listOf("My Layout"), vm.recentBoards.value.map { it.label })
+        assertTrue(vm.recentBoards.value.first().ref is BoardRef.Saved)
     }
 
     @Test
-    fun `applyPreset with a saved ref restores that snapshot`() {
+    fun `openBoard with a saved ref restores that snapshot`() {
         repo.save(boardWith(Tile(id = "a", label = "first")))
         val vm = newViewModel()
-        vm.saveAsPreset("Version 1")
-        val savedId = vm.presets.value.first().id
+        vm.saveBoardAs("Version 1")
+        val savedId = vm.savedBoards.value.first().id
 
         vm.setLabel("a", "changed")
-        vm.applyPreset(PresetRef.Saved(savedId))
+        vm.openBoard(BoardRef.Saved(savedId))
 
         assertEquals("first", vm.board.value.currentPage.tiles.first { it.id == "a" }.label)
     }
 
     @Test
-    fun `applyPreset with an unknown saved id reports failure without touching the board`() {
+    fun `openBoard with an unknown saved id reports failure without touching the board`() {
         repo.save(boardWith(Tile(id = "a", label = "unchanged")))
         val vm = newViewModel()
 
-        vm.applyPreset(PresetRef.Saved("does-not-exist"))
+        vm.openBoard(BoardRef.Saved("does-not-exist"))
 
         assertEquals("unchanged", vm.board.value.currentPage.tiles.first { it.id == "a" }.label)
-        assertEquals("Couldn't load preset", vm.message.value)
+        assertEquals("Couldn't open board", vm.message.value)
     }
 
     @Test
@@ -1278,7 +1278,7 @@ class BoardViewModelTest {
         repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
         val vm = newViewModel()
 
-        vm.saveAsPreset("Backup layout")
+        vm.saveBoardAs("Backup layout")
         vm.clearTile("a")
 
         assertTrue(repo.soundFile("a.mp3").exists())
@@ -1301,7 +1301,7 @@ class BoardViewModelTest {
         repo.save(boardWith(Tile(id = "a", fileName = "a.mp3")))
         repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
         val vm = newViewModel()
-        vm.saveAsPreset("Backup layout")
+        vm.saveBoardAs("Backup layout")
         vm.clearTile("a")
 
         vm.refreshStrayClips()

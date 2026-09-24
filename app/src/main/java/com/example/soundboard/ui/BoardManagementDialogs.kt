@@ -12,36 +12,36 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.soundboard.BoardViewModel
-import com.example.soundboard.PresetRef
+import com.example.soundboard.BoardRef
 import com.example.soundboard.StrayClip
-import com.example.soundboard.data.SavedPreset
+import com.example.soundboard.data.SavedBoard
 import kotlin.time.Duration.Companion.milliseconds
 
-/** Lists bundled ("Factory") and on-device saved presets to load; picking one hands the choice back for the caller's own confirm gate. */
+/** Lists built-in boards and boards saved on this device; picking one hands the choice back for the caller's own confirm gate. */
 @Composable
-internal fun PresetPickerDialog(
-    factoryPresets: List<PresetRef.Factory>,
-    savedPresets: List<SavedPreset>,
-    onSelect: (PresetRef, String) -> Unit,
+internal fun OpenBoardDialog(
+    builtInBoards: List<BoardRef.BuiltIn>,
+    savedBoards: List<SavedBoard>,
+    onSelect: (BoardRef, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Load preset") },
+        title = { Text("Open board") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                factoryPresets.forEach { ref ->
-                    PresetRow(name = ref.label, subtitle = "Factory", onClick = { onSelect(ref, ref.label) })
+                builtInBoards.forEach { ref ->
+                    BoardRow(name = ref.label, subtitle = "Built-in", onClick = { onSelect(ref, ref.label) })
                 }
-                savedPresets.forEach { saved ->
-                    PresetRow(
+                savedBoards.forEach { saved ->
+                    BoardRow(
                         name = saved.name,
                         subtitle = "Saved · ${relativeSavedAt(saved.savedAt)}",
-                        onClick = { onSelect(PresetRef.Saved(saved.id), saved.name) }
+                        onClick = { onSelect(BoardRef.Saved(saved.id), saved.name) }
                     )
                 }
-                if (factoryPresets.isEmpty() && savedPresets.isEmpty()) {
-                    HelperText("No presets yet — use \"Save as preset\" to create one.")
+                if (builtInBoards.isEmpty() && savedBoards.isEmpty()) {
+                    HelperText("No saved boards yet — use \"Save board as\" to create one.")
                 }
             }
         },
@@ -51,7 +51,7 @@ internal fun PresetPickerDialog(
 }
 
 @Composable
-private fun PresetRow(name: String, subtitle: String, onClick: () -> Unit) {
+private fun BoardRow(name: String, subtitle: String, onClick: () -> Unit) {
     TextButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(name, style = MaterialTheme.typography.bodyLarge)
@@ -60,7 +60,7 @@ private fun PresetRow(name: String, subtitle: String, onClick: () -> Unit) {
     }
 }
 
-/** Coarse "how long ago" for a saved-preset timestamp — good enough for a picker list, no date library needed. */
+/** Coarse "how long ago" for a saved board's timestamp — good enough for a picker list, no date library needed. */
 internal fun relativeSavedAt(savedAt: Long): String {
     val elapsedMs = (System.currentTimeMillis() - savedAt).coerceAtLeast(0)
     val minutes = elapsedMs.milliseconds.inWholeMinutes
@@ -83,7 +83,7 @@ private fun formatFileSize(bytes: Long): String = when {
 
 /**
  * Sound files [BoardViewModel.refreshStrayClips] found with nothing pointing at them —
- * not on the live board, not in any saved preset. Offers exporting them (for safekeeping)
+ * not on the live board, not in any saved board. Offers exporting them (for safekeeping)
  * before deleting, or deleting outright.
  */
 @Composable
@@ -103,7 +103,7 @@ internal fun StrayCleanupDialog(
                 val totalBytes = clips.sumOf { it.sizeBytes }
                 Text(
                     "${clips.size} unused clip${if (clips.size == 1) "" else "s"} found, " +
-                        "totaling ${formatFileSize(totalBytes)} — not used by any page or saved preset."
+                        "totaling ${formatFileSize(totalBytes)} — not used by any page or saved board."
                 )
             }
         },
@@ -131,19 +131,19 @@ internal fun StrayCleanupDialog(
     )
 }
 
-/** Confirms replacing a board that has sounds on it with the preset named [label]. */
+/** Confirms replacing a board that has sounds on it with the board named [label]. */
 @Composable
-internal fun ConfirmApplyPresetDialog(label: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+internal fun ConfirmOpenBoardDialog(label: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Replace current board with \"$label\"?") },
         text = {
             Text(
-                "This board has sounds on it. Loading a preset replaces everything — " +
+                "This board has sounds on it. Opening another board replaces everything — " +
                     "export a backup first if you want to keep it."
             )
         },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("Load") } },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Open") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }

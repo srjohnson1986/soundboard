@@ -25,8 +25,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.example.soundboard.BoardViewModel
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
-import com.example.soundboard.data.PresetRepository
-import com.example.soundboard.data.RecentPresetsRepository
+import com.example.soundboard.data.SavedBoardRepository
+import com.example.soundboard.data.RecentBoardsRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
@@ -60,7 +60,7 @@ class BoardScreenTest {
         repo.save(board)
         player = FakePlayer()
         speaker = FakeSpeaker()
-        vm = BoardViewModel(repo, player, FakeRecorder(), PresetRepository(context), speaker, DevicePreferences(context), RecentPresetsRepository(context))
+        vm = BoardViewModel(repo, player, FakeRecorder(), SavedBoardRepository(context), speaker, DevicePreferences(context), RecentBoardsRepository(context))
 
         composeRule.setContent {
             BoardScreen(vm = vm)
@@ -146,11 +146,11 @@ class BoardScreenTest {
     }
 
     @Test
-    fun saveAsPresetRenamesTheBoard() {
+    fun saveBoardAsRenamesTheBoard() {
         launchWith(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))))
 
         composeRule.onNodeWithContentDescription("Menu").performClick()
-        composeRule.onNodeWithText("Save as preset").performClick()
+        composeRule.onNodeWithText("Save board as...").performClick()
         // "New Board" appears twice once the dialog is up (the title bar behind
         // it, and the field's prefilled value) — hasSetTextAction() narrows to
         // the actual editable field regardless of window traversal order.

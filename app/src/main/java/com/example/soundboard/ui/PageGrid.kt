@@ -453,7 +453,7 @@ private fun TileCard(
     }
 
     val filled = tile.hasSound
-    // A preset can ship a tile with a label but no recording yet (see
+    // A built-in board can ship a tile with a label but no recording yet (see
     // BoardRepository.sanitizeMissingSounds) — flag that distinctly from a
     // plain blank tile so it reads as "still needs recording," not "empty."
     val needsRecording = !tile.hasSound && tile.label.isNotBlank()

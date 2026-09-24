@@ -14,17 +14,17 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
-class PresetRepositoryTest {
+class SavedBoardRepositoryTest {
 
     private lateinit var context: android.content.Context
-    private lateinit var presetRepo: PresetRepository
-    private lateinit var presetsDir: File
+    private lateinit var savedBoardRepo: SavedBoardRepository
+    private lateinit var savedBoardsDir: File
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
-        presetRepo = PresetRepository(context)
-        presetsDir = File(context.filesDir, "presets")
+        savedBoardRepo = SavedBoardRepository(context)
+        savedBoardsDir = File(context.filesDir, "presets")
     }
 
     private fun boardNamed(name: String, vararg tiles: Tile) = Board(
@@ -36,54 +36,54 @@ class PresetRepositoryTest {
     fun `save then load round-trips the board`() {
         val board = boardNamed("My Layout", Tile(id = "a", label = "Hey", fileName = "a.mp3"))
 
-        val id = presetRepo.save(board)
-        val loaded = presetRepo.load(id)
+        val id = savedBoardRepo.save(board)
+        val loaded = savedBoardRepo.load(id)
 
         assertEquals(board, loaded)
     }
 
     @Test
     fun `load returns null for an id that was never saved`() {
-        assertNull(presetRepo.load("does-not-exist"))
+        assertNull(savedBoardRepo.load("does-not-exist"))
     }
 
     @Test
     fun `save then load round-trips a tile's ttsScript`() {
         val board = boardNamed("My Layout", Tile(id = "a", label = "Water", ttsScript = "I would like a glass of water please"))
 
-        val id = presetRepo.save(board)
-        val loaded = presetRepo.load(id)
+        val id = savedBoardRepo.save(board)
+        val loaded = savedBoardRepo.load(id)
 
         assertEquals("I would like a glass of water please", loaded?.currentPage?.tiles?.first { it.id == "a" }?.ttsScript)
     }
 
     @Test
     fun `list returns saved presets newest first`() {
-        val firstId = presetRepo.save(boardNamed("First"))
-        File(presetsDir, "$firstId.json").setLastModified(1_000L)
-        val secondId = presetRepo.save(boardNamed("Second"))
-        File(presetsDir, "$secondId.json").setLastModified(2_000L)
+        val firstId = savedBoardRepo.save(boardNamed("First"))
+        File(savedBoardsDir, "$firstId.json").setLastModified(1_000L)
+        val secondId = savedBoardRepo.save(boardNamed("Second"))
+        File(savedBoardsDir, "$secondId.json").setLastModified(2_000L)
 
-        val listed = presetRepo.list()
+        val listed = savedBoardRepo.list()
 
         assertEquals(listOf("Second", "First"), listed.map { it.name })
     }
 
     @Test
     fun `list skips a preset file that fails to decode rather than crashing`() {
-        presetRepo.save(boardNamed("Good"))
-        presetsDir.mkdirs()
-        File(presetsDir, "corrupt.json").writeText("not json at all")
+        savedBoardRepo.save(boardNamed("Good"))
+        savedBoardsDir.mkdirs()
+        File(savedBoardsDir, "corrupt.json").writeText("not json at all")
 
-        val listed = presetRepo.list()
+        val listed = savedBoardRepo.list()
 
         assertEquals(listOf("Good"), listed.map { it.name })
     }
 
     @Test
     fun `allReferencedFileNames collects fileNames across every saved preset`() {
-        presetRepo.save(boardNamed("A", Tile(id = "1", fileName = "one.mp3")))
-        presetRepo.save(
+        savedBoardRepo.save(boardNamed("A", Tile(id = "1", fileName = "one.mp3")))
+        savedBoardRepo.save(
             Board(
                 name = "B",
                 pages = listOf(
@@ -93,13 +93,13 @@ class PresetRepositoryTest {
             )
         )
 
-        val referenced = presetRepo.allReferencedFileNames()
+        val referenced = savedBoardRepo.allReferencedFileNames()
 
         assertEquals(setOf("one.mp3", "two.mp3", "hey.mp3"), referenced)
     }
 
     @Test
     fun `allReferencedFileNames is empty when nothing has been saved`() {
-        assertTrue(presetRepo.allReferencedFileNames().isEmpty())
+        assertTrue(savedBoardRepo.allReferencedFileNames().isEmpty())
     }
 }

@@ -6,8 +6,8 @@ import android.content.Context
  * Settings that describe this device rather than the board's content — deliberately
  * kept in device-local SharedPreferences instead of on [com.example.soundboard.model.Board],
  * since the rest of Settings intentionally travels with the board (switching to a
- * different preset switches those too). Performance mode shouldn't silently flip off
- * just because the preset you switched to didn't have it set.
+ * different board switches those too). Performance mode shouldn't silently flip off
+ * just because the board you switched to didn't have it set.
  */
 class DevicePreferences(context: Context) {
 

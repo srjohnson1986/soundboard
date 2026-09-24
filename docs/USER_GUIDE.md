@@ -4,16 +4,17 @@
 
 The top bar always shows which board is active: "Soundboard" in small text,
 with the board's own name underneath (e.g. "Jeremy Draft Care Board" for the
-bundled fallback preset — see [presets/README.md](../presets/README.md)). A
-fresh board with no name of its own is called "New Board" until you save it
-as a preset (see "Presets" below), which is also how you rename one.
+built-in board the app starts with — see [presets/README.md](../presets/README.md)). A
+fresh board with no name of its own is called "New Board" until you rename it
+(**Rename board**) or save it under a name (see "Saving and opening boards"
+below).
 
 ## The grid
 
 Each tile is either empty (shows a **+**), filled (shows its label, or
 "Unnamed" if you haven't given it one), or labeled but without a sound yet —
-shown with a small 🔇 in the corner. That last state is what a preset built
-from labels alone (see "Presets" below) leaves a tile in before you've
+shown with a small 🔇 in the corner. That last state is what a board built
+from labels alone (see "Saving and opening boards" below) leaves a tile in before you've
 recorded anything for it; tapping it opens the edit dialog just like any
 other empty tile.
 
@@ -99,7 +100,7 @@ simply gets another row. To go back to the old behavior of adding columns until
 ## Label text
 
 **Settings → Tile labels** controls how every tile label looks, board-wide.
-These settings are saved with presets.
+These settings are saved with the board.
 
 - **Font** — Default (Roboto), Roboto Condensed (fits longer phrases), Noto
   Serif, or one of two fonts designed for easy reading: **Atkinson
@@ -172,34 +173,33 @@ found parked somewhere else, like a page meant for occasional use. The menu
 item reads **Home page ✓** when you're already looking at the current home
 page.
 
-## Presets
+## Saving and opening boards
 
 Tile edits, grid size, and reordering all save automatically — there's
-nothing extra to do for those. Presets are for something different:
+nothing extra to do for those. Saving a board is for something different:
 snapshotting a whole board layout so you can come back to it, or start a new
 board from a known-good one, without a file picker or leaving the app.
 
-- **Save as preset** (in the **☰** menu) prompts for a name, then saves
-  everything about the current board — its pages, their names and order,
-  which page is home, grid size, and every tile's label, sound, volume, and
-  color — as a new preset. The name you type also becomes the board's own
-  name (the one shown in the top bar), so this replaces the old
-  name-only-and-nothing-else "Save."
-- **Load preset** shows every available preset: the bundled ones ("Factory")
-  plus anything you've saved yourself, newest first. Picking one replaces
-  your current board with it. If your current board has any sounds on it,
-  you'll be asked to confirm first — export a backup beforehand if you want
-  to keep what's there.
+- **Save board as...** (in the **☰** menu, under **Boards**) prompts for a
+  name, then saves everything about the current board — its pages, their
+  names and order, which page is home, grid size, settings, and every tile's
+  label, sound, volume, and color — as a new saved board. The name you type
+  also becomes the board's own name (the one shown in the top bar).
+- **Open board...** shows every board you can switch to: the ones built into
+  the app ("Built-in") plus anything you've saved yourself, newest first.
+  **Recent boards** lists the last few you opened or saved. Picking one
+  replaces your current board with it. If your current board has any sounds
+  on it, you'll be asked to confirm first — export a backup beforehand if you
+  want to keep what's there.
 
-**A saved preset is same-device only.** It's a small file that points at the
+**A saved board is same-device only.** It's a small file that points at the
 sound files already on your device — it doesn't make its own copy of the
 audio. That keeps saving fast and keeps you from running out of space no
-matter how many you save, but it also means a saved preset can't survive
+matter how many you save, but it also means a saved board can't survive
 uninstalling the app or clearing its data (that wipes the sounds it points
 at too). If you want a copy that survives that — or that you can move to
-another device — use **Export** below instead. The two bundled factory
-presets don't have this limitation, since their sounds ship inside the app
-itself.
+another device — use **Export** below instead. The built-in boards don't
+have this limitation, since their sounds ship inside the app itself.
 
 **A generic, mostly-unrecorded layout works fine too.** If you build (or are
 handed) a backup zip whose board.json has real pages, names, and tile labels
@@ -215,7 +215,7 @@ rest.
 
 Use **Export backup** / **Import backup** in the **☰** menu to back up or
 restore your whole board — its name, every tile, label, color, volume, and
-sound file — as a single, self-contained zip. Unlike a saved preset, a
+sound file — as a single, self-contained zip. Unlike a saved board, a
 backup carries its own copy of every sound file, so it survives moving to a
 new device or reinstalling the app.
 

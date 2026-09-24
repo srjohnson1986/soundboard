@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -46,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.example.soundboard.model.TileBorder
@@ -210,7 +212,8 @@ internal fun TextInputDialog(
 /**
  * A label, with optional [supportingText] under it, and a switch at the row's end. The
  * label column takes the remaining width, so a long label wraps rather than pushing the
- * switch off the edge.
+ * switch off the edge. The whole row is the toggle — tapping the label flips it too, a
+ * far bigger target than the switch alone, and screen readers announce it as one control.
  */
 @Composable
 internal fun SwitchRow(
@@ -223,7 +226,9 @@ internal fun SwitchRow(
     labelStyle: TextStyle = LocalTextStyle.current
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -231,7 +236,8 @@ internal fun SwitchRow(
             Text(label, style = labelStyle)
             if (supportingText != null) HelperText(supportingText)
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        // Null: the row above handles the toggle, so the switch is just its visual.
+        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
 

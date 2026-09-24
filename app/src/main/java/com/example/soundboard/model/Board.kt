@@ -292,6 +292,21 @@ data class Board(
         return copy(pages = pages.mapIndexed { i, page -> if (i == index) transform(page) else page })
     }
 
+    /** The tile with [tileId] on whichever page holds it; null if no page does. */
+    fun findTile(tileId: String): Tile? =
+        pages.firstNotNullOfOrNull { page -> page.tiles.firstOrNull { it.id == tileId } }
+
+    /**
+     * Applies [transform] to the tile with [tileId], on whichever page holds it. Tile ids
+     * are unique across the board — the sticky home row shows the home page's own tiles
+     * rather than copies — so this also edits a home-row tile tapped from another page.
+     */
+    fun updatingTile(tileId: String, transform: (Tile) -> Tile): Board =
+        copy(pages = pages.map { page ->
+            if (page.tiles.none { it.id == tileId }) page
+            else page.copy(tiles = page.tiles.map { if (it.id == tileId) transform(it) else it })
+        })
+
     /** Appends a new empty page and switches to it. */
     fun addPage(name: String = "Page ${pages.size + 1}"): Board {
         // Page's own tiles default (List(16)) is sized for its own 4x4 rows/columns default,

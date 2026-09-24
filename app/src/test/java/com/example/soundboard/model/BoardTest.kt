@@ -122,6 +122,42 @@ class BoardTest {
     }
 
     @Test
+    fun `updatingTile edits the tile on whichever page holds it`() {
+        val board = Board(
+            pages = listOf(
+                Page(name = "A", tiles = listOf(Tile(id = "a", label = "old"))),
+                Page(name = "B", tiles = listOf(Tile(id = "b", label = "old")))
+            ),
+            currentPageIndex = 0
+        )
+
+        val result = board.updatingTile("b") { it.copy(label = "new") }
+
+        assertEquals("old", result.pages[0].tiles[0].label)
+        assertEquals("new", result.pages[1].tiles[0].label)
+    }
+
+    @Test
+    fun `updatingTile with an unknown id leaves the board unchanged`() {
+        val board = Board(pages = listOf(Page(tiles = listOf(Tile(id = "a")))))
+
+        assertEquals(board, board.updatingTile("missing") { it.copy(label = "new") })
+    }
+
+    @Test
+    fun `findTile finds a tile on any page and null for an unknown id`() {
+        val board = Board(
+            pages = listOf(
+                Page(tiles = listOf(Tile(id = "a"))),
+                Page(tiles = listOf(Tile(id = "b", label = "B")))
+            )
+        )
+
+        assertEquals("B", board.findTile("b")?.label)
+        assertEquals(null, board.findTile("missing"))
+    }
+
+    @Test
     fun `withHomePage sets the home index`() {
         val board = Board(pages = listOf(Page(name = "A"), Page(name = "B")))
 

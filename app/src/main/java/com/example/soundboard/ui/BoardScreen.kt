@@ -69,9 +69,7 @@ internal sealed interface BoardDialog {
     data class PageOptions(val pageIndex: Int) : BoardDialog
     data class RenamePage(val pageIndex: Int) : BoardDialog
     data class GridSize(val pageIndex: Int) : BoardDialog
-    data class PageColor(val pageIndex: Int) : BoardDialog
-    data class PageOpacity(val pageIndex: Int) : BoardDialog
-    data class PageBorder(val pageIndex: Int) : BoardDialog
+    data class PageAppearance(val pageIndex: Int) : BoardDialog
     data class ConfirmDeletePage(val pageIndex: Int) : BoardDialog
 }
 
@@ -386,48 +384,12 @@ fun BoardScreen(
         BoardDialog.Speak -> SpeakDialog(onSpeak = vm::speakAdHoc, onDismiss = ::closeDialog)
 
         BoardDialog.Settings -> SettingsDialog(
-            openOnHomePage = board.openOnHomePage,
-            onOpenOnHomePageChange = vm::setOpenOnHomePage,
-            idleTimeoutMinutes = board.idleTimeoutMinutes,
-            onIdleTimeoutMinutesChange = vm::setIdleTimeoutMinutes,
-            longPressDurationMillis = board.longPressDurationMillis,
-            onLongPressDurationMillisChange = vm::setLongPressDurationMillis,
-            themeMode = board.themeMode,
-            onThemeModeChange = vm::setThemeMode,
-            keepScreenAwake = board.keepScreenAwake,
-            onKeepScreenAwakeChange = vm::setKeepScreenAwake,
-            hapticFeedbackEnabled = board.hapticFeedbackEnabled,
-            onHapticFeedbackEnabledChange = vm::setHapticFeedbackEnabled,
-            speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
-            onSpeakUnrecordedTilesEnabledChange = vm::setSpeakUnrecordedTilesEnabled,
+            board = board,
             performanceModeEnabled = performanceModeEnabled,
-            onPerformanceModeEnabledChange = vm::setPerformanceModeEnabled,
-            stickyHomeRowEnabled = board.stickyHomeRowEnabled,
-            hasHomePage = board.homePageIndex != null,
-            onStickyHomeRowEnabledChange = vm::setStickyHomeRowEnabled,
-            hideBlankTilesEnabled = board.hideBlankTilesEnabled,
-            onHideBlankTilesEnabledChange = vm::setHideBlankTilesEnabled,
-            backgroundColorArgb = board.backgroundColorArgb,
-            hasBackgroundImage = board.backgroundImageFileName != null,
-            onBackgroundColorChange = vm::setBackgroundColor,
+            actions = vm,
             onPickBackgroundImage = {
                 backgroundImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             },
-            onClearBackground = vm::clearBackground,
-            tileOpacity = board.tileOpacity,
-            onTileOpacityChange = vm::setTileOpacity,
-            tileBorder = board.tileBorder,
-            onTileBorderChange = vm::setTileBorder,
-            defaultPageRows = board.defaultPageRows,
-            onDefaultPageRowsChange = vm::setDefaultPageRows,
-            defaultPageColumns = board.defaultPageColumns,
-            onDefaultPageColumnsChange = vm::setDefaultPageColumns,
-            landscapeLayout = board.landscapeLayout,
-            onLandscapeLayoutChange = vm::setLandscapeLayout,
-            rowHeight = board.rowHeight,
-            onRowHeightChange = vm::setRowHeight,
-            labelStyle = board.labelStyle,
-            onLabelStyleChange = vm::setLabelStyle,
             onDismiss = ::closeDialog
         )
 
@@ -506,9 +468,7 @@ fun BoardScreen(
                     vm.setHomePage(index)
                 },
                 onGridSize = { showDialog(BoardDialog.GridSize(index)) },
-                onPageColor = { showDialog(BoardDialog.PageColor(index)) },
-                onPageOpacity = { showDialog(BoardDialog.PageOpacity(index)) },
-                onPageBorder = { showDialog(BoardDialog.PageBorder(index)) },
+                onPageAppearance = { showDialog(BoardDialog.PageAppearance(index)) },
                 onMoveLeft = {
                     vm.movePage(index, index - 1)
                     closeDialog()
@@ -557,26 +517,12 @@ fun BoardScreen(
             )
         }
 
-        is BoardDialog.PageColor -> pageAt(dialog.pageIndex)?.let { page ->
-            PageColorDialog(
-                current = page.color,
-                onSelect = { vm.setPageColor(dialog.pageIndex, it) },
-                onDismiss = ::closeDialog
-            )
-        }
-
-        is BoardDialog.PageOpacity -> pageAt(dialog.pageIndex)?.let { page ->
-            PageOpacityDialog(
-                current = page.opacity,
-                onSelect = { vm.setPageOpacity(dialog.pageIndex, it) },
-                onDismiss = ::closeDialog
-            )
-        }
-
-        is BoardDialog.PageBorder -> pageAt(dialog.pageIndex)?.let { page ->
-            PageBorderDialog(
-                current = page.border,
-                onSelect = { vm.setPageBorder(dialog.pageIndex, it) },
+        is BoardDialog.PageAppearance -> pageAt(dialog.pageIndex)?.let { page ->
+            PageAppearanceDialog(
+                page = page,
+                onColorChange = { vm.setPageColor(dialog.pageIndex, it) },
+                onOpacityChange = { vm.setPageOpacity(dialog.pageIndex, it) },
+                onBorderChange = { vm.setPageBorder(dialog.pageIndex, it) },
                 onDismiss = ::closeDialog
             )
         }

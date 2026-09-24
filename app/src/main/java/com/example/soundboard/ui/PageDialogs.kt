@@ -1,7 +1,6 @@
 package com.example.soundboard.ui
 
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -9,29 +8,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.BorderStyle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Opacity
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,12 +34,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.TileBorder
-import com.example.soundboard.ui.theme.presetColors
 
 @Composable
 internal fun PageOptionsDialog(
@@ -60,9 +50,7 @@ internal fun PageOptionsDialog(
     onRename: () -> Unit,
     onSetHome: () -> Unit,
     onGridSize: () -> Unit,
-    onPageColor: () -> Unit,
-    onPageOpacity: () -> Unit,
-    onPageBorder: () -> Unit,
+    onPageAppearance: () -> Unit,
     onMoveLeft: () -> Unit,
     onMoveRight: () -> Unit,
     onDelete: () -> Unit,
@@ -105,19 +93,9 @@ internal fun PageOptionsDialog(
                     onClick = onGridSize
                 )
                 DropdownMenuItem(
-                    text = { Text("Page color") },
+                    text = { Text("Page appearance") },
                     leadingIcon = { Icon(Icons.Filled.Palette, contentDescription = null) },
-                    onClick = onPageColor
-                )
-                DropdownMenuItem(
-                    text = { Text("Page tile opacity") },
-                    leadingIcon = { Icon(Icons.Filled.Opacity, contentDescription = null) },
-                    onClick = onPageOpacity
-                )
-                DropdownMenuItem(
-                    text = { Text("Page tile border") },
-                    leadingIcon = { Icon(Icons.Filled.BorderStyle, contentDescription = null) },
-                    onClick = onPageBorder
+                    onClick = onPageAppearance
                 )
                 HorizontalDivider()
                 Row(
@@ -219,67 +197,48 @@ internal fun GridSizeDialog(
                 Stepper("Rows", r) { r = it }
                 Stepper("Columns", c) { c = it }
                 if (shrinking) {
-                    Text(
+                    HelperText(
                         "Shrinking only hides blank tiles — rows stop at the last " +
-                            "tile with a sound or label.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                            "tile with a sound or label."
                     )
                 }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Custom landscape size", modifier = Modifier.weight(1f))
-                    Switch(
-                        checked = customLandscape,
-                        onCheckedChange = { on ->
-                            if (on) {
-                                lr = defaultLandscapeRows
-                                lc = defaultLandscapeColumns
-                            }
-                            customLandscape = on
+                SectionDivider()
+                SwitchRow(
+                    label = "Custom landscape size",
+                    checked = customLandscape,
+                    onCheckedChange = { on ->
+                        if (on) {
+                            lr = defaultLandscapeRows
+                            lc = defaultLandscapeColumns
                         }
-                    )
-                }
+                        customLandscape = on
+                    }
+                )
                 if (customLandscape) {
                     Stepper("Landscape rows", lr) { lr = it }
                     Stepper("Landscape columns", lc) { lc = it }
                 } else {
-                    Text(
-                        "Landscape: $defaultLandscapeRows rows x $defaultLandscapeColumns columns (twice the columns).",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    HelperText("Landscape: $defaultLandscapeRows rows x $defaultLandscapeColumns columns (twice the columns).")
                 }
-                Text(
+                HelperText(
                     if (pageGridActive) {
                         "Rows keep their portrait height in landscape, and grow to show every tile with a sound or label."
                     } else {
                         "Settings has landscape set to Fit to screen, so this only applies once it's switched to Page grid."
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    }
                 )
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                SectionDivider()
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Tile shape", modifier = Modifier.weight(1f))
-                    SingleChoiceSegmentedButtonRow {
-                        SegmentedButton(
-                            selected = !wide,
-                            onClick = { wide = false },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                        ) { Text("Square") }
-                        SegmentedButton(
-                            selected = wide,
-                            onClick = { wide = true },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                        ) { Text("Wide") }
-                    }
+                    SegmentedChoice(
+                        options = listOf(false, true),
+                        selected = wide,
+                        optionLabel = { isWide -> if (isWide) "Wide" else "Square" },
+                        onSelect = { wide = it }
+                    )
                 }
                 OptionDropdown(
                     label = "Max row height",
@@ -306,73 +265,43 @@ internal fun GridSizeDialog(
     )
 }
 
+/**
+ * A page's color, plus its optional overrides of the board's tile opacity and border — one
+ * dialog for everything about how the page's tiles look. Each change applies immediately.
+ */
 @Composable
-internal fun PageColorDialog(current: Int?, onSelect: (Int?) -> Unit, onDismiss: () -> Unit) {
+internal fun PageAppearanceDialog(
+    page: Page,
+    onColorChange: (Int?) -> Unit,
+    onOpacityChange: (Float?) -> Unit,
+    onBorderChange: (TileBorder?) -> Unit,
+    onDismiss: () -> Unit
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Page color") },
+        title = { Text("Page appearance") },
         text = {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                presetColors.forEach { color ->
-                    ColorSwatch(
-                        color = color,
-                        selected = color?.toArgb() == current,
-                        onClick = { onSelect(color?.toArgb()) }
-                    )
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
-    )
-}
-
-@Composable
-internal fun PageOpacityDialog(current: Float?, onSelect: (Float?) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Page tile opacity") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Override the board's setting")
-                    Switch(
-                        checked = current != null,
-                        onCheckedChange = { onSelect(if (it) 1f else null) }
-                    )
-                }
-                current?.let { opacity -> OpacityControls(opacity, onSelect) }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
-    )
-}
-
-@Composable
-internal fun PageBorderDialog(current: TileBorder?, onSelect: (TileBorder?) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Page tile border") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Override the board's setting")
-                    Switch(
-                        checked = current != null,
-                        onCheckedChange = { onSelect(if (it) TileBorder(enabled = true) else null) }
-                    )
-                }
-                current?.let { border -> BorderControls(border, onSelect) }
+                Text("Page color", style = MaterialTheme.typography.bodyMedium)
+                ColorPicker(selectedArgb = page.color, onSelect = onColorChange)
+                HelperText("Tints this page's tab and its filled tiles. A tile's own color always wins.")
+                SectionDivider()
+                OverrideSection(
+                    label = "Override the board's tile opacity",
+                    value = page.opacity,
+                    initialOverride = 1f,
+                    onChange = onOpacityChange
+                ) { opacity -> OpacityControls(opacity, onOpacityChange) }
+                SectionDivider()
+                OverrideSection(
+                    label = "Override the board's tile border",
+                    value = page.border,
+                    initialOverride = TileBorder(enabled = true),
+                    onChange = onBorderChange
+                ) { border -> BorderControls(border, onBorderChange) }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }

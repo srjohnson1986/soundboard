@@ -116,15 +116,19 @@ class BoardScreenTest {
     }
 
     /**
-     * Flips the Switch on the same row as [label]. Settings and the menu use a bare Switch
-     * beside a Text, so tapping the label itself doesn't toggle anything.
+     * Flips the switch for [label]. In Settings the whole row is the toggle (SwitchRow), so
+     * the toggleable node contains the label; the menu's Edit mode row is a bare Switch
+     * beside a Text, so fall back to the switch level with the label.
      */
     private fun clickSwitchBeside(label: String) {
         val labelNode = composeRule.onNodeWithText(label)
         runCatching { labelNode.performScrollTo() }
-        val labelCenterY = labelNode.fetchSemanticsNode().boundsInRoot.center.y
+        val labelCenter = labelNode.fetchSemanticsNode().boundsInRoot.center
         val switches = composeRule.onAllNodes(isToggleable())
-        val index = switches.fetchSemanticsNodes().indexOfFirst { abs(it.boundsInRoot.center.y - labelCenterY) < 40f }
+        val nodes = switches.fetchSemanticsNodes()
+        val index = nodes.indexOfFirst { it.boundsInRoot.contains(labelCenter) }
+            .takeIf { it >= 0 }
+            ?: nodes.indexOfFirst { abs(it.boundsInRoot.center.y - labelCenter.y) < 40f }
         switches[index].performClick()
         composeRule.waitForIdle()
     }

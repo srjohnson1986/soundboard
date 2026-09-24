@@ -126,9 +126,13 @@ onto one grid.
 - **Add page** (in the **☰** menu) — prompts for a name and switches to the
   new, empty page.
 - **Rename page** — renames whichever page is currently showing.
-- **Page color** — pick an accent for the page you're on; it tints that
-  page's tab and its filled tiles (a tile's own color, if it has one, always
-  wins). One glance at the tab bar tells you which page you're on.
+- **Page appearance** — everything about how the page's tiles look, in one
+  place:
+  - **Page color** — an accent that tints the page's tab and its filled
+    tiles (a tile's own color, if it has one, always wins). One glance at the
+    tab bar tells you which page you're on.
+  - **Tile opacity** and **Tile border** — optionally override the board-wide
+    settings for just this page.
 - **Delete page** — removes whichever page is currently showing. Only appears
   in the menu when there's more than one page, since a board always needs at
   least one. If the page has any tiles with sounds assigned, you'll be asked

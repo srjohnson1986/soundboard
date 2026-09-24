@@ -3,8 +3,6 @@ package com.example.soundboard.ui
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,7 +21,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,15 +30,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
-import com.example.soundboard.ui.theme.presetColors
 import kotlinx.coroutines.delay
 
 /** Fixed accent for the Preview/Play clip icon in [EditTileDialog]; not theme-derived since Material3 has no "success" role. */
@@ -140,23 +134,14 @@ internal fun EditTileDialog(
                         Text("Choose sound")
                     }
                 }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Speak the label instead", style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            "Used when there's no sound file",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(checked = tile.speakLabel, onCheckedChange = onSpeakLabelChange)
-                }
+                SwitchRow(
+                    label = "Speak the label instead",
+                    checked = tile.speakLabel,
+                    onCheckedChange = onSpeakLabelChange,
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    supportingText = "Used when there's no sound file",
+                    labelStyle = MaterialTheme.typography.bodyMedium
+                )
                 OutlinedTextField(
                     value = ttsScript,
                     onValueChange = { ttsScript = it },
@@ -231,49 +216,24 @@ internal fun EditTileDialog(
 
                 Column {
                     Text("Color", style = MaterialTheme.typography.labelMedium)
-                    Row(
-                        modifier = Modifier.horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        presetColors.forEach { color ->
-                            ColorSwatch(
-                                color = color,
-                                selected = color?.toArgb() == tile.colorArgb,
-                                onClick = { onColorChange(color?.toArgb()) }
-                            )
-                        }
-                    }
+                    ColorPicker(selectedArgb = tile.colorArgb, onSelect = onColorChange)
                 }
 
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Override opacity", style = MaterialTheme.typography.labelMedium)
-                        Switch(
-                            checked = tile.opacity != null,
-                            onCheckedChange = { onOpacityChange(if (it) 1f else null) }
-                        )
-                    }
-                    tile.opacity?.let { opacity -> OpacityControls(opacity, onOpacityChange) }
-                }
+                OverrideSection(
+                    label = "Override opacity",
+                    value = tile.opacity,
+                    initialOverride = 1f,
+                    onChange = onOpacityChange,
+                    labelStyle = MaterialTheme.typography.labelMedium
+                ) { opacity -> OpacityControls(opacity, onOpacityChange) }
 
-                Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Override border", style = MaterialTheme.typography.labelMedium)
-                        Switch(
-                            checked = tile.border != null,
-                            onCheckedChange = { onBorderChange(if (it) TileBorder(enabled = true) else null) }
-                        )
-                    }
-                    tile.border?.let { border -> BorderControls(border, onBorderChange) }
-                }
+                OverrideSection(
+                    label = "Override border",
+                    value = tile.border,
+                    initialOverride = TileBorder(enabled = true),
+                    onChange = onBorderChange,
+                    labelStyle = MaterialTheme.typography.labelMedium
+                ) { border -> BorderControls(border, onBorderChange) }
 
                 if (!tile.isEmpty) {
                     TextButton(

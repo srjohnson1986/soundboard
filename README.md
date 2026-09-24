@@ -81,3 +81,11 @@ flake). Pull requests that only change Markdown skip both.
 Changes go through a GitHub issue, a feature branch and a pull request
 against `master`. See [Architecture](docs/ARCHITECTURE.md) before touching the
 code, and keep `docs/` current in the same pull request.
+
+A "Protect master" ruleset enforces that workflow:
+- `master` can't be deleted or force-pushed.
+- Changes reach it only through a pull request; no approval is needed.
+- The CI `build-and-test` check must pass before merging. On a pull request
+  that only changes Markdown the check reports as skipped, which counts as
+  passing.
+- Repository admins can bypass the rules in an emergency.

@@ -93,6 +93,13 @@ data class Tile(
 
     /** What TTS actually says for this tile: [ttsScript] when set, otherwise [label]. */
     val speechText: String get() = ttsScript?.takeIf { it.isNotBlank() } ?: label
+
+    /**
+     * Whether tapping this tile does anything: plays its clip, or speaks its [speechText]
+     * when [speakLabel] is on or the board's [Board.speakUnrecordedTilesEnabled] fallback is.
+     */
+    fun isPlayable(speakUnrecordedTilesEnabled: Boolean): Boolean =
+        fileName != null || ((speakLabel || speakUnrecordedTilesEnabled) && speechText.isNotBlank())
 }
 
 /** One grid of tiles within a [Board]; a board can have several, switched via tabs. */
@@ -138,6 +145,12 @@ data class Page(
 
     /** Tiles shown on the landscape grid (under [LandscapeLayout.PAGE_GRID]), in row-major order. */
     val landscapeTiles: List<Tile> get() = tiles.take(shownLandscapeRows * effectiveLandscapeColumns)
+
+    /** [tile]'s opacity: its own override, else this page's, else [boardOpacity]. */
+    fun opacityFor(tile: Tile, boardOpacity: Float): Float = tile.opacity ?: opacity ?: boardOpacity
+
+    /** [tile]'s border: its own override, else this page's, else [boardBorder]. */
+    fun borderFor(tile: Tile, boardBorder: TileBorder): TileBorder = tile.border ?: border ?: boardBorder
 
     /** Rows needed at [gridColumns] wide to reach the last tile with a sound or label; 0 if there is none. */
     fun rowsNeededFor(gridColumns: Int): Int {
@@ -278,6 +291,13 @@ data class Board(
 
     /** Whether any tile on any page has a sound or speech set up, for gating destructive replace actions. */
     val hasAnySound: Boolean get() = pages.any { page -> page.tiles.any { !it.isEmpty } }
+
+    /**
+     * Every sound file any tile on any page points at. The home row is just the home
+     * page's first row, so it needs no separate pass.
+     */
+    val soundFileNames: Set<String>
+        get() = pages.flatMap { it.tiles }.mapNotNull { it.fileName }.toSet()
 
     /** Every page brought in line with its layout rules; see [Page.normalized]. */
     fun normalized(): Board = copy(pages = pages.map { it.normalized() })

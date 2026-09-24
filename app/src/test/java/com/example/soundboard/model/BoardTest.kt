@@ -1,7 +1,9 @@
 package com.example.soundboard.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BoardTest {
@@ -346,4 +348,48 @@ class BoardTest {
         assertEquals("Water", tile.speechText)
     }
 
+    @Test
+    fun `isPlayable is true for a tile with a sound file`() {
+        assertTrue(Tile(fileName = "a.mp3").isPlayable(speakUnrecordedTilesEnabled = false))
+    }
+
+    @Test
+    fun `isPlayable speaks a labeled tile only when speakLabel or the board fallback is on`() {
+        val unrecorded = Tile(label = "Water")
+        assertTrue(unrecorded.isPlayable(speakUnrecordedTilesEnabled = true))
+        assertFalse(unrecorded.isPlayable(speakUnrecordedTilesEnabled = false))
+        assertTrue(unrecorded.copy(speakLabel = true).isPlayable(speakUnrecordedTilesEnabled = false))
+    }
+
+    @Test
+    fun `isPlayable is false with nothing to say`() {
+        assertFalse(Tile(label = "", speakLabel = true).isPlayable(speakUnrecordedTilesEnabled = true))
+    }
+
+    @Test
+    fun `soundFileNames collects every page's sound files once`() {
+        val board = Board(
+            pages = listOf(
+                Page(tiles = listOf(Tile(fileName = "a.mp3"), Tile(), Tile(fileName = "b.mp3"))),
+                Page(tiles = listOf(Tile(fileName = "a.mp3")))
+            )
+        )
+
+        assertEquals(setOf("a.mp3", "b.mp3"), board.soundFileNames)
+    }
+
+    @Test
+    fun `opacityFor and borderFor prefer the tile, then the page, then the board`() {
+        val boardBorder = TileBorder()
+        val pageBorder = TileBorder(enabled = true, widthDp = 2f)
+        val tileBorder = TileBorder(enabled = true, widthDp = 4f)
+        val page = Page(opacity = 0.5f, border = pageBorder)
+
+        assertEquals(0.2f, page.opacityFor(Tile(opacity = 0.2f), boardOpacity = 1f))
+        assertEquals(0.5f, page.opacityFor(Tile(), boardOpacity = 1f))
+        assertEquals(1f, Page().opacityFor(Tile(), boardOpacity = 1f))
+        assertEquals(tileBorder, page.borderFor(Tile(border = tileBorder), boardBorder))
+        assertEquals(pageBorder, page.borderFor(Tile(), boardBorder))
+        assertEquals(boardBorder, Page().borderFor(Tile(), boardBorder))
+    }
 }

@@ -46,3 +46,24 @@ internal fun portraitRowHeightPx(
     val tileWidth = (portraitGridWidthPx - spacingPx * (columns - 1)) / columns
     return (tileWidth / aspectRatio).coerceAtLeast(0f)
 }
+
+/** Columns whose portrait row height counts as the standard [com.example.soundboard.model.RowHeight] measures against. */
+internal const val STANDARD_ROW_COLUMNS = 4
+
+/**
+ * A page's row height: the portrait row height its own [columns] and [aspectRatio] give
+ * (see [portraitRowHeightPx]), capped at [maxScale] times the standard — the height a
+ * [STANDARD_ROW_COLUMNS]-column row of the same shape would have — so a 1- or 2-column
+ * page gets full-width bars instead of huge squares.
+ */
+internal fun cappedRowHeightPx(
+    portraitGridWidthPx: Float,
+    columns: Int,
+    aspectRatio: Float,
+    spacingPx: Float,
+    maxScale: Float
+): Float {
+    val natural = portraitRowHeightPx(portraitGridWidthPx, columns, aspectRatio, spacingPx)
+    val standard = portraitRowHeightPx(portraitGridWidthPx, STANDARD_ROW_COLUMNS, aspectRatio, spacingPx)
+    return minOf(natural, standard * maxScale)
+}

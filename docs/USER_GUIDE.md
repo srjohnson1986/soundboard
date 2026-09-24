@@ -80,6 +80,14 @@ sound is to clear it directly.
 than columns tends to need Wide so two-line labels fit without wrapping to a
 cramped third line. This is a per-page setting, alongside rows/columns.
 
+**Max row height** — rows never grow taller than a 4-column row of the same
+tile shape (**Standard**). A 1- or 2-column page gets full-width bars instead
+of giant squares. Change the limit for the whole board in **Settings → Max row
+height**: **Short**, **Standard**, **Tall**, **Extra tall**, or **No limit**
+(the old behavior). To give one page its own limit, set it in that page's
+**Grid size**. Pages with 4 or more columns are already under the Standard
+limit, so only **Short** changes them.
+
 **Landscape** — turning the device sideways shows the same tiles in a wider
 grid: twice the columns, and about half the rows plus one, so there are always
 a few blank tiles ready to fill. Rows stay the same height as in portrait. To

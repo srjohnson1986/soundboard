@@ -148,6 +148,7 @@ import com.example.soundboard.StrayClip
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.Page
+import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
@@ -162,6 +163,50 @@ import kotlinx.coroutines.withTimeoutOrNull
 private val IDLE_TIMEOUT_OPTIONS_MINUTES = listOf(0, 1, 2, 5, 10)
 
 private fun idleTimeoutLabel(minutes: Int) = if (minutes == 0) "Off" else "$minutes min"
+
+private fun rowHeightLabel(rowHeight: RowHeight) = when (rowHeight) {
+    RowHeight.SHORT -> "Short"
+    RowHeight.STANDARD -> "Standard"
+    RowHeight.TALL -> "Tall"
+    RowHeight.EXTRA_TALL -> "Extra tall"
+    RowHeight.UNLIMITED -> "No limit"
+}
+
+/** A read-only dropdown picking one of [options]. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> OptionDropdown(
+    label: String,
+    selected: T,
+    options: List<T>,
+    optionLabel: (T) -> String,
+    onSelect: (T) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            modifier = Modifier
+                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                .fillMaxWidth(),
+            value = optionLabel(selected),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) }
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(optionLabel(option)) },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
 
 /**
  * Choices offered for the page-tab long-press duration in [SettingsDialog]. 500ms is the
@@ -714,6 +759,7 @@ fun BoardScreen(
                 PinnedRow(
                     homePage = homePage,
                     landscapeLayout = board.landscapeLayout,
+                    boardRowHeight = board.rowHeight,
                     activeColumns = activePageColumns,
                     editMode = editMode,
                     pageColor = homePage.color?.let { Color(it) },
@@ -765,6 +811,7 @@ fun BoardScreen(
                         globalTileOpacity = if (performanceModeEnabled) 1f else board.tileOpacity,
                         globalTileBorder = if (performanceModeEnabled) TileBorder() else board.tileBorder,
                         landscapeLayout = board.landscapeLayout,
+                        boardRowHeight = board.rowHeight,
                         onEffectiveColumnsChanged = { activePageColumns = it },
                         referenceHeightPx = contentAreaHeightPx,
                         pinFirstRow = page.isHome && board.stickyHomeRowEnabled,
@@ -864,10 +911,13 @@ fun BoardScreen(
                 landscapeRows = page.landscapeRows,
                 landscapeColumns = page.landscapeColumns,
                 pageGridActive = board.landscapeLayout == LandscapeLayout.PAGE_GRID,
-                onConfirm = { r, c, ratio, landscapeRows, landscapeColumns ->
+                rowHeight = page.rowHeight,
+                boardRowHeight = board.rowHeight,
+                onConfirm = { r, c, ratio, landscapeRows, landscapeColumns, rowHeight ->
                     vm.resize(index, r, c)
                     vm.setTileAspectRatio(index, ratio)
                     vm.setLandscapeGrid(index, landscapeRows, landscapeColumns)
+                    vm.setPageRowHeight(index, rowHeight)
                     gridDialogIndex = null
                 },
                 onDismiss = { gridDialogIndex = null }
@@ -945,6 +995,8 @@ pageOpacityDialogIndex?.let { index ->
             onDefaultPageColumnsChange = vm::setDefaultPageColumns,
             landscapeLayout = board.landscapeLayout,
             onLandscapeLayoutChange = vm::setLandscapeLayout,
+            rowHeight = board.rowHeight,
+            onRowHeightChange = vm::setRowHeight,
             onDismiss = { showSettingsDialog = false }
         )
     }
@@ -1138,22 +1190,24 @@ private val GRID_PADDING = 12.dp
 private val TILE_SPACING = 8.dp
 
 /**
- * The row height [page] has in portrait, for landscape's page grid to reuse so rows
- * keep the same height in both orientations. Portrait's grid width is taken from the
- * window's shorter side, since that's the side that's horizontal in portrait — this
- * works even when the app was launched straight into landscape.
+ * [page]'s row height: its portrait row height, capped by its row height setting (the
+ * page's own override, else [boardRowHeight]) — see [cappedRowHeightPx]. Used in portrait
+ * and by landscape's page grid alike, so rows keep the same height in both orientations.
+ * Portrait's grid width is taken from the window's shorter side, since that's the side
+ * that's horizontal in portrait — this works even when the app launched in landscape.
  */
 @Composable
-private fun portraitRowHeight(page: Page): Dp {
+private fun pageRowHeight(page: Page, boardRowHeight: RowHeight): Dp {
     val density = LocalDensity.current
     val window = LocalWindowInfo.current.containerSize
     return with(density) {
         val portraitGridWidthPx = minOf(window.width, window.height) - (GRID_PADDING * 2).toPx()
-        portraitRowHeightPx(
+        cappedRowHeightPx(
             portraitGridWidthPx = portraitGridWidthPx,
             columns = page.columns,
             aspectRatio = page.tileAspectRatio,
-            spacingPx = TILE_SPACING.toPx()
+            spacingPx = TILE_SPACING.toPx(),
+            maxScale = (page.rowHeight ?: boardRowHeight).maxScale
         ).toDp()
     }
 }
@@ -1175,6 +1229,7 @@ private fun portraitRowHeight(page: Page): Dp {
 private fun PinnedRow(
     homePage: Page,
     landscapeLayout: LandscapeLayout,
+    boardRowHeight: RowHeight,
     activeColumns: Int?,
     editMode: Boolean,
     pageColor: Color?,
@@ -1199,7 +1254,8 @@ private fun PinnedRow(
         else -> baseColumns
     }
     val tiles = if (usePageGrid) homePage.landscapeTiles else homePage.visibleTiles
-    val rowHeight = if (usePageGrid) portraitRowHeight(homePage) else null
+    // Fit to screen sizes landscape tiles by their shape alone, as it always has.
+    val rowHeight = if (isLandscape && !usePageGrid) null else pageRowHeight(homePage, boardRowHeight)
 
     Row(
         modifier = Modifier
@@ -1261,6 +1317,7 @@ private fun PageGrid(
     globalTileOpacity: Float,
     globalTileBorder: TileBorder,
     landscapeLayout: LandscapeLayout,
+    boardRowHeight: RowHeight,
     onEffectiveColumnsChanged: (Int) -> Unit,
     // The height budget for the landscape column math — measured once, above the pager,
     // covering the space available before the sticky row (PinnedRow) is subtracted. Using
@@ -1299,7 +1356,8 @@ private fun PageGrid(
         else -> page.columns
     }
     val shownTiles = if (usePageGrid) page.landscapeTiles else page.visibleTiles
-    val rowHeight = if (usePageGrid) portraitRowHeight(page) else null
+    // Fit to screen sizes landscape tiles by their shape alone, as it always has.
+    val rowHeight = if (isLandscape && !usePageGrid) null else pageRowHeight(page, boardRowHeight)
     LaunchedEffect(columns, isActive) {
         if (isActive) onEffectiveColumnsChanged(columns)
     }
@@ -1452,8 +1510,9 @@ private fun TileCard(
     border: TileBorder,
     performanceModeEnabled: Boolean,
     hidden: Boolean = false,
-    // A fixed row height, overriding [aspectRatio] — landscape's page grid keeps rows at
-    // their portrait height even though its tiles are a different width.
+    // A fixed row height, overriding [aspectRatio] — rows are capped by the row height
+    // setting, and landscape's page grid keeps them at their portrait height even though
+    // its tiles are a different width.
     rowHeight: Dp? = null,
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
@@ -1930,13 +1989,23 @@ private fun GridSizeDialog(
     // Whether Settings' landscape layout is the per-page grid, i.e. whether the
     // landscape values here actually apply — they're still editable either way.
     pageGridActive: Boolean,
-    onConfirm: (rows: Int, columns: Int, aspectRatio: Float, landscapeRows: Int?, landscapeColumns: Int?) -> Unit,
+    rowHeight: RowHeight?,
+    boardRowHeight: RowHeight,
+    onConfirm: (
+        rows: Int,
+        columns: Int,
+        aspectRatio: Float,
+        landscapeRows: Int?,
+        landscapeColumns: Int?,
+        rowHeight: RowHeight?
+    ) -> Unit,
     onDismiss: () -> Unit
 ) {
     var r by remember { mutableIntStateOf(rows) }
     var c by remember { mutableIntStateOf(columns) }
     var wide by remember { mutableStateOf(aspectRatio != 1f) }
     var customLandscape by remember { mutableStateOf(landscapeRows != null || landscapeColumns != null) }
+    var pageRowHeight by remember { mutableStateOf(rowHeight) }
     // The derived defaults track the portrait steppers live, so switching to custom
     // starts from exactly what landscape was about to show.
     val defaultLandscapeRows = Page.defaultLandscapeRows(r)
@@ -2019,6 +2088,13 @@ private fun GridSizeDialog(
                         ) { Text("Wide") }
                     }
                 }
+                OptionDropdown(
+                    label = "Max row height",
+                    selected = pageRowHeight,
+                    options = listOf(null) + RowHeight.entries,
+                    optionLabel = { it?.let(::rowHeightLabel) ?: "Board default (${rowHeightLabel(boardRowHeight)})" },
+                    onSelect = { pageRowHeight = it }
+                )
             }
         },
         confirmButton = {
@@ -2028,7 +2104,8 @@ private fun GridSizeDialog(
                     c,
                     if (wide) 4f / 3f else 1f,
                     lr.takeIf { customLandscape },
-                    lc.takeIf { customLandscape }
+                    lc.takeIf { customLandscape },
+                    pageRowHeight
                 )
             }) { Text("Apply") }
         },
@@ -2149,6 +2226,8 @@ private fun SettingsDialog(
     onDefaultPageColumnsChange: (Int) -> Unit,
     landscapeLayout: LandscapeLayout,
     onLandscapeLayoutChange: (LandscapeLayout) -> Unit,
+    rowHeight: RowHeight,
+    onRowHeightChange: (RowHeight) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -2383,6 +2462,20 @@ private fun SettingsDialog(
                 Text("Default grid size for new pages", style = MaterialTheme.typography.bodyMedium)
                 Stepper("Rows", defaultPageRows, onDefaultPageRowsChange)
                 Stepper("Columns", defaultPageColumns, onDefaultPageColumnsChange)
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                OptionDropdown(
+                    label = "Max row height",
+                    selected = rowHeight,
+                    options = RowHeight.entries,
+                    optionLabel = ::rowHeightLabel,
+                    onSelect = onRowHeightChange
+                )
+                Text(
+                    "Standard is the height of a 4-column row, so pages with fewer columns " +
+                        "get wide bars instead of huge squares. Overridable per page (Grid size).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 Text("Landscape layout", style = MaterialTheme.typography.bodyMedium)
                 SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {

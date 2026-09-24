@@ -17,6 +17,21 @@ enum class ThemeMode { SYSTEM, LIGHT, DARK }
 enum class LandscapeLayout { PAGE_GRID, FIT_TO_SCREEN }
 
 /**
+ * The tallest a tile row may get, as a multiple of the standard row height — the height
+ * a 4-column row of the same tile shape would have in portrait. Rows are otherwise as
+ * tall as their tiles' own width and shape make them, so this only bites on pages with
+ * few columns (or, below [STANDARD], shortens every row). [UNLIMITED] never caps.
+ */
+@Serializable
+enum class RowHeight(val maxScale: Float) {
+    SHORT(0.75f),
+    STANDARD(1f),
+    TALL(1.5f),
+    EXTRA_TALL(2f),
+    UNLIMITED(Float.POSITIVE_INFINITY)
+}
+
+/**
  * A tile's border. [colorArgb] null means "Recommended" — resolved to the
  * current theme's outlineVariant color at render time rather than a fixed
  * value, so it looks right in both light and dark mode.
@@ -78,7 +93,9 @@ data class Page(
     /** Landscape grid rows; null derives it from [rows] (see [configuredLandscapeRows]). */
     val landscapeRows: Int? = null,
     /** Landscape grid columns; null derives it from [columns] (see [effectiveLandscapeColumns]). */
-    val landscapeColumns: Int? = null
+    val landscapeColumns: Int? = null,
+    /** Per-page row height cap override; null inherits the board's [Board.rowHeight]. */
+    val rowHeight: RowHeight? = null
 ) {
     /** Tiles currently shown on the portrait grid, in row-major order. */
     val visibleTiles: List<Tile> get() = tiles.take(rows * columns)
@@ -221,6 +238,8 @@ data class Board(
     val tileBorder: TileBorder = TileBorder(),
     /** How pages lay out in landscape: each page's own landscape grid, or auto-fit to the screen. */
     val landscapeLayout: LandscapeLayout = LandscapeLayout.PAGE_GRID,
+    /** Global row height cap; overridden per-page by [Page.rowHeight]. */
+    val rowHeight: RowHeight = RowHeight.STANDARD,
     /** Forward-looking marker for the on-disk schema shape; not branched on yet. */
     val schemaVersion: Int = CURRENT_SCHEMA_VERSION
 ) {

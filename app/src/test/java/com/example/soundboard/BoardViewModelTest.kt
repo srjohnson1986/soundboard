@@ -10,7 +10,9 @@ import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.PresetRepository
 import com.example.soundboard.data.RecentPresetsRepository
 import com.example.soundboard.model.Board
+import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.Page
+import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
@@ -881,6 +883,45 @@ class BoardViewModelTest {
 
         assertEquals(null, vm.board.value.pages[0].opacity)
         assertEquals(0.4f, vm.board.value.pages[1].opacity)
+    }
+
+    @Test
+    fun `row height defaults to standard and persists across a fresh view model`() {
+        val vm = newViewModel()
+        assertEquals(RowHeight.STANDARD, vm.board.value.rowHeight)
+
+        vm.setRowHeight(RowHeight.TALL)
+
+        assertEquals(RowHeight.TALL, newViewModel().board.value.rowHeight)
+    }
+
+    @Test
+    fun `setPageRowHeight overrides only the targeted page and null clears it`() {
+        repo.save(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
+        val vm = newViewModel()
+
+        vm.setPageRowHeight(1, RowHeight.SHORT)
+
+        assertEquals(null, vm.board.value.pages[0].rowHeight)
+        assertEquals(RowHeight.SHORT, newViewModel().board.value.pages[1].rowHeight)
+
+        vm.setPageRowHeight(1, null)
+
+        assertEquals(null, vm.board.value.pages[1].rowHeight)
+    }
+
+    @Test
+    fun `setLandscapeGrid and setLandscapeLayout persist across a fresh view model`() {
+        repo.save(Board(pages = listOf(Page(name = "A"))))
+        val vm = newViewModel()
+
+        vm.setLandscapeGrid(0, 2, 6)
+        vm.setLandscapeLayout(LandscapeLayout.FIT_TO_SCREEN)
+
+        val reloaded = newViewModel().board.value
+        assertEquals(6, reloaded.pages[0].landscapeColumns)
+        assertEquals(2, reloaded.pages[0].landscapeRows)
+        assertEquals(LandscapeLayout.FIT_TO_SCREEN, reloaded.landscapeLayout)
     }
 
     @Test

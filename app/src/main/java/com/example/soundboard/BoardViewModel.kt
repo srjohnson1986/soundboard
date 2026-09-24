@@ -20,6 +20,7 @@ import com.example.soundboard.data.RecentPresetsRepository
 import com.example.soundboard.data.SavedPreset
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LandscapeLayout
+import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
@@ -312,6 +313,15 @@ class BoardViewModel(
 
     fun setLandscapeLayout(layout: LandscapeLayout) {
         commit(_board.value.copy(landscapeLayout = layout))
+    }
+
+    fun setRowHeight(rowHeight: RowHeight) {
+        commit(_board.value.copy(rowHeight = rowHeight))
+    }
+
+    /** Per-page row height override; null inherits the board's global setting. */
+    fun setPageRowHeight(index: Int, rowHeight: RowHeight?) {
+        commit(_board.value.updatingPage(index) { it.copy(rowHeight = rowHeight) })
     }
 
     fun setPageColor(index: Int, colorArgb: Int?) {

@@ -86,6 +86,29 @@ class GridLayoutTest {
     }
 
     @Test
+    fun `a 1-column page is capped at the standard 4-column row height`() {
+        // Uncapped, one 424px-wide square column would be 424px tall; the standard is 100px.
+        assertEquals(100f, cappedRowHeightPx(424f, columns = 1, aspectRatio = 1f, spacingPx = 8f, maxScale = 1f), 0.001f)
+        assertEquals(75f, cappedRowHeightPx(424f, columns = 1, aspectRatio = 4f / 3f, spacingPx = 8f, maxScale = 1f), 0.001f)
+    }
+
+    @Test
+    fun `pages with 4 or more columns keep their natural height under the standard cap`() {
+        assertEquals(100f, cappedRowHeightPx(424f, columns = 4, aspectRatio = 1f, spacingPx = 8f, maxScale = 1f), 0.001f)
+        // 6 columns: (424 - 40) / 6 = 64px, already under the cap.
+        assertEquals(64f, cappedRowHeightPx(424f, columns = 6, aspectRatio = 1f, spacingPx = 8f, maxScale = 1f), 0.001f)
+    }
+
+    @Test
+    fun `the cap scales with maxScale and never exceeds the natural height`() {
+        assertEquals(150f, cappedRowHeightPx(424f, columns = 1, aspectRatio = 1f, spacingPx = 8f, maxScale = 1.5f), 0.001f)
+        assertEquals(75f, cappedRowHeightPx(424f, columns = 4, aspectRatio = 1f, spacingPx = 8f, maxScale = 0.75f), 0.001f)
+        // 2 columns: (424 - 8) / 2 = 208px natural, just over a 2x cap of 200px.
+        assertEquals(200f, cappedRowHeightPx(424f, columns = 2, aspectRatio = 1f, spacingPx = 8f, maxScale = 2f), 0.001f)
+        assertEquals(424f, cappedRowHeightPx(424f, columns = 1, aspectRatio = 1f, spacingPx = 8f, maxScale = Float.POSITIVE_INFINITY), 0.001f)
+    }
+
+    @Test
     fun `portrait row height is zero for degenerate input`() {
         assertEquals(0f, portraitRowHeightPx(portraitGridWidthPx = 0f, columns = 4, aspectRatio = 1f, spacingPx = 8f), 0f)
         assertEquals(0f, portraitRowHeightPx(portraitGridWidthPx = 400f, columns = 0, aspectRatio = 1f, spacingPx = 8f), 0f)

@@ -20,6 +20,7 @@ import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
 import java.io.ByteArrayInputStream
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import org.junit.Assert.assertEquals
@@ -792,6 +793,95 @@ class BoardViewModelTest {
         assertTrue(vm.board.value.stickyHomeRowEnabled)
         assertEquals(2, vm.board.value.defaultPageRows)
         assertEquals(6, vm.board.value.defaultPageColumns)
+    }
+
+    @Test
+    fun `layout and label settings are captured by saveAsPreset and restored by applyPreset`() {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+        val labelStyle = LabelStyle(minSizeSp = 18f, maxSizeSp = 40f, font = LabelFont.LEXEND, bold = true, allCaps = true)
+        vm.setLandscapeLayout(LandscapeLayout.FIT_TO_SCREEN)
+        vm.setLandscapeGrid(0, 3, 5)
+        vm.setRowHeight(RowHeight.TALL)
+        vm.setPageRowHeight(0, RowHeight.SHORT)
+        vm.setLabelStyle(labelStyle)
+
+        vm.saveAsPreset("Version 1")
+        val savedId = vm.presets.value.first().id
+        vm.setLandscapeLayout(LandscapeLayout.PAGE_GRID)
+        vm.setLandscapeGrid(0, null, null)
+        vm.setRowHeight(RowHeight.STANDARD)
+        vm.setPageRowHeight(0, null)
+        vm.setLabelStyle(LabelStyle())
+
+        vm.applyPreset(PresetRef.Saved(savedId))
+
+        val board = vm.board.value
+        assertEquals(LandscapeLayout.FIT_TO_SCREEN, board.landscapeLayout)
+        assertEquals(3, board.pages[0].landscapeRows)
+        assertEquals(5, board.pages[0].landscapeColumns)
+        assertEquals(RowHeight.TALL, board.rowHeight)
+        assertEquals(RowHeight.SHORT, board.pages[0].rowHeight)
+        assertEquals(labelStyle, board.labelStyle)
+    }
+
+    @Test
+    fun `rapid back-to-back commits on a real IO dispatcher leave the latest board on disk`() {
+        // Regression for the save race fixed in #144: each commit launches its own save,
+        // and on a real thread pool they used to be able to finish out of order.
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = BoardViewModel(repo, player, recorder, presetRepo, speaker, devicePrefs, recentPresetsRepo, ioDispatcher = Dispatchers.IO)
+        waitUntil { vm.board.value.currentPage.tiles.any { it.id == "a" } }
+
+        repeat(40) { i ->
+            vm.setLandscapeGrid(0, (i % 5) + 1, (i % 7) + 1)
+            vm.setRowHeight(RowHeight.entries[i % RowHeight.entries.size])
+        }
+        val expected = vm.board.value
+
+        waitUntil { BoardRepository(context).load() == expected }
+    }
+
+    private fun waitUntil(timeoutMillis: Long = 5_000, condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        while (!condition()) {
+            shadowOf(android.os.Looper.getMainLooper()).idle()
+            assertTrue("condition not met within ${timeoutMillis}ms", System.currentTimeMillis() < deadline)
+            Thread.sleep(20)
+        }
+    }
+
+    @Test
+    fun `recording onto a landscape-only tile grows the portrait grid to show it`() {
+        // A 4x4 page shows 8x3 = 24 slots in landscape; slot 20 doesn't exist in portrait.
+        repo.save(Board(pages = listOf(Page(rows = 4, columns = 4, tiles = List(16) { Tile(id = "t$it") }))))
+        val vm = newViewModel()
+        val landscapeOnly = vm.board.value.currentPage.landscapeTiles[19]
+        assertFalse(vm.board.value.currentPage.visibleTiles.contains(landscapeOnly))
+
+        vm.startRecording()
+        vm.stopRecording(landscapeOnly.id)
+
+        val page = vm.board.value.currentPage
+        assertEquals(5, page.rows)
+        assertTrue(page.visibleTiles.any { it.id == landscapeOnly.id })
+    }
+
+    @Test
+    fun `once a tile's sound is cleared, shrinking the grid can hide it again`() {
+        repo.save(
+            Board(pages = listOf(Page(rows = 2, columns = 2, tiles = listOf(Tile(id = "a"), Tile(id = "b"), Tile(id = "c"), Tile(id = "d", label = "Water", fileName = "d.mp3")))))
+        )
+        repo.soundFile("d.mp3").apply { parentFile?.mkdirs() }.writeText("d")
+        val vm = newViewModel()
+
+        vm.resize(0, 1, 2)
+        assertEquals(2, vm.board.value.currentPage.rows)
+
+        vm.clearTile("d")
+        vm.resize(0, 1, 2)
+        assertEquals(1, vm.board.value.currentPage.rows)
+        assertFalse(vm.board.value.currentPage.visibleTiles.any { it.id == "d" })
     }
 
     @Test

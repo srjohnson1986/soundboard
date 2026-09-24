@@ -107,55 +107,39 @@ class BoardViewModel(
         speaker.speak(text)
     }
 
-    fun setLabel(tileId: String, label: String) = updateTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(label = label) else it }
-    }
+    // The tile editors below find their tile by id on whichever page holds it (see
+    // Board.updatingTile), so the same call edits a tile on the current page or a
+    // home-row tile tapped from the sticky row on another page.
+
+    fun setLabel(tileId: String, label: String) = updateTile(tileId) { it.copy(label = label) }
 
     /** Sets the longer text spoken instead of the label; a blank value clears it back to null (falls back to the label). */
-    fun setTtsScript(tileId: String, script: String) = updateTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(ttsScript = script.ifBlank { null }) else it }
-    }
+    fun setTtsScript(tileId: String, script: String) = updateTile(tileId) { it.copy(ttsScript = script.ifBlank { null }) }
 
-    fun setVolume(tileId: String, volume: Float) = updateTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(volume = volume.coerceIn(0f, 1f)) else it }
-    }
+    fun setVolume(tileId: String, volume: Float) = updateTile(tileId) { it.copy(volume = volume.coerceIn(0f, 1f)) }
 
-    fun setColor(tileId: String, colorArgb: Int?) = updateTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
-    }
+    fun setColor(tileId: String, colorArgb: Int?) = updateTile(tileId) { it.copy(colorArgb = colorArgb) }
 
     /** Per-tile opacity override; null inherits the page's, then the board's. */
-    fun setOpacity(tileId: String, opacity: Float?) = updateTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(opacity = opacity?.coerceIn(0f, 1f)) else it }
-    }
+    fun setOpacity(tileId: String, opacity: Float?) = updateTile(tileId) { it.copy(opacity = opacity?.coerceIn(0f, 1f)) }
 
     /** Per-tile border override; null inherits the page's, then the board's. */
-    fun setBorder(tileId: String, border: TileBorder?) = updateTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(border = border) else it }
-    }
+    fun setBorder(tileId: String, border: TileBorder?) = updateTile(tileId) { it.copy(border = border) }
 
-    fun setSpeakLabel(tileId: String, value: Boolean) = updateTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(speakLabel = value) else it }
-    }
+    fun setSpeakLabel(tileId: String, value: Boolean) = updateTile(tileId) { it.copy(speakLabel = value) }
 
     fun assignSound(tileId: String, uri: Uri) {
         viewModelScope.launch {
             val name = withContext(ioDispatcher) { repo.importSound(uri) } ?: return@launch
             withContext(ioDispatcher) { player.load(name, repo.soundFile(name)) }
-            updateTiles { tiles ->
-                tiles.map { if (it.id == tileId) it.copy(fileName = name) else it }
-            }
+            updateTile(tileId) { it.copy(fileName = name) }
         }
     }
 
-    fun clearTile(tileId: String) = updateTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null, speakLabel = false) else it }
-    }
+    fun clearTile(tileId: String) = updateTile(tileId) { it.copy(label = "", fileName = null, speakLabel = false) }
 
     /** Detaches a tile's sound without touching its label or [Tile.speakLabel]. */
-    fun removeSound(tileId: String) = updateTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(fileName = null) else it }
-    }
+    fun removeSound(tileId: String) = updateTile(tileId) { it.copy(fileName = null) }
 
     /** Starts recording into a fresh file; call [stopRecording] or [cancelRecording] to end it. */
     fun startRecording() {
@@ -176,7 +160,7 @@ class BoardViewModel(
     fun stopRecording(tileId: String) {
         viewModelScope.launch {
             val name = finishRecording() ?: return@launch
-            updateTiles { tiles -> tiles.map { if (it.id == tileId) it.copy(fileName = name) else it } }
+            updateTile(tileId) { it.copy(fileName = name) }
         }
     }
 
@@ -226,69 +210,6 @@ class BoardViewModel(
     fun setPerformanceModeEnabled(value: Boolean) {
         devicePrefs.performanceModeEnabled = value
         _performanceModeEnabled.value = value
-    }
-
-    // The sticky home row shown on other pages is just the home page's own first
-    // row of tiles — these mutators edit it via Board.updatingPage(homeIndex, ...)
-    // rather than updatingCurrentPage, since the home page usually isn't the page
-    // being viewed when its sticky banner is tapped.
-
-    fun setHomeRowLabel(tileId: String, label: String) = updateHomeRowTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(label = label) else it }
-    }
-
-    /** Same as [setTtsScript], for a home-row tile edited via the sticky banner. */
-    fun setHomeRowTtsScript(tileId: String, script: String) = updateHomeRowTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(ttsScript = script.ifBlank { null }) else it }
-    }
-
-    fun setHomeRowVolume(tileId: String, volume: Float) = updateHomeRowTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(volume = volume.coerceIn(0f, 1f)) else it }
-    }
-
-    fun setHomeRowColor(tileId: String, colorArgb: Int?) = updateHomeRowTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(colorArgb = colorArgb) else it }
-    }
-
-    /** Same as [setOpacity], for a home-row tile edited via the sticky banner. */
-    fun setHomeRowOpacity(tileId: String, opacity: Float?) = updateHomeRowTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(opacity = opacity?.coerceIn(0f, 1f)) else it }
-    }
-
-    /** Same as [setBorder], for a home-row tile edited via the sticky banner. */
-    fun setHomeRowBorder(tileId: String, border: TileBorder?) = updateHomeRowTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(border = border) else it }
-    }
-
-    fun setHomeRowSpeakLabel(tileId: String, value: Boolean) = updateHomeRowTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(speakLabel = value) else it }
-    }
-
-    fun assignHomeRowSound(tileId: String, uri: Uri) {
-        viewModelScope.launch {
-            val name = withContext(ioDispatcher) { repo.importSound(uri) } ?: return@launch
-            withContext(ioDispatcher) { player.load(name, repo.soundFile(name)) }
-            updateHomeRowTiles { tiles ->
-                tiles.map { if (it.id == tileId) it.copy(fileName = name) else it }
-            }
-        }
-    }
-
-    fun clearHomeRowTile(tileId: String) = updateHomeRowTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(label = "", fileName = null, speakLabel = false) else it }
-    }
-
-    /** Same as [removeSound], for a home-row tile edited via the sticky banner. */
-    fun removeHomeRowSound(tileId: String) = updateHomeRowTiles { tiles ->
-        tiles.map { if (it.id == tileId) it.copy(fileName = null) else it }
-    }
-
-    /** Same as [stopRecording], for a home-row tile edited via the sticky banner. */
-    fun stopHomeRowRecording(tileId: String) {
-        viewModelScope.launch {
-            val name = finishRecording() ?: return@launch
-            updateHomeRowTiles { tiles -> tiles.map { if (it.id == tileId) it.copy(fileName = name) else it } }
-        }
     }
 
     fun setDefaultPageRows(value: Int) {
@@ -614,13 +535,8 @@ class BoardViewModel(
         }
     }
 
-    private fun updateTiles(transform: (List<Tile>) -> List<Tile>) {
-        commit(_board.value.updatingCurrentPage { it.copy(tiles = transform(it.tiles)) })
-    }
-
-    private fun updateHomeRowTiles(transform: (List<Tile>) -> List<Tile>) {
-        val homeIndex = _board.value.homePageIndex ?: return
-        commit(_board.value.updatingPage(homeIndex) { it.copy(tiles = transform(it.tiles)) })
+    private fun updateTile(tileId: String, transform: (Tile) -> Tile) {
+        commit(_board.value.updatingTile(tileId, transform))
     }
 
     /** Every tile a sound file can be referenced from: every page (the home row is just its first row). */

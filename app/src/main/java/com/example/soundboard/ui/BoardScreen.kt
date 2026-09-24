@@ -352,10 +352,15 @@ private const val APP_VERSION = "v0.2.1"
 private const val RELEASES_BASE_URL = "https://github.com/srjohnson1986/soundboard/releases"
 private const val RELEASE_URL = "$RELEASES_BASE_URL/tag/$APP_VERSION"
 
-/** Which tile an open [EditTileDialog] is showing — a page tile or one from the home page's sticky row. */
+/**
+ * Which tile an open [EditTileDialog] is showing — a page tile or one from the home page's
+ * sticky row. Both are edited the same way (by id, on whichever page holds the tile); the
+ * distinction only decides whether switching pages closes the dialog.
+ */
 private sealed interface EditTarget {
-    data class PageTile(val id: String) : EditTarget
-    data class HomeRowTile(val id: String) : EditTarget
+    val id: String
+    data class PageTile(override val id: String) : EditTarget
+    data class HomeRowTile(override val id: String) : EditTarget
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -428,11 +433,11 @@ fun BoardScreen(
         }
     }
 
-    // A page-tile dialog left open while switching pages would otherwise resolve
-    // against a tile id that belongs to the page the user just left. A home-row-tile
-    // dialog is unaffected — it always resolves against the home page regardless of
-    // which page is current. Auto-return (below) can trigger this while a recording
-    // is in progress, so cancel it too.
+    // A page-tile dialog left open while switching pages would otherwise keep editing
+    // a tile on the page the user just left, no longer on screen. A home-row-tile
+    // dialog is unaffected — its tile stays visible (in the sticky row or on the home
+    // page itself) whichever page is current. Auto-return (below) can trigger this
+    // while a recording is in progress, so cancel it too.
     LaunchedEffect(board.currentPageIndex) {
         if (editingTarget is EditTarget.PageTile) {
             editingTarget = null
@@ -952,62 +957,29 @@ fun BoardScreen(
     }
     }
 
-    when (val target = editingTarget) {
-        is EditTarget.PageTile -> {
-            val editing = board.currentPage.tiles.firstOrNull { it.id == target.id }
-            if (editing != null) {
-                EditTileDialog(
-                    tile = editing,
-                    isRecording = isRecording,
-                    speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
-                    onLabelChange = { vm.setLabel(editing.id, it) },
-                    onTtsScriptChange = { vm.setTtsScript(editing.id, it) },
-                    onSoundPicked = { vm.assignSound(editing.id, it) },
-                    onClear = { vm.clearTile(editing.id) },
-                    onRemoveSound = { vm.removeSound(editing.id) },
-                    onVolumeChange = { vm.setVolume(editing.id, it) },
-                    onColorChange = { vm.setColor(editing.id, it) },
-                    onOpacityChange = { vm.setOpacity(editing.id, it) },
-                    onBorderChange = { vm.setBorder(editing.id, it) },
-                    onSpeakLabelChange = { vm.setSpeakLabel(editing.id, it) },
-                    onPlay = vm::play,
-                    onStartRecording = vm::startRecording,
-                    onStopRecording = { vm.stopRecording(editing.id) },
-                    onDismiss = {
-                        vm.cancelRecording()
-                        editingTarget = null
-                    }
-                )
+    editingTarget?.let { board.findTile(it.id) }?.let { editing ->
+        EditTileDialog(
+            tile = editing,
+            isRecording = isRecording,
+            speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
+            onLabelChange = { vm.setLabel(editing.id, it) },
+            onTtsScriptChange = { vm.setTtsScript(editing.id, it) },
+            onSoundPicked = { vm.assignSound(editing.id, it) },
+            onClear = { vm.clearTile(editing.id) },
+            onRemoveSound = { vm.removeSound(editing.id) },
+            onVolumeChange = { vm.setVolume(editing.id, it) },
+            onColorChange = { vm.setColor(editing.id, it) },
+            onOpacityChange = { vm.setOpacity(editing.id, it) },
+            onBorderChange = { vm.setBorder(editing.id, it) },
+            onSpeakLabelChange = { vm.setSpeakLabel(editing.id, it) },
+            onPlay = vm::play,
+            onStartRecording = vm::startRecording,
+            onStopRecording = { vm.stopRecording(editing.id) },
+            onDismiss = {
+                vm.cancelRecording()
+                editingTarget = null
             }
-        }
-        is EditTarget.HomeRowTile -> {
-            val editing = board.homePage?.tiles?.firstOrNull { it.id == target.id }
-            if (editing != null) {
-                EditTileDialog(
-                    tile = editing,
-                    isRecording = isRecording,
-                    speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
-                    onLabelChange = { vm.setHomeRowLabel(editing.id, it) },
-                    onTtsScriptChange = { vm.setHomeRowTtsScript(editing.id, it) },
-                    onSoundPicked = { vm.assignHomeRowSound(editing.id, it) },
-                    onClear = { vm.clearHomeRowTile(editing.id) },
-                    onRemoveSound = { vm.removeHomeRowSound(editing.id) },
-                    onVolumeChange = { vm.setHomeRowVolume(editing.id, it) },
-                    onColorChange = { vm.setHomeRowColor(editing.id, it) },
-                    onOpacityChange = { vm.setHomeRowOpacity(editing.id, it) },
-                    onBorderChange = { vm.setHomeRowBorder(editing.id, it) },
-                    onSpeakLabelChange = { vm.setHomeRowSpeakLabel(editing.id, it) },
-                    onPlay = vm::play,
-                    onStartRecording = vm::startRecording,
-                    onStopRecording = { vm.stopHomeRowRecording(editing.id) },
-                    onDismiss = {
-                        vm.cancelRecording()
-                        editingTarget = null
-                    }
-                )
-            }
-        }
-        null -> Unit
+        )
     }
 
     if (showSpeakDialog) {

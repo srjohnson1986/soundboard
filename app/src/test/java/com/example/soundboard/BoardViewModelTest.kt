@@ -180,7 +180,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setHomeRowSpeakLabel updates the home page tile and leaves the current page alone`() {
+    fun `setSpeakLabel edits a home page tile from another page and leaves the current page alone`() {
         repo.save(
             Board(
                 pages = listOf(
@@ -192,7 +192,7 @@ class BoardViewModelTest {
         )
         val vm = newViewModel()
 
-        vm.setHomeRowSpeakLabel("hey", true)
+        vm.setSpeakLabel("hey", true)
 
         assertTrue(vm.board.value.homePage!!.tiles.first { it.id == "hey" }.speakLabel)
         assertFalse(vm.board.value.currentPage.tiles.first { it.id == "a" }.speakLabel)
@@ -220,7 +220,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setHomeRowTtsScript updates the home page tile and leaves the current page alone`() {
+    fun `setTtsScript edits a home page tile from another page and leaves the current page alone`() {
         repo.save(
             Board(
                 pages = listOf(
@@ -232,7 +232,7 @@ class BoardViewModelTest {
         )
         val vm = newViewModel()
 
-        vm.setHomeRowTtsScript("hey", "Come here please")
+        vm.setTtsScript("hey", "Come here please")
 
         assertEquals("Come here please", vm.board.value.homePage!!.tiles.first { it.id == "hey" }.ttsScript)
         assertNull(vm.board.value.currentPage.tiles.first { it.id == "a" }.ttsScript)
@@ -249,11 +249,11 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `clearHomeRowTile also turns off speakLabel`() {
+    fun `clearTile on a home page tile also turns off speakLabel`() {
         repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", speakLabel = true)), isHome = true))))
         val vm = newViewModel()
 
-        vm.clearHomeRowTile("hey")
+        vm.clearTile("hey")
 
         assertFalse(vm.board.value.homePage!!.tiles.first { it.id == "hey" }.speakLabel)
     }
@@ -272,7 +272,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `removeHomeRowSound clears the file but keeps the label and speakLabel`() {
+    fun `removeSound on a home page tile clears the file but keeps the label and speakLabel`() {
         repo.save(
             Board(
                 pages = listOf(
@@ -282,7 +282,7 @@ class BoardViewModelTest {
         )
         val vm = newViewModel()
 
-        vm.removeHomeRowSound("hey")
+        vm.removeSound("hey")
 
         val tile = vm.board.value.homePage!!.tiles.first { it.id == "hey" }
         assertNull(tile.fileName)
@@ -415,14 +415,14 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `stopHomeRowRecording points the home page tile at the recorded file`() {
+    fun `stopRecording points a home page tile at the recorded file`() {
         repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey")), isHome = true))))
         val vm = newViewModel()
 
         vm.startRecording()
         val recordedFile = recorder.startedFile!!
 
-        vm.stopHomeRowRecording("hey")
+        vm.stopRecording("hey")
 
         val tile = vm.board.value.homePage!!.tiles.first { it.id == "hey" }
         assertEquals(recordedFile.name, tile.fileName)
@@ -1052,7 +1052,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setHomeRowOpacity edits the home page's tile even from a different current page`() {
+    fun `setOpacity edits the home page's tile even from a different current page`() {
         repo.save(
             Board(
                 pages = listOf(
@@ -1064,7 +1064,7 @@ class BoardViewModelTest {
         )
         val vm = newViewModel()
 
-        vm.setHomeRowOpacity("a", 0.3f)
+        vm.setOpacity("a", 0.3f)
 
         assertEquals(0.3f, vm.board.value.homePage?.tiles?.first { it.id == "a" }?.opacity)
     }
@@ -1103,7 +1103,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setHomeRowBorder edits the home page's tile even from a different current page`() {
+    fun `setBorder edits the home page's tile even from a different current page`() {
         repo.save(
             Board(
                 pages = listOf(
@@ -1115,7 +1115,7 @@ class BoardViewModelTest {
         )
         val vm = newViewModel()
 
-        vm.setHomeRowBorder("a", TileBorder(enabled = true))
+        vm.setBorder("a", TileBorder(enabled = true))
 
         assertEquals(TileBorder(enabled = true), vm.board.value.homePage?.tiles?.first { it.id == "a" }?.border)
     }
@@ -1159,7 +1159,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `setHomeRowLabel updates the home page tile regardless of the current page`() {
+    fun `setLabel edits a home page tile regardless of the current page`() {
         repo.save(
             Board(
                 pages = listOf(
@@ -1171,7 +1171,7 @@ class BoardViewModelTest {
         )
         val vm = newViewModel()
 
-        vm.setHomeRowLabel("hey", "Hey!")
+        vm.setLabel("hey", "Hey!")
 
         assertEquals("Hey!", vm.board.value.homePage!!.tiles.first { it.id == "hey" }.label)
         assertEquals("old", vm.board.value.currentPage.tiles.first { it.id == "a" }.label)
@@ -1183,7 +1183,7 @@ class BoardViewModelTest {
         repo.soundFile("hey.mp3").apply { parentFile?.mkdirs() }.writeText("hey")
         val vm = newViewModel()
 
-        vm.clearHomeRowTile("hey")
+        vm.clearTile("hey")
 
         val tile = vm.board.value.homePage!!.tiles.first { it.id == "hey" }
         assertEquals("", tile.label)

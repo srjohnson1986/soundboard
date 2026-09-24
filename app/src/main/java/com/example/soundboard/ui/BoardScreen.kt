@@ -24,8 +24,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -231,15 +233,64 @@ private fun LabelStyleControls(labelStyle: LabelStyle, onChange: (LabelStyle) ->
         Text("All caps")
         Switch(checked = labelStyle.allCaps, onCheckedChange = { onChange(labelStyle.copy(allCaps = it)) })
     }
-    val sample = "Call the doctor"
     Text(
-        text = if (labelStyle.allCaps) sample.uppercase() else sample,
-        style = baseLabelTextStyle(labelStyle).copy(fontSize = sizeRange.start.roundToInt().sp),
-        textAlign = TextAlign.Center,
+        "Preview",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(top = 8.dp)
+    )
+    // Both ends of the size range, each on a tile-shaped sample: a long phrase at the
+    // smallest size and a short word at the largest, the way they'd actually meet it.
+    val base = baseLabelTextStyle(labelStyle)
+    val smallest = sizeRange.start.roundToInt()
+    val largest = sizeRange.endInclusive.roundToInt()
+    // The two tiles share a height (the taller one's), so they read as tiles on one row.
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    )
+            .height(IntrinsicSize.Min),
+        horizontalArrangement = Arrangement.spacedBy(TILE_SPACING)
+    ) {
+        LabelPreviewTile("Call the doctor", base.copy(fontSize = smallest.sp), labelStyle.allCaps, Modifier.weight(1f))
+        LabelPreviewTile("Yes", base.copy(fontSize = largest.sp), labelStyle.allCaps, Modifier.weight(1f))
+    }
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(TILE_SPACING)
+    ) {
+        listOf("Smallest ($smallest sp)", "Largest ($largest sp)").forEach { caption ->
+            Text(
+                caption,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+/** A sample tile in Settings' label preview, drawn like a filled tile. */
+@Composable
+private fun LabelPreviewTile(text: String, style: TextStyle, allCaps: Boolean, modifier: Modifier) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        modifier = modifier.fillMaxHeight()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(TILE_CONTENT_PADDING),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (allCaps) text.uppercase() else text,
+                style = style,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
 }
 
 /** A read-only dropdown picking one of [options]. */

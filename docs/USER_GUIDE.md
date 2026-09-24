@@ -110,8 +110,10 @@ These settings are saved with presets.
   fewer, bigger tiles therefore get bigger text, and text never goes below the
   smallest size. A label too long to fit even at the smallest size wraps to 3
   lines and ends in "…", as before.
-- **Bold** and **All caps** — for extra legibility. The sample underneath
-  shows the result.
+- **Bold** and **All caps** — for extra legibility.
+- **Preview** — two sample tiles show the current choices at both ends of the
+  size range: a long phrase at the smallest size and a short word at the
+  largest. They update live as you change any of the settings above.
 
 ## Pages
 

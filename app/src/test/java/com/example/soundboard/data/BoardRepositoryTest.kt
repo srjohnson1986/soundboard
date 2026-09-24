@@ -3,7 +3,11 @@ package com.example.soundboard.data
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.example.soundboard.model.Board
+import com.example.soundboard.model.LabelFont
+import com.example.soundboard.model.LabelStyle
+import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.Page
+import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.Tile
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -85,6 +89,27 @@ class BoardRepositoryTest {
         val loaded = repo.load()
 
         assertEquals("I would like a glass of water please", loaded.currentPage.tiles.first { it.id == "a" }.ttsScript)
+    }
+
+    @Test
+    fun `a full backup export then import round-trips every layout and label setting`() {
+        val board = Board(
+            pages = listOf(
+                Page(name = "A", landscapeRows = 2, landscapeColumns = 6, rowHeight = RowHeight.SHORT),
+                Page(name = "B")
+            ),
+            landscapeLayout = LandscapeLayout.FIT_TO_SCREEN,
+            rowHeight = RowHeight.EXTRA_TALL,
+            labelStyle = LabelStyle(minSizeSp = 12f, maxSizeSp = 44f, font = LabelFont.ATKINSON_HYPERLEGIBLE, bold = true, allCaps = true)
+        ).normalized()
+        repo.save(board)
+        val zip = File(context.filesDir, "backup.zip")
+
+        assertTrue(repo.exportTo(Uri.fromFile(zip)))
+        repo.save(Board())
+        assertTrue(repo.importFrom(Uri.fromFile(zip)))
+
+        assertEquals(board, repo.load())
     }
 
     @Test

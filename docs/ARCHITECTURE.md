@@ -642,18 +642,23 @@ gesture.
 
 | Layer | File(s) | Runs on |
 |---|---|---|
-| `Page.resized()`/`.moved()` | `test/.../model/PageTest.kt` | plain JVM (JUnit) |
+| `Page.resized()`/`.moved()`/`.normalized()` and the landscape grid defaults | `test/.../model/PageTest.kt` | plain JVM (JUnit) |
+| Landscape column/row-height math, label size search | `test/.../ui/GridLayoutTest.kt`, `test/.../ui/LabelTextTest.kt` | plain JVM (JUnit) |
 | `Board` page management (`addPage`/`removePage`/`renamePage`/`switchTo`/`withHomePage`) and `hasAnySound` | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
 | `BoardRepository`, incl. the legacy-schema and `homePageIndex` migrations and additive-field defaults in `load()` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
 | `PresetRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/PresetRepositoryTest.kt` | Robolectric |
 | `BoardViewModel`, incl. home-row mutators, cross-page/preset orphan pruning, record/stop/cancel, and saveAsPreset/applyPreset | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
 | `BoardScreen`, incl. the sticky home row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
+| Landscape grid, row height cap, drag steps, label size/font/caps, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
 
-`./gradlew test` runs the first four; `./gradlew connectedAndroidTest` runs
-the Compose layer against a connected device or emulator.
+`./gradlew test` runs everything except the two `androidTest/` classes;
+`./gradlew connectedAndroidTest` runs those against a connected device or
+emulator. **CI only runs the former**, so run `connectedAndroidTest` on an
+emulator before a release. `LayoutAndLabelTest` rotates the device itself
+(`UiAutomation.setRotation`) and restores portrait afterwards.
 
 - **`FakePlayer`** (a `Player`) exists twice — once under `test/`, once under
-  `androidTest/` — since those source sets don't share code by default. Keep
+  `androidTest/` (`UiTestFakes.kt`) — since those source sets don't share code by default. Keep
   both in sync if `Player`'s contract changes. **`FakeRecorder`** (a
   `Recorder`) follows the same split, though the `androidTest/` copy is a
   bare stub (`BoardScreenTest` doesn't exercise recording — see the known

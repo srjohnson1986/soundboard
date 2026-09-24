@@ -1,10 +1,14 @@
 package com.example.soundboard.ui
 
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -19,9 +23,6 @@ import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.soundboard.BoardViewModel
-import com.example.soundboard.audio.Player
-import com.example.soundboard.audio.Recorder
-import com.example.soundboard.audio.Speaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.PresetRepository
@@ -30,37 +31,12 @@ import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
 import java.io.File
+import kotlin.math.abs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-
-private class FakePlayer : Player {
-    val played = mutableListOf<String>()
-    override fun load(key: String, file: File) {}
-    override fun play(key: String, volume: Float) {
-        played += key
-    }
-    override fun unload(key: String) {}
-    override fun clear() {}
-    override fun release() {}
-}
-
-private class FakeRecorder : Recorder {
-    override fun start(file: File) = true
-    override fun stop() = true
-    override fun cancel() {}
-}
-
-private class FakeSpeaker : Speaker {
-    val spoken = mutableListOf<String>()
-    override fun speak(text: String) {
-        spoken += text
-    }
-    override fun stop() {}
-    override fun shutdown() {}
-}
 
 @RunWith(AndroidJUnit4::class)
 class BoardScreenTest {
@@ -76,6 +52,11 @@ class BoardScreenTest {
     private fun launchWith(board: Board) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         repo = BoardRepository(context)
+        // load() treats a fileName with no file behind it as "needs recording" (see
+        // BoardRepository.sanitizeMissingSounds), so give every referenced sound a file.
+        board.pages.flatMap { it.tiles }.mapNotNull { it.fileName }.forEach { name ->
+            repo.soundFile(name).apply { parentFile?.mkdirs() }.writeText(name)
+        }
         repo.save(board)
         player = FakePlayer()
         speaker = FakeSpeaker()
@@ -117,7 +98,8 @@ class BoardScreenTest {
         )
 
         composeRule.onNodeWithContentDescription("Menu").performClick()
-        composeRule.onNodeWithText("Edit mode").performClick()
+        clickSwitchBeside("Edit mode")
+        composeRule.onNodeWithContentDescription("Menu").performClick()
         composeRule.onNodeWithText("Air horn").performClick()
 
         composeRule.onNodeWithText("Edit tile").assertIsDisplayed()
@@ -128,8 +110,34 @@ class BoardScreenTest {
         assertTrue(player.played.isEmpty())
     }
 
+    /**
+     * Flips the Switch on the same row as [label]. Settings and the menu use a bare Switch
+     * beside a Text, so tapping the label itself doesn't toggle anything.
+     */
+    private fun clickSwitchBeside(label: String) {
+        val labelNode = composeRule.onNodeWithText(label)
+        runCatching { labelNode.performScrollTo() }
+        val labelCenterY = labelNode.fetchSemanticsNode().boundsInRoot.center.y
+        val switches = composeRule.onAllNodes(isToggleable())
+        val index = switches.fetchSemanticsNodes().indexOfFirst { abs(it.boundsInRoot.center.y - labelCenterY) < 40f }
+        switches[index].performClick()
+        composeRule.waitForIdle()
+    }
+
+    /** How many nodes with [text] are actually on screen — the pager keeps neighboring pages composed off-screen too. */
+    private fun displayedCount(text: String): Int {
+        val nodes = composeRule.onAllNodesWithText(text)
+        return nodes.fetchSemanticsNodes().indices.count { nodes[it].isDisplayed() }
+    }
+
+    /** The one on-screen node with [text], ignoring copies on neighboring pages composed off-screen. */
+    private fun displayedNode(text: String): SemanticsNodeInteraction {
+        val nodes = composeRule.onAllNodesWithText(text)
+        return nodes[nodes.fetchSemanticsNodes().indices.single { nodes[it].isDisplayed() }]
+    }
+
     @Test
-    fun saveAsPresetRenamesBoardAndUpdatesTitle() {
+    fun saveAsPresetRenamesTheBoard() {
         launchWith(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))))
 
         composeRule.onNodeWithContentDescription("Menu").performClick()
@@ -140,8 +148,8 @@ class BoardScreenTest {
         composeRule.onNode(hasSetTextAction() and hasText("New Board")).performTextReplacement("Family Board")
         composeRule.onNodeWithText("Save").performClick()
 
-        composeRule.onNodeWithText("Family Board").assertIsDisplayed()
-        assertEquals("Family Board", vm.board.value.name)
+        // The title bar reads "Soundboard" now, not the board's name.
+        composeRule.waitUntil(timeoutMillis = 2_000) { vm.board.value.name == "Family Board" }
     }
 
     @Test
@@ -163,7 +171,8 @@ class BoardScreenTest {
                     Page(
                         rows = 2,
                         columns = 2,
-                        tiles = (0 until 4).map { Tile(id = "t$it", label = "S$it", fileName = "$it.mp3") }
+                        // One blank tile keeps the last row from being full, which would auto-grow a row.
+                        tiles = (0 until 3).map { Tile(id = "t$it", label = "S$it", fileName = "$it.mp3") } + Tile(id = "t3")
                     )
                 )
             )
@@ -173,14 +182,14 @@ class BoardScreenTest {
         // page's own tab — hold past the long-press timeout via the test clock, the same
         // way idleTimeoutReturnsToTheHomePageAfterInactivity drives a real delay()-based wait.
         longPressPageTab("Page 1")
-        composeRule.onNodeWithText("Grid size (portrait) (2x2)").performClick()
+        composeRule.onNodeWithText("Grid size (2x2", substring = true).performClick()
         composeRule.onNodeWithContentDescription("Increase Columns").performClick()
         composeRule.onNodeWithText("Apply").performClick()
-        composeRule.onNodeWithText("Page 1").performTouchInput { up() }
+        pageTab("Page 1").performTouchInput { up() }
 
         longPressPageTab("Page 1")
-        composeRule.onNodeWithText("Grid size (portrait) (2x3)").assertIsDisplayed()
-        composeRule.onNodeWithText("Page 1").performTouchInput { up() }
+        composeRule.onNodeWithText("Grid size (2x3", substring = true).assertIsDisplayed()
+        pageTab("Page 1").performTouchInput { up() }
     }
 
     @Test
@@ -198,12 +207,15 @@ class BoardScreenTest {
         // "Feelings" itself is ambiguous here — it's both the tab label behind the
         // dialog and the dialog's own title — so assert on content unique to the dialog.
         composeRule.onNodeWithText("Rename").assertIsDisplayed()
-        composeRule.onNodeWithText("Grid size (portrait) (1x1)").assertIsDisplayed()
+        composeRule.onNodeWithText("Grid size (1x1", substring = true).assertIsDisplayed()
     }
+
+    /** A page's tab — its name alone also matches the page options dialog's title once that's open. */
+    private fun pageTab(pageName: String) = composeRule.onNode(hasText(pageName) and hasClickAction())
 
     /** Holds a page tab down past the long-press timeout to open its PageOptionsDialog, without releasing it. */
     private fun longPressPageTab(pageName: String) {
-        composeRule.onNodeWithText(pageName).performTouchInput { down(center) }
+        pageTab(pageName).performTouchInput { down(center) }
         composeRule.mainClock.autoAdvance = false
         composeRule.mainClock.advanceTimeBy(600)
         composeRule.mainClock.autoAdvance = true
@@ -246,7 +258,7 @@ class BoardScreenTest {
 
         composeRule.waitForIdle()
 
-        assertEquals(listOf("B", "A", "C"), vm.board.value.currentPage.tiles.map { it.label })
+        assertEquals(listOf("B", "A", "C"), vm.board.value.currentPage.visibleTiles.map { it.label }.filter { it.isNotEmpty() })
     }
 
     @Test
@@ -277,7 +289,7 @@ class BoardScreenTest {
         composeRule.waitForIdle()
 
         composeRule.waitUntil(timeoutMillis = 2_000) { player.played.contains("a.mp3") }
-        assertEquals(listOf("A", "B"), vm.board.value.currentPage.tiles.map { it.label })
+        assertEquals(listOf("A", "B"), vm.board.value.currentPage.visibleTiles.map { it.label }.filter { it.isNotEmpty() })
     }
 
     @Test
@@ -286,7 +298,8 @@ class BoardScreenTest {
             Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Air horn", fileName = "a.mp3")))))
         )
         composeRule.onNodeWithContentDescription("Menu").performClick()
-        composeRule.onNodeWithText("Edit mode").performClick()
+        clickSwitchBeside("Edit mode")
+        composeRule.onNodeWithContentDescription("Menu").performClick()
 
         composeRule.onNodeWithText("Air horn").performTouchInput {
             down(center)
@@ -310,7 +323,7 @@ class BoardScreenTest {
             )
         )
 
-        composeRule.onNodeWithText("Hey").performTouchInput {
+        displayedNode("Hey").performTouchInput {
             down(center)
             advanceEventTime(600)
             up()
@@ -364,25 +377,27 @@ class BoardScreenTest {
             )
         )
 
-        composeRule.onNodeWithText("Hey").assertDoesNotExist()
+        assertEquals(0, displayedCount("Hey"))
 
         composeRule.onNodeWithContentDescription("Menu").performClick()
         composeRule.onNodeWithText("Settings").performClick()
-        composeRule.onNodeWithText("Sticky home row").performClick()
+        clickSwitchBeside("Sticky home row")
         composeRule.onNodeWithText("Done").performClick()
 
-        composeRule.onNodeWithText("Hey").assertIsDisplayed()
+        assertEquals(1, displayedCount("Hey"))
         composeRule.onNodeWithText("Alpha").assertIsDisplayed()
 
         composeRule.onNodeWithText("Second").performClick()
+        composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("Hey").assertIsDisplayed()
+        assertEquals(1, displayedCount("Hey"))
         composeRule.onNodeWithText("Beta").assertIsDisplayed()
 
         composeRule.onNodeWithText("Home").performClick()
+        composeRule.waitForIdle()
 
         // Shown once, as ordinary page content — not duplicated by the sticky banner.
-        composeRule.onAllNodesWithText("Hey").assertCountEquals(1)
+        assertEquals(1, displayedCount("Hey"))
     }
 
     @Test
@@ -396,7 +411,7 @@ class BoardScreenTest {
         )
 
         repeat(6) {
-            composeRule.onRoot().performTouchInput { swipeUp() }
+            composeRule.onRoot().performTouchInput { swipeUp(startY = bottom * 0.75f, endY = bottom * 0.3f) }
             composeRule.waitForIdle()
         }
 
@@ -418,7 +433,7 @@ class BoardScreenTest {
         )
 
         repeat(6) {
-            composeRule.onRoot().performTouchInput { swipeUp() }
+            composeRule.onRoot().performTouchInput { swipeUp(startY = bottom * 0.75f, endY = bottom * 0.3f) }
             composeRule.waitForIdle()
         }
 

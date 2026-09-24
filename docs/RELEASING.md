@@ -47,16 +47,19 @@ never `assembleRelease`, so it doesn't need this file at all).
 
 ## Every release
 
-1. Bump `versionName` (and `versionCode`) in `app/build.gradle.kts`, through
+1. Read through `docs/USER_GUIDE.md` with the new build in hand and fix
+   anything that no longer matches the app (menu names, where a setting
+   lives, new features). Land any fixes before tagging, like any other change.
+2. Bump `versionName` (and `versionCode`) in `app/build.gradle.kts`, through
    the usual issue/branch/PR flow. The in-app version label (`APP_VERSION` in
    `ui/BoardTopBar.kt`) and its release-notes link read `versionName` via
    `BuildConfig`, so there's nothing else to keep in sync.
-2. Once that's merged, tag the merge commit and push the tag:
+3. Once that's merged, tag the merge commit and push the tag:
    ```bash
    git tag -a vX.Y.Z <commit> -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
-3. Build the signed APK and give it its release name:
+4. Build the signed APK and give it its release name:
    ```bash
    ./gradlew assembleRelease
    cp app/build/outputs/apk/release/app-release.apk soundboard.apk
@@ -67,9 +70,19 @@ never `assembleRelease`, so it doesn't need this file at all).
    release, which is handy to bookmark on the devices that sideload it:
    `https://github.com/srjohnson1986/soundboard/releases/latest/download/soundboard.apk`.
    (`soundboard.apk` at the repo root is gitignored.)
-4. Publish the release and attach the APK:
+5. Publish the release and attach the APK:
    ```bash
    gh release create vX.Y.Z --title vX.Y.Z --generate-notes soundboard.apk
    ```
    (Or `gh release upload vX.Y.Z soundboard.apk` if the release already
    exists without it.)
+6. Sync the wiki, which mirrors `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`
+   and this file for people who browse the wiki instead of the repo:
+   ```bash
+   scripts/sync-wiki.sh
+   ```
+   It copies those files to the wiki's User-Guide, Architecture and Releasing
+   pages, pointing their `../` repo links at GitHub, and only pushes if
+   something changed (`--dry-run` shows the diff without pushing). Edit the
+   docs here, never the wiki pages directly; the next sync overwrites them.
+   The wiki's Home page is the one page kept by hand.

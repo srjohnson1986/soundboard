@@ -56,15 +56,20 @@ never `assembleRelease`, so it doesn't need this file at all).
    git tag -a vX.Y.Z <commit> -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
-3. Build the signed APK:
+3. Build the signed APK and give it its release name:
    ```bash
    ./gradlew assembleRelease
+   cp app/build/outputs/apk/release/app-release.apk soundboard.apk
    ```
-   The output lands at `app/build/outputs/apk/release/app-release.apk`.
+   Gradle always names its output `app-release.apk`; every release publishes it
+   as `soundboard.apk` instead. That name is easy to recognize in a phone's
+   Downloads, and because it never changes, this link always serves the newest
+   release, which is handy to bookmark on the devices that sideload it:
+   `https://github.com/srjohnson1986/soundboard/releases/latest/download/soundboard.apk`.
+   (`soundboard.apk` at the repo root is gitignored.)
 4. Publish the release and attach the APK:
    ```bash
-   gh release create vX.Y.Z --title vX.Y.Z --generate-notes \
-     app/build/outputs/apk/release/app-release.apk
+   gh release create vX.Y.Z --title vX.Y.Z --generate-notes soundboard.apk
    ```
-   (Or `gh release upload vX.Y.Z app-release.apk` if the release already
+   (Or `gh release upload vX.Y.Z soundboard.apk` if the release already
    exists without it.)

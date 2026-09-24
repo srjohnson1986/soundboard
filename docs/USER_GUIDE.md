@@ -152,6 +152,10 @@ home page, so editing one of those tiles from any page updates the real
 tile, not a separate copy. It's hidden while you're actually on the home
 page, since that row is already right there.
 
+It's the same tiles in portrait and landscape. In landscape they stretch
+across the wider screen, and the rest of the home page continues below them
+in the landscape grid.
+
 Turning it on or off never deletes anything — pages just show (or stop
 showing) that row above their own content.
 

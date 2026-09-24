@@ -113,4 +113,27 @@ class GridLayoutTest {
         assertEquals(0f, portraitRowHeightPx(portraitGridWidthPx = 0f, columns = 4, aspectRatio = 1f, spacingPx = 8f), 0f)
         assertEquals(0f, portraitRowHeightPx(portraitGridWidthPx = 400f, columns = 0, aspectRatio = 1f, spacingPx = 8f), 0f)
     }
+
+    @Test
+    fun `in a plain grid a drag moves by whole rows and columns`() {
+        assertEquals(9, dragTargetIndex(index = 0, rowDelta = 2, colDelta = 1, columns = 4, pinnedCount = 0, lastIndex = 15))
+        assertEquals(0, dragTargetIndex(index = 5, rowDelta = -3, colDelta = -1, columns = 4, pinnedCount = 0, lastIndex = 15))
+        assertEquals(15, dragTargetIndex(index = 14, rowDelta = 5, colDelta = 0, columns = 4, pinnedCount = 0, lastIndex = 15))
+    }
+
+    @Test
+    fun `a pinned row as wide as the grid behaves like a plain grid`() {
+        assertEquals(6, dragTargetIndex(index = 2, rowDelta = 1, colDelta = 0, columns = 4, pinnedCount = 4, lastIndex = 15))
+    }
+
+    @Test
+    fun `dragging straight down from a wide pinned tile lands under it in the landscape grid`() {
+        // 4 pinned tiles over rows of 8: pinned tile 1 spans the 2nd quarter of the width,
+        // which sits over grid columns 2 and 3 of the first grid row (indices 6 and 7).
+        assertEquals(7, dragTargetIndex(index = 1, rowDelta = 1, colDelta = 0, columns = 8, pinnedCount = 4, lastIndex = 27))
+        // And back up again.
+        assertEquals(1, dragTargetIndex(index = 7, rowDelta = -1, colDelta = 0, columns = 8, pinnedCount = 4, lastIndex = 27))
+        // Two rows down skips the first grid row.
+        assertEquals(15, dragTargetIndex(index = 1, rowDelta = 2, colDelta = 0, columns = 8, pinnedCount = 4, lastIndex = 27))
+    }
 }

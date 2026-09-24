@@ -180,7 +180,7 @@ class LayoutAndLabelTest {
     }
 
     @Test
-    fun landscapeStickyRowShowsTheHomePagesFirstLandscapeRowAtTheSameHeight() {
+    fun landscapeStickyRowKeepsTheSameTilesAsPortraitAtTheSameHeight() {
         rotate(landscape = true)
         // Home sits two pages away, so the pager doesn't compose its own grid off-screen.
         launchWith(
@@ -194,9 +194,71 @@ class LayoutAndLabelTest {
             )
         )
 
-        (0 until 8).forEach { assertEquals("H$it", 1, displayedCount("H$it")) }
-        assertEquals(0, displayedCount("H8"))
+        // The home page's first portrait row (4 tiles), not its 8-wide landscape row.
+        (0 until 4).forEach { assertEquals("H$it", 1, displayedCount("H$it")) }
+        assertEquals(0, displayedCount("H4"))
         assertClose(tileBounds("O0").height, tileBounds("H0").height, what = "sticky row height")
+        assertClose(tileBounds("H0").top, tileBounds("H3").top, what = "one row")
+    }
+
+    @Test
+    fun theHomePagePinsTheSameFirstRowInLandscapeAndContinuesBelowIt() {
+        rotate(landscape = true)
+        launchWith(
+            Board(
+                pages = listOf(labeledPage("H", rows = 4, columns = 4, name = "Home", isHome = true)),
+                stickyHomeRowEnabled = true
+            )
+        )
+
+        // Pinned: H0..H3 on one row. The 8-wide grid starts at H4 on the next row.
+        assertClose(tileBounds("H0").top, tileBounds("H3").top, what = "pinned row")
+        assertTrue(tileBounds("H4").top > tileBounds("H0").bottom)
+        assertClose(tileBounds("H4").top, tileBounds("H11").top, what = "first grid row")
+        assertClose(tileBounds("H0").left, tileBounds("H4").left, what = "grid starts at the left")
+    }
+
+    @Test
+    fun draggingAWidePinnedTileStraightDownLandsUnderItInTheLandscapeGrid() {
+        rotate(landscape = true)
+        launchWith(
+            Board(
+                pages = listOf(labeledPage("H", rows = 4, columns = 4, name = "Home", isHome = true)),
+                stickyHomeRowEnabled = true
+            )
+        )
+
+        // H1 is the second of 4 wide pinned tiles, over grid columns 2-3 of the 8 below.
+        val down = tileBounds("H4").top - tileBounds("H0").top
+        displayed("H1").performTouchInput {
+            down(center)
+            advanceEventTime(600)
+            moveBy(Offset(0f, down))
+            up()
+        }
+        composeRule.waitForIdle()
+
+        assertEquals("H1", vm.board.value.currentPage.tiles[7].label)
+    }
+
+    @Test
+    fun fitToScreenAlsoKeepsTheSameStickyTiles() {
+        rotate(landscape = true)
+        launchWith(
+            Board(
+                pages = listOf(
+                    labeledPage("O", rows = 4, columns = 4, name = "Other"),
+                    labeledPage("M", rows = 1, columns = 1, name = "Middle"),
+                    labeledPage("H", rows = 4, columns = 4, name = "Home", isHome = true)
+                ),
+                stickyHomeRowEnabled = true,
+                landscapeLayout = LandscapeLayout.FIT_TO_SCREEN
+            )
+        )
+
+        (0 until 4).forEach { assertEquals("H$it", 1, displayedCount("H$it")) }
+        assertEquals(0, displayedCount("H4"))
+        assertClose(portraitRowHeightPx(columns = 4), tileBounds("H0").height, what = "sticky row height")
     }
 
     @Test

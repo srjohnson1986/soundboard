@@ -249,6 +249,8 @@ class BoardViewModel(
 
     override fun setShowModeMuteSounds(value: Boolean) = updateShowMode { it.copy(muteSounds = value) }
 
+    override fun setShowModeFlipped(value: Boolean) = updateShowMode { it.copy(flipped = value) }
+
     private fun updateShowMode(transform: (ShowModeSettings) -> ShowModeSettings) {
         val updated = transform(_showMode.value)
         if (updated == _showMode.value) return

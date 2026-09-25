@@ -879,10 +879,11 @@ class BoardViewModelTest {
         vm.setShowModeEnabled(true)
         vm.setShowModeTimerSeconds(30)
         vm.setShowModeMuteSounds(true)
+        vm.setShowModeFlipped(true)
 
         vm.openBoard(BoardRef.Saved(savedBoardRepo.save(Board(name = "Other"))))
 
-        val expected = ShowModeSettings(enabled = true, timerSeconds = 30, tapToClose = true, muteSounds = true)
+        val expected = ShowModeSettings(enabled = true, timerSeconds = 30, tapToClose = true, muteSounds = true, flipped = true)
         assertEquals(expected, vm.showMode.value)
         assertEquals(expected, newViewModel().showMode.value)
     }

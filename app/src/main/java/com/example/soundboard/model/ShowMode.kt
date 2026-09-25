@@ -15,7 +15,9 @@ data class ShowModeSettings(
     val timerSeconds: Int = DEFAULT_TIMER_SECONDS,
     val tapToClose: Boolean = true,
     /** Skips the tile's sound or speech while showing its text. */
-    val muteSounds: Boolean = false
+    val muteSounds: Boolean = false,
+    /** Draws the text upside down, for someone sitting across from the device to read. */
+    val flipped: Boolean = false
 ) {
     val hasTimer: Boolean get() = timerSeconds > 0
 

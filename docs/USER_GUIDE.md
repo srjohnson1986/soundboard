@@ -121,6 +121,8 @@ Closing the text puts you back exactly where you were.
 - **Mute sounds while showing:** shows the words without playing the tile's
   recording or speech. With this off, the sound plays too and finishes even if
   the text is closed early.
+- **Flip text upside down:** turns the text around for someone sitting across
+  from the screen to read.
 
 The timer and tap to close can't both be off, so the text can always be
 closed. The **Back** button always closes it too.
@@ -234,8 +236,8 @@ to return to the list or **Done** to close Settings.
   - Keep the screen from turning off while the board is open
   - Performance mode: turns off shadows, tap ripples and similar effects
     (and tile see-through and borders) to help older devices stay smooth
-- **Show mode:** on or off, and how the text closes and whether sounds play
-  (see "Show mode").
+- **Show mode:** on or off, how the text closes, whether sounds play, and
+  whether the text is upside down (see "Show mode").
 
 Everything except Performance mode and Show mode is saved with the board, so
 switching boards switches these too. Those two belong to the device.

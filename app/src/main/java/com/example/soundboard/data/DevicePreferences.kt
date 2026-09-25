@@ -32,7 +32,8 @@ class DevicePreferences(context: Context) {
                 enabled = prefs.getBoolean(KEY_SHOW_MODE_ENABLED, defaults.enabled),
                 timerSeconds = timerSeconds,
                 tapToClose = prefs.getBoolean(KEY_SHOW_MODE_TAP_TO_CLOSE, defaults.tapToClose) || timerSeconds == 0,
-                muteSounds = prefs.getBoolean(KEY_SHOW_MODE_MUTE_SOUNDS, defaults.muteSounds)
+                muteSounds = prefs.getBoolean(KEY_SHOW_MODE_MUTE_SOUNDS, defaults.muteSounds),
+                flipped = prefs.getBoolean(KEY_SHOW_MODE_FLIPPED, defaults.flipped)
             )
         }
         set(value) = prefs.edit()
@@ -40,6 +41,7 @@ class DevicePreferences(context: Context) {
             .putInt(KEY_SHOW_MODE_TIMER_SECONDS, value.timerSeconds)
             .putBoolean(KEY_SHOW_MODE_TAP_TO_CLOSE, value.tapToClose)
             .putBoolean(KEY_SHOW_MODE_MUTE_SOUNDS, value.muteSounds)
+            .putBoolean(KEY_SHOW_MODE_FLIPPED, value.flipped)
             .apply()
 
     private companion object {
@@ -49,5 +51,6 @@ class DevicePreferences(context: Context) {
         const val KEY_SHOW_MODE_TIMER_SECONDS = "show_mode_timer_seconds"
         const val KEY_SHOW_MODE_TAP_TO_CLOSE = "show_mode_tap_to_close"
         const val KEY_SHOW_MODE_MUTE_SOUNDS = "show_mode_mute_sounds"
+        const val KEY_SHOW_MODE_FLIPPED = "show_mode_flipped"
     }
 }

@@ -35,16 +35,16 @@ class DevicePreferencesTest {
     }
 
     @Test
-    fun `showMode defaults to off with a 10 second timer, tap to close, and sounds on`() {
+    fun `showMode defaults to off with a 10 second timer, tap to close, sounds on, and not flipped`() {
         assertEquals(
-            ShowModeSettings(enabled = false, timerSeconds = 10, tapToClose = true, muteSounds = false),
+            ShowModeSettings(enabled = false, timerSeconds = 10, tapToClose = true, muteSounds = false, flipped = false),
             DevicePreferences(context).showMode
         )
     }
 
     @Test
     fun `showMode round-trips and persists across a fresh instance`() {
-        val settings = ShowModeSettings(enabled = true, timerSeconds = 3, tapToClose = false, muteSounds = true)
+        val settings = ShowModeSettings(enabled = true, timerSeconds = 3, tapToClose = false, muteSounds = true, flipped = true)
 
         DevicePreferences(context).showMode = settings
 

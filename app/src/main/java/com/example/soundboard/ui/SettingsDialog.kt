@@ -233,7 +233,8 @@ private fun settingsSummary(
                 if (showMode.hasTimer) "after ${showMode.timerSeconds} s" else null,
                 if (showMode.tapToClose) "on tap" else null
             ).joinToString(" or ")
-            "On · closes $closes · sounds ${if (showMode.muteSounds) "muted" else "on"}"
+            "On · closes $closes · sounds ${if (showMode.muteSounds) "muted" else "on"}" +
+                if (showMode.flipped) " · upside down" else ""
         }
 }
 
@@ -523,6 +524,13 @@ private fun ShowModeSettingsControls(showMode: ShowModeSettings, actions: BoardS
         checked = showMode.muteSounds,
         onCheckedChange = actions::setShowModeMuteSounds,
         supportingText = "Shows the words without playing the tile's recording or speech."
+    )
+    SectionDivider()
+    SwitchRow(
+        label = "Flip text upside down",
+        checked = showMode.flipped,
+        onCheckedChange = actions::setShowModeFlipped,
+        supportingText = "For someone sitting across from the screen to read."
     )
     HelperText("The Back button always closes the text, whatever these are set to.")
 }

@@ -212,7 +212,7 @@ lives in ordinary `SharedPreferences` (`DevicePreferences`, a small
 silently turn it back off. `BoardViewModel` reads it once at construction
 into its own `performanceModeEnabled: StateFlow<Boolean>`, separate from
 `board`. Show mode (`ShowModeSettings`: on/off, display timer, tap to close,
-mute) is there for the same reason — it's about where the board is being used —
+mute, flip upside down) is there for the same reason — it's about where the board is being used —
 and is exposed the same way as `showMode: StateFlow<ShowModeSettings>`.
 `ShowModeSettings.withTimerSeconds`/`withTapToClose` refuse a change that
 would leave neither a timer nor tap to close, and `DevicePreferences` repairs

@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -38,7 +39,8 @@ internal const val SHOW_TEXT_OVERLAY_TAG = "show_text_overlay"
 
 /**
  * Show mode's text screen: [text] as large as it fits without splitting a word, white on
- * black whatever the theme, in the board's label font. Drawn over the whole board (top bar
+ * black whatever the theme, in the board's label font (upside down if
+ * [ShowModeSettings.flipped]). Drawn over the whole board (top bar
  * included) and swallowing every touch, so nothing underneath can be tapped by accident. Closes via [onDismiss] when
  * the timer runs out, on a tap if [ShowModeSettings.tapToClose], and always on Back.
  */
@@ -84,7 +86,13 @@ internal fun ShowTextOverlay(
         }
         // Only a script too long to fit even at the smallest size needs this; taps still
         // reach the tap-to-close handler, since scrolling only claims drags.
-        BasicText(text = text, style = style, modifier = Modifier.verticalScroll(rememberScrollState()))
+        BasicText(
+            text = text,
+            style = style,
+            modifier = Modifier
+                .rotate(if (showMode.flipped) 180f else 0f)
+                .verticalScroll(rememberScrollState())
+        )
     }
 }
 

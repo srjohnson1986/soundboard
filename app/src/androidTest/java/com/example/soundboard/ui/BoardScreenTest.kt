@@ -569,8 +569,14 @@ class BoardScreenTest {
 
         composeRule.onNodeWithTag(SHOW_TEXT_OVERLAY_TAG).assertIsDisplayed()
         assertTrue(player.played.isEmpty())
-        composeRule.waitUntil(timeoutMillis = 6_000) {
-            composeRule.onAllNodes(hasTestTag(SHOW_TEXT_OVERLAY_TAG)).fetchSemanticsNodes().isEmpty()
-        }
+
+        // The timer's delay() runs on Compose's test clock, which only moves on its own
+        // while something else is animating — drive it explicitly, like the idle-timer test.
+        composeRule.mainClock.autoAdvance = false
+        composeRule.mainClock.advanceTimeBy(3_500L)
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitForIdle()
+
+        assertEquals(0, composeRule.onAllNodes(hasTestTag(SHOW_TEXT_OVERLAY_TAG)).fetchSemanticsNodes().size)
     }
 }

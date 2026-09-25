@@ -35,4 +35,5 @@ interface BoardSettingsActions {
     fun setShowModeTimerSeconds(value: Int)
     fun setShowModeTapToClose(value: Boolean)
     fun setShowModeMuteSounds(value: Boolean)
+    fun setShowModeFlipped(value: Boolean)
 }

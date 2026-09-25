@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +48,7 @@ import com.example.soundboard.model.LabelFont
 import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.RowHeight
+import com.example.soundboard.model.ShowModeSettings
 import com.example.soundboard.model.ThemeMode
 import kotlin.math.roundToInt
 
@@ -184,11 +186,17 @@ internal enum class SettingsGroup(val title: String, val icon: ImageVector) {
     TILE_LABELS("Tile labels", Icons.Filled.TextFields),
     GRID_LAYOUT("Grid layout", Icons.Filled.GridView),
     TAPPING_AND_SPEECH("Tapping & speech", Icons.Filled.TouchApp),
-    SCREEN("Screen", Icons.Filled.Smartphone)
+    SCREEN("Screen", Icons.Filled.Smartphone),
+    SHOW_MODE("Show mode", Icons.Filled.Visibility)
 }
 
 /** A one-line summary of [group]'s current values, shown under its name in the Settings list. */
-private fun settingsSummary(group: SettingsGroup, board: Board, performanceModeEnabled: Boolean): String = when (group) {
+private fun settingsSummary(
+    group: SettingsGroup,
+    board: Board,
+    performanceModeEnabled: Boolean,
+    showMode: ShowModeSettings
+): String = when (group) {
     SettingsGroup.HOME_PAGE ->
         if (board.homePageIndex == null) {
             "No home page set"
@@ -217,6 +225,16 @@ private fun settingsSummary(group: SettingsGroup, board: Board, performanceModeE
         "Long-press: ${longPressDurationLabel(board.longPressDurationMillis).lowercase()} · haptics ${onOff(board.hapticFeedbackEnabled)}"
     SettingsGroup.SCREEN ->
         "${if (board.keepScreenAwake) "Stays awake" else "Can sleep"} · performance mode ${onOff(performanceModeEnabled)}"
+    SettingsGroup.SHOW_MODE ->
+        if (!showMode.enabled) {
+            "Off"
+        } else {
+            val closes = listOfNotNull(
+                if (showMode.hasTimer) "after ${showMode.timerSeconds} s" else null,
+                if (showMode.tapToClose) "on tap" else null
+            ).joinToString(" or ")
+            "On · closes $closes · sounds ${if (showMode.muteSounds) "muted" else "on"}"
+        }
 }
 
 private fun onOff(value: Boolean) = if (value) "on" else "off"
@@ -235,13 +253,14 @@ private fun landscapeLayoutLabel(layout: LandscapeLayout) = when (layout) {
 /**
  * Settings' top level: one row per [SettingsGroup] with a summary of its current values.
  * Picking one hands it to [onOpenGroup]. Everything in Settings except Performance mode
- * lives on the board itself, so it travels with the board when it's saved or opened;
- * Performance mode is per-device (see [com.example.soundboard.data.DevicePreferences]).
+ * and Show mode lives on the board itself, so it travels with the board when it's saved or
+ * opened; those two are per-device (see [com.example.soundboard.data.DevicePreferences]).
  */
 @Composable
 internal fun SettingsDialog(
     board: Board,
     performanceModeEnabled: Boolean,
+    showMode: ShowModeSettings,
     onOpenGroup: (SettingsGroup) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -255,7 +274,7 @@ internal fun SettingsDialog(
                         text = {
                             Column(modifier = Modifier.padding(vertical = 4.dp)) {
                                 Text(group.title)
-                                HelperText(settingsSummary(group, board, performanceModeEnabled))
+                                HelperText(settingsSummary(group, board, performanceModeEnabled, showMode))
                             }
                         },
                         leadingIcon = { Icon(group.icon, contentDescription = null) },
@@ -277,6 +296,7 @@ internal fun SettingsGroupDialog(
     group: SettingsGroup,
     board: Board,
     performanceModeEnabled: Boolean,
+    showMode: ShowModeSettings,
     actions: BoardSettingsActions,
     onPickBackgroundImage: () -> Unit,
     onBack: () -> Unit,
@@ -297,6 +317,7 @@ internal fun SettingsGroupDialog(
                     SettingsGroup.GRID_LAYOUT -> GridLayoutSettings(board, actions)
                     SettingsGroup.TAPPING_AND_SPEECH -> TappingAndSpeechSettings(board, actions)
                     SettingsGroup.SCREEN -> ScreenSettings(board, performanceModeEnabled, actions)
+                    SettingsGroup.SHOW_MODE -> ShowModeSettingsControls(showMode, actions)
                 }
             }
         },
@@ -461,4 +482,47 @@ private fun ScreenSettings(board: Board, performanceModeEnabled: Boolean, action
         supportingText = "Turns off tile shadows, tap ripples, and the drag-reorder scale " +
             "effect to help the board stay smooth on older devices. Applies to this device only."
     )
+}
+
+private fun showModeTimerLabel(seconds: Int) = if (seconds == 0) "Off" else "$seconds seconds"
+
+@Composable
+private fun ShowModeSettingsControls(showMode: ShowModeSettings, actions: BoardSettingsActions) {
+    SwitchRow(
+        label = "Show mode",
+        checked = showMode.enabled,
+        onCheckedChange = actions::setShowModeEnabled,
+        supportingText = "Tapping a tile also shows its words in large white text on a black " +
+            "screen — its script if it has one, otherwise its name. Also in the menu. " +
+            "Applies to this device only."
+    )
+    SectionDivider()
+    OptionDropdown(
+        label = "Close the text after",
+        selected = showMode.timerSeconds,
+        // "Off" is only offered while tap to close is on, so there's always a way out.
+        options = ShowModeSettings.TIMER_OPTIONS_SECONDS.filter { it > 0 || showMode.tapToClose },
+        optionLabel = ::showModeTimerLabel,
+        onSelect = actions::setShowModeTimerSeconds
+    )
+    SectionDivider()
+    SwitchRow(
+        label = "Tap to close",
+        checked = showMode.tapToClose,
+        onCheckedChange = actions::setShowModeTapToClose,
+        enabled = showMode.hasTimer,
+        supportingText = if (showMode.hasTimer) {
+            "Tapping anywhere on the text closes it early."
+        } else {
+            "Stays on while the timer is off, so the text can always be closed."
+        }
+    )
+    SectionDivider()
+    SwitchRow(
+        label = "Mute sounds while showing",
+        checked = showMode.muteSounds,
+        onCheckedChange = actions::setShowModeMuteSounds,
+        supportingText = "Shows the words without playing the tile's recording or speech."
+    )
+    HelperText("The Back button always closes the text, whatever these are set to.")
 }

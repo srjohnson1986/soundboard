@@ -5,6 +5,7 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.performScrollTo
@@ -12,6 +13,7 @@ import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -32,6 +34,7 @@ import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.RecentBoardsRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
+import com.example.soundboard.model.ShowModeSettings
 import com.example.soundboard.model.Tile
 import java.io.File
 import kotlin.math.abs
@@ -63,6 +66,8 @@ class BoardScreenTest {
         repo.save(board)
         player = FakePlayer()
         speaker = FakeSpeaker()
+        // Show mode lives in device prefs, which outlive each test — start every test with it off.
+        DevicePreferences(context).showMode = ShowModeSettings()
         vm = BoardViewModel(repo, player, FakeRecorder(), SavedBoardRepository(context), speaker, DevicePreferences(context), RecentBoardsRepository(context))
 
         composeRule.setContent {
@@ -516,5 +521,56 @@ class BoardScreenTest {
         composeRule.waitForIdle()
 
         assertEquals(0, vm.board.value.currentPageIndex)
+    }
+
+    @Test
+    fun showModeToggleFromMenuShowsTheScriptAndTapCloses() {
+        launchWith(
+            Board(
+                pages = listOf(
+                    Page(
+                        rows = 1,
+                        columns = 1,
+                        tiles = listOf(Tile(id = "a", label = "Water", ttsScript = "Some water please", fileName = "a.mp3"))
+                    )
+                )
+            )
+        )
+
+        composeRule.onNodeWithContentDescription("Menu").performClick()
+        clickSwitchBeside("Show mode")
+        composeRule.onNodeWithContentDescription("Menu").performClick()
+        composeRule.onNodeWithText("Water").performClick()
+
+        composeRule.onNodeWithText("Some water please").assertIsDisplayed()
+        composeRule.waitUntil(timeoutMillis = 2_000) { player.playedKeys == listOf("a.mp3") }
+
+        composeRule.onNodeWithTag(SHOW_TEXT_OVERLAY_TAG).performClick()
+
+        assertEquals(0, composeRule.onAllNodesWithText("Some water please").fetchSemanticsNodes().size)
+        // The closing tap landed on the text screen, not the tile underneath it.
+        assertEquals(listOf("a.mp3"), player.playedKeys)
+    }
+
+    @Test
+    fun showModeWithoutTapToCloseIgnoresTapsAndClosesOnTheTimer() {
+        launchWith(
+            Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Water", fileName = "a.mp3")))))
+        )
+        composeRule.runOnIdle {
+            vm.setShowModeEnabled(true)
+            vm.setShowModeMuteSounds(true)
+            vm.setShowModeTimerSeconds(3)
+            vm.setShowModeTapToClose(false)
+        }
+
+        composeRule.onNodeWithText("Water").performClick()
+        composeRule.onNodeWithTag(SHOW_TEXT_OVERLAY_TAG).performClick()
+
+        composeRule.onNodeWithTag(SHOW_TEXT_OVERLAY_TAG).assertIsDisplayed()
+        assertTrue(player.played.isEmpty())
+        composeRule.waitUntil(timeoutMillis = 6_000) {
+            composeRule.onAllNodes(hasTestTag(SHOW_TEXT_OVERLAY_TAG)).fetchSemanticsNodes().isEmpty()
+        }
     }
 }

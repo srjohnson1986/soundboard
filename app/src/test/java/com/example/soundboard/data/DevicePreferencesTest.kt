@@ -1,6 +1,8 @@
 package com.example.soundboard.data
 
 import androidx.test.core.app.ApplicationProvider
+import com.example.soundboard.model.ShowModeSettings
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -30,5 +32,29 @@ class DevicePreferencesTest {
         DevicePreferences(context).performanceModeEnabled = true
 
         assertTrue(DevicePreferences(context).performanceModeEnabled)
+    }
+
+    @Test
+    fun `showMode defaults to off with a 10 second timer, tap to close, and sounds on`() {
+        assertEquals(
+            ShowModeSettings(enabled = false, timerSeconds = 10, tapToClose = true, muteSounds = false),
+            DevicePreferences(context).showMode
+        )
+    }
+
+    @Test
+    fun `showMode round-trips and persists across a fresh instance`() {
+        val settings = ShowModeSettings(enabled = true, timerSeconds = 3, tapToClose = false, muteSounds = true)
+
+        DevicePreferences(context).showMode = settings
+
+        assertEquals(settings, DevicePreferences(context).showMode)
+    }
+
+    @Test
+    fun `a stored showMode with no way to close reads back with tap to close on`() {
+        DevicePreferences(context).showMode = ShowModeSettings(enabled = true, timerSeconds = 0, tapToClose = false)
+
+        assertTrue(DevicePreferences(context).showMode.tapToClose)
     }
 }

@@ -22,6 +22,7 @@ import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.RowHeight
+import com.example.soundboard.model.ShowModeSettings
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
@@ -57,6 +58,14 @@ class BoardViewModel(
     /** Device-local, not part of [Board] — see [DevicePreferences]. */
     private val _performanceModeEnabled = MutableStateFlow(devicePrefs.performanceModeEnabled)
     val performanceModeEnabled: StateFlow<Boolean> = _performanceModeEnabled.asStateFlow()
+
+    /** Device-local, not part of [Board] — see [DevicePreferences]. */
+    private val _showMode = MutableStateFlow(devicePrefs.showMode)
+    val showMode: StateFlow<ShowModeSettings> = _showMode.asStateFlow()
+
+    /** The words Show mode has on screen right now; null when the text screen is closed. */
+    private val _shownText = MutableStateFlow<String?>(null)
+    val shownText: StateFlow<String?> = _shownText.asStateFlow()
 
     private val _savedBoards = MutableStateFlow<List<SavedBoard>>(emptyList())
     val savedBoards: StateFlow<List<SavedBoard>> = _savedBoards.asStateFlow()
@@ -97,6 +106,27 @@ class BoardViewModel(
         if (!tile.isPlayable(_board.value.speakUnrecordedTilesEnabled)) return
         val name = tile.fileName
         if (name != null) player.play(name, tile.volume) else speaker.speak(tile.speechText)
+    }
+
+    /**
+     * A tile used for real, by a tap or a long-press preview on the board: puts its words on
+     * the Show mode screen when that's on, and plays it unless Show mode mutes sounds. The tile
+     * editor's own Play button calls [play] directly, so it never opens the text screen.
+     */
+    fun activate(tile: Tile) {
+        if (!tile.isPlayable(_board.value.speakUnrecordedTilesEnabled)) return
+        val showMode = _showMode.value
+        val text = tile.speechText.trim()
+        if (showMode.enabled && text.isNotEmpty()) {
+            _shownText.value = text
+            if (showMode.muteSounds) return
+        }
+        play(tile)
+    }
+
+    /** Closes the Show mode text screen. Whatever it was playing carries on to the end. */
+    fun dismissShownText() {
+        _shownText.value = null
     }
 
     /** Speaks arbitrary text not tied to any tile — for a one-off phrase no pad covers. */
@@ -207,6 +237,25 @@ class BoardViewModel(
     override fun setPerformanceModeEnabled(value: Boolean) {
         devicePrefs.performanceModeEnabled = value
         _performanceModeEnabled.value = value
+    }
+
+    override fun setShowModeEnabled(value: Boolean) = updateShowMode { it.copy(enabled = value) }
+
+    /** 0 turns the timer off; ignored if tap to close is off too (see [ShowModeSettings.withTimerSeconds]). */
+    override fun setShowModeTimerSeconds(value: Int) = updateShowMode { it.withTimerSeconds(value) }
+
+    /** Ignored when turning it off would leave no timer either (see [ShowModeSettings.withTapToClose]). */
+    override fun setShowModeTapToClose(value: Boolean) = updateShowMode { it.withTapToClose(value) }
+
+    override fun setShowModeMuteSounds(value: Boolean) = updateShowMode { it.copy(muteSounds = value) }
+
+    private fun updateShowMode(transform: (ShowModeSettings) -> ShowModeSettings) {
+        val updated = transform(_showMode.value)
+        if (updated == _showMode.value) return
+        devicePrefs.showMode = updated
+        _showMode.value = updated
+        // Turning Show mode off shouldn't leave its text screen stranded on top of the board.
+        if (!updated.enabled) _shownText.value = null
     }
 
     override fun setDefaultPageRows(value: Int) {

@@ -9,6 +9,8 @@ have it speak its words aloud with the device's text-to-speech voice.
   its home page on its own, and keep the home page's first row pinned above
   every other page for things that must always be within reach.
 - **Speak...:** type any phrase no tile covers and have it read aloud.
+- **Show mode:** a tapped tile's words also fill the screen in large white text
+  on black, for someone to read, with the option to mute the sound.
 - **Legible labels:** each page's labels size themselves to fit its tiles,
   with two easy-to-read fonts bundled.
 - **Saved boards and backups:** save a whole board to come back to later,

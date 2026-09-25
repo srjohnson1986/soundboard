@@ -201,7 +201,7 @@ to pre-validate. `Board`'s own mutators (`withPageRemoved`, `withPageRenamed`,
   app updates, uninstalls, or the user moves the file, silently breaking the
   tile. Copying also means the app never needs `READ_EXTERNAL_STORAGE`.
 
-**`DevicePreferences` is the one setting deliberately *not* on `Board`.**
+**`DevicePreferences` holds the settings deliberately *not* on `Board`.**
 Everything else in Settings travels with the board on purpose (loading a
 different board switches those too — see the settings-on-board comment atop
 `Board`'s fields). Performance mode (disables tile shadows, tap ripples, and
@@ -211,7 +211,12 @@ lives in ordinary `SharedPreferences` (`DevicePreferences`, a small
 `Context`-backed wrapper) instead — opening a different board must not
 silently turn it back off. `BoardViewModel` reads it once at construction
 into its own `performanceModeEnabled: StateFlow<Boolean>`, separate from
-`board`.
+`board`. Show mode (`ShowModeSettings`: on/off, display timer, tap to close,
+mute) is there for the same reason — it's about where the board is being used —
+and is exposed the same way as `showMode: StateFlow<ShowModeSettings>`.
+`ShowModeSettings.withTimerSeconds`/`withTapToClose` refuse a change that
+would leave neither a timer nor tap to close, and `DevicePreferences` repairs
+such a combination on read, so the text screen can never strand anyone.
 
 **Backup** (`exportTo/importFrom`) is just those two things zipped: `board.json`
 at the zip root, every file under `sounds/` mirrored into a `sounds/` entry.
@@ -461,9 +466,9 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   null`, since the adjacent `Text` already labels it, while an icon-only
   control with no adjacent label — the menu button itself, or the tab row's
   Add-page tab below — carries a real `contentDescription` instead. Top to
-  bottom, the menu holds: **Edit mode**, a manual `Row` (`Icon` + label +
-  `Switch`) rather than a `DropdownMenuItem` since a switch doesn't fit that
-  composable's trailing-content slot cleanly; **Settings**, which opens
+  bottom, the menu holds: **Edit mode** and **Show mode**, each a
+  `MenuSwitchRow` (`Icon` + label + `Switch`) rather than a `DropdownMenuItem`
+  since a switch doesn't fit that composable's trailing-content slot cleanly; **Settings**, which opens
   `SettingsDialog` (below), including the **Sticky home row** switch, rather
   than exposing its contents as more menu rows; **Boards**
   (**Rename board**, **Recent boards**, **Save board as...**/**Open board...**); **Backup** (**Export backup**/
@@ -472,7 +477,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   selection — live in the tab row and `PageOptionsDialog` instead; see below.
 - **Settings is a list of groups, each its own dialog.** `SettingsDialog` shows
   one row per `SettingsGroup` (Home page, Look, Tile labels, Grid layout,
-  Tapping & speech, Screen) with a summary of its current values; picking one
+  Tapping & speech, Screen, Show mode) with a summary of its current values; picking one
   opens `SettingsGroupDialog` via `BoardDialog.SettingsGroupDetail(group)`,
   whose Back (and the system back gesture) reopens the list and whose Done
   closes Settings (#169). This keeps any one screen short instead of one long
@@ -482,9 +487,9 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   `0` means "Off"), long-press duration, theme, background, default tile
   opacity/border, row height, label style, landscape layout and so on. They
   are fields on `Board` itself, so they travel with the board and persist
-  through `commit()` like any other board edit. The one exception is
-  **Performance mode**, which describes the device rather than the board and
-  lives in `DevicePreferences` (`SharedPreferences`). The group dialog takes the
+  through `commit()` like any other board edit. The exceptions are
+  **Performance mode** and **Show mode**, which describe the device rather than
+  the board and live in `DevicePreferences` (`SharedPreferences`). The group dialog takes the
   `Board` plus a `BoardSettingsActions` (the ViewModel) rather than a value
   and a callback per setting. Unlike `editMode`, which lives entirely in
   Compose state, all of these need to survive process death.
@@ -652,6 +657,19 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   color (light in dark mode), producing light text on a light custom tile.
   `textColorFor()` sidesteps that by never depending on the current theme at
   all.
+- **Show mode is an overlay, not a screen.** Board taps and long-press
+  previews call `vm.activate(tile)`, which sets `shownText` (the tile's
+  `speechText`) when Show mode is on and calls `play()` unless it mutes sounds;
+  the tile editor's own Play button still calls `play()` directly, so it never
+  opens the text screen. `BoardScreen` draws `ShowTextOverlay` over the whole
+  `Scaffold` while `shownText` is set, so closing it lands on the same page
+  with nothing to navigate back to. The overlay always installs a
+  `pointerInput`, even with tap to close off, since an overlay without one
+  lets touches fall through to the tiles underneath. The auto-return idle timer
+  is held off while it's up. Text size comes from the same
+  `largestFittingSize`/`breaksInsideWord` search tile labels use, not
+  Compose's `TextAutoSize`, which only checks height and will happily split
+  "doctor" across two lines.
 
 ## Threading
 

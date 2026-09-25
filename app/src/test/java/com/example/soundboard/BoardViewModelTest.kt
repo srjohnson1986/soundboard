@@ -15,6 +15,7 @@ import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.RowHeight
+import com.example.soundboard.model.ShowModeSettings
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
@@ -754,6 +755,136 @@ class BoardViewModelTest {
         vm.openBoard(BoardRef.Saved(savedBoardRepo.save(Board(name = "Other"))))
 
         assertTrue(vm.performanceModeEnabled.value)
+    }
+
+    @Test
+    fun `activate with Show mode off plays the tile and shows nothing`() {
+        val vm = newViewModel()
+
+        vm.activate(Tile(id = "a", label = "Water", fileName = "a.mp3"))
+
+        assertEquals(listOf("a.mp3"), player.playedKeys)
+        assertNull(vm.shownText.value)
+    }
+
+    @Test
+    fun `activate in Show mode shows the script and still plays`() {
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+
+        vm.activate(Tile(id = "a", label = "Water", ttsScript = "I would like some water", speakWhenNoSound = true))
+
+        assertEquals("I would like some water", vm.shownText.value)
+        assertEquals(listOf("I would like some water"), speaker.spoken)
+    }
+
+    @Test
+    fun `activate in Show mode falls back to the label for a recorded tile`() {
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+
+        vm.activate(Tile(id = "a", label = "Water", fileName = "a.mp3"))
+
+        assertEquals("Water", vm.shownText.value)
+        assertEquals(listOf("a.mp3"), player.playedKeys)
+    }
+
+    @Test
+    fun `activate in Show mode with mute on shows the text without playing`() {
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+        vm.setShowModeMuteSounds(true)
+
+        vm.activate(Tile(id = "a", label = "Water", fileName = "a.mp3"))
+
+        assertEquals("Water", vm.shownText.value)
+        assertTrue(player.played.isEmpty())
+    }
+
+    @Test
+    fun `activate in Show mode with nothing to show just plays, even when muted`() {
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+        vm.setShowModeMuteSounds(true)
+
+        vm.activate(Tile(id = "a", label = " ", fileName = "a.mp3"))
+
+        assertNull(vm.shownText.value)
+        assertEquals(listOf("a.mp3"), player.playedKeys)
+    }
+
+    @Test
+    fun `activate on an unplayable tile shows nothing`() {
+        val vm = newViewModel()
+        vm.setSpeakUnrecordedTilesEnabled(false)
+        vm.setShowModeEnabled(true)
+
+        vm.activate(Tile(id = "a", label = "Awaiting a recording"))
+
+        assertNull(vm.shownText.value)
+    }
+
+    @Test
+    fun `play never opens the Show mode text`() {
+        // The tile editor's Play button calls play() directly — previewing a recording
+        // while editing shouldn't black out the screen.
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+
+        vm.play(Tile(id = "a", label = "Water", fileName = "a.mp3"))
+
+        assertNull(vm.shownText.value)
+    }
+
+    @Test
+    fun `dismissShownText closes the text`() {
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+        vm.activate(Tile(id = "a", label = "Water", fileName = "a.mp3"))
+
+        vm.dismissShownText()
+
+        assertNull(vm.shownText.value)
+    }
+
+    @Test
+    fun `turning Show mode off closes any text on screen`() {
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+        vm.activate(Tile(id = "a", label = "Water", fileName = "a.mp3"))
+
+        vm.setShowModeEnabled(false)
+
+        assertNull(vm.shownText.value)
+    }
+
+    @Test
+    fun `Show mode can't be left with neither a timer nor tap to close`() {
+        val vm = newViewModel()
+
+        vm.setShowModeTimerSeconds(0)
+        vm.setShowModeTapToClose(false)
+        assertTrue(vm.showMode.value.tapToClose)
+
+        vm.setShowModeTimerSeconds(5)
+        vm.setShowModeTapToClose(false)
+        vm.setShowModeTimerSeconds(0)
+        assertEquals(5, vm.showMode.value.timerSeconds)
+        assertFalse(vm.showMode.value.tapToClose)
+    }
+
+    @Test
+    fun `Show mode settings persist across a fresh view model and survive loading a different board`() {
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+        vm.setShowModeTimerSeconds(30)
+        vm.setShowModeMuteSounds(true)
+
+        vm.openBoard(BoardRef.Saved(savedBoardRepo.save(Board(name = "Other"))))
+
+        val expected = ShowModeSettings(enabled = true, timerSeconds = 30, tapToClose = true, muteSounds = true)
+        assertEquals(expected, vm.showMode.value)
+        assertEquals(expected, newViewModel().showMode.value)
     }
 
     @Test

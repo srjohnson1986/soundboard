@@ -31,4 +31,8 @@ interface BoardSettingsActions {
     fun setLandscapeLayout(layout: LandscapeLayout)
     fun setRowHeight(rowHeight: RowHeight)
     fun setLabelStyle(style: LabelStyle)
+    fun setShowModeEnabled(value: Boolean)
+    fun setShowModeTimerSeconds(value: Int)
+    fun setShowModeTapToClose(value: Boolean)
+    fun setShowModeMuteSounds(value: Boolean)
 }

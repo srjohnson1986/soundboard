@@ -89,6 +89,8 @@ fun BoardScreen(
     val strayClips by vm.strayClips.collectAsStateWithLifecycle()
     val recentBoards by vm.recentBoards.collectAsStateWithLifecycle()
     val performanceModeEnabled by vm.performanceModeEnabled.collectAsStateWithLifecycle()
+    val showMode by vm.showMode.collectAsStateWithLifecycle()
+    val shownText by vm.shownText.collectAsStateWithLifecycle()
     var openDialog by remember { mutableStateOf<BoardDialog?>(null) }
     var editMode by remember { mutableStateOf(false) }
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
@@ -137,7 +139,10 @@ fun BoardScreen(
         }
     }
 
-    /** A tile tap: plays it, or opens its editor when there's nothing to play or edit mode is on. */
+    /**
+     * A tile tap: plays it (and shows its words, in Show mode), or opens its editor when
+     * there's nothing to play or edit mode is on.
+     */
     fun onTileTap(tileId: String, isPlayable: Boolean, fromStickyRow: Boolean, play: () -> Unit) {
         recordInteraction()
         if (!isPlayable || editMode) {
@@ -169,8 +174,10 @@ fun BoardScreen(
 
     // Auto-return to the home page after a few idle minutes (configurable in
     // SettingsDialog; 0 disables it). Restarts on every interaction
-    // (lastInteractionAt changing cancels the previous delay).
-    LaunchedEffect(lastInteractionAt, board.homePageIndex, board.idleTimeoutMinutes) {
+    // (lastInteractionAt changing cancels the previous delay). Held off while Show mode's
+    // text is up, so closing it always lands back on the page it was opened from.
+    LaunchedEffect(lastInteractionAt, board.homePageIndex, board.idleTimeoutMinutes, shownText != null) {
+        if (shownText != null) return@LaunchedEffect
         val home = board.homePageIndex ?: return@LaunchedEffect
         if (board.idleTimeoutMinutes <= 0) return@LaunchedEffect
         delay(board.idleTimeoutMinutes.minutes)
@@ -250,6 +257,8 @@ fun BoardScreen(
                     recentBoards = recentBoards,
                     editMode = editMode,
                     onEditModeChange = { editMode = it },
+                    showModeEnabled = showMode.enabled,
+                    onShowModeChange = vm::setShowModeEnabled,
                     onSelectPage = { index ->
                         recordInteraction()
                         vm.switchPage(index)
@@ -294,11 +303,11 @@ fun BoardScreen(
                                 tile.id,
                                 tile.isPlayable(board.speakUnrecordedTilesEnabled),
                                 fromStickyRow = true
-                            ) { vm.play(tile) }
+                            ) { vm.activate(tile) }
                         },
                         onPreviewSound = { tile ->
                             recordInteraction()
-                            vm.play(tile)
+                            vm.activate(tile)
                         }
                     )
                 }
@@ -337,11 +346,11 @@ fun BoardScreen(
                                     tile.id,
                                     tile.isPlayable(board.speakUnrecordedTilesEnabled),
                                     fromStickyRow = false
-                                ) { vm.play(tile) }
+                                ) { vm.activate(tile) }
                             },
                             onPreviewSound = { tile ->
                                 recordInteraction()
-                                vm.play(tile)
+                                vm.activate(tile)
                             },
                             onPreviewMove = vm::previewMove,
                             onCommitOrder = vm::commitOrder,
@@ -350,6 +359,17 @@ fun BoardScreen(
                     }
                 }
             }
+        }
+        shownText?.let { text ->
+            ShowTextOverlay(
+                text = text,
+                showMode = showMode,
+                labelStyle = board.labelStyle,
+                onDismiss = {
+                    recordInteraction()
+                    vm.dismissShownText()
+                }
+            )
         }
     }
 
@@ -390,6 +410,7 @@ fun BoardScreen(
         BoardDialog.Settings -> SettingsDialog(
             board = board,
             performanceModeEnabled = performanceModeEnabled,
+            showMode = showMode,
             onOpenGroup = { showDialog(BoardDialog.SettingsGroupDetail(it)) },
             onDismiss = ::closeDialog
         )
@@ -398,6 +419,7 @@ fun BoardScreen(
             group = dialog.group,
             board = board,
             performanceModeEnabled = performanceModeEnabled,
+            showMode = showMode,
             actions = vm,
             onPickBackgroundImage = {
                 backgroundImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,6 +56,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
@@ -89,6 +91,8 @@ internal fun BoardTopBar(
     recentBoards: List<RecentBoardItem>,
     editMode: Boolean,
     onEditModeChange: (Boolean) -> Unit,
+    showModeEnabled: Boolean,
+    onShowModeChange: (Boolean) -> Unit,
     onSelectPage: (Int) -> Unit,
     onOpenDialog: (BoardDialog) -> Unit,
     onShowRecentBoards: () -> Unit,
@@ -102,6 +106,8 @@ internal fun BoardTopBar(
             recentBoards = recentBoards,
             editMode = editMode,
             onEditModeChange = onEditModeChange,
+            showModeEnabled = showModeEnabled,
+            onShowModeChange = onShowModeChange,
             onOpenDialog = onOpenDialog,
             onShowRecentBoards = onShowRecentBoards,
             onOpenBoard = onOpenBoard,
@@ -153,6 +159,8 @@ private fun HamburgerMenu(
     recentBoards: List<RecentBoardItem>,
     editMode: Boolean,
     onEditModeChange: (Boolean) -> Unit,
+    showModeEnabled: Boolean,
+    onShowModeChange: (Boolean) -> Unit,
     onOpenDialog: (BoardDialog) -> Unit,
     onShowRecentBoards: () -> Unit,
     onOpenBoard: (BoardRef, String) -> Unit,
@@ -163,7 +171,7 @@ private fun HamburgerMenu(
     var showMenu by remember { mutableStateOf(false) }
     var showRecentBoardsMenu by remember { mutableStateOf(false) }
 
-    /** Closes the menu, then runs [action] — every entry except Recent boards and Edit mode. */
+    /** Closes the menu, then runs [action] — every entry except Recent boards and the mode switches. */
     fun menuAction(action: () -> Unit): () -> Unit = {
         showMenu = false
         action()
@@ -253,27 +261,9 @@ private fun HamburgerMenu(
             )
             HorizontalDivider()
             // Mode
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.Edit,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text("Edit mode")
-                }
-                Switch(
-                    checked = editMode,
-                    onCheckedChange = onEditModeChange
-                )
-            }
+            MenuSwitchRow(Icons.Filled.Edit, "Edit mode", editMode, onEditModeChange)
+            // Its timer, tap-to-close and mute options live in Settings → Show mode.
+            MenuSwitchRow(Icons.Filled.Visibility, "Show mode", showModeEnabled, onShowModeChange)
             HorizontalDivider()
             DropdownMenuItem(
                 text = { Text("Speak...") },
@@ -427,4 +417,30 @@ private fun MenuSectionHeader(text: String) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
     )
+}
+
+/** A menu row with a switch that flips in place, leaving the menu open. */
+@Composable
+private fun MenuSwitchRow(icon: ImageVector, label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.width(12.dp))
+            Text(label)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
 }

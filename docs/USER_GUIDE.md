@@ -18,6 +18,7 @@ The **☰** menu, top to bottom:
   - **Open board...**
   - (see "Saving and opening boards")
 - **Edit mode:** a switch (see "Editing a tile")
+- **Show mode:** a switch (see "Show mode")
 - **Speak...:** type any phrase and have it read aloud (see "Speaking")
 - **Settings** (see "Settings")
 - **Page options (…):** for the page you're on (see "Pages")
@@ -101,6 +102,28 @@ overrides) takes effect the moment you change it.
 **Speak...** in the **☰** menu opens a box where you can type any phrase and
 tap **Speak** to hear it read aloud. It's for something no tile covers, and
 it doesn't change the board.
+
+## Show mode
+
+Show mode puts a tile's words on screen for someone to read, instead of (or as
+well as) hearing them. Turn it on or off with the **Show mode** switch in the
+**☰** menu.
+
+While it's on, tapping a tile, or holding one to preview it, fills the screen
+with its words in large white text on black: its script if it has one,
+otherwise its name. It doesn't apply to **Speak...** or while Edit mode is on.
+Closing the text puts you back exactly where you were.
+
+**Settings → Show mode** has its options:
+
+- **Close the text after:** 3, 5, 10, 15 or 30 seconds, or Off.
+- **Tap to close:** tapping anywhere on the text closes it early.
+- **Mute sounds while showing:** shows the words without playing the tile's
+  recording or speech. With this off, the sound plays too and finishes even if
+  the text is closed early.
+
+The timer and tap to close can't both be off, so the text can always be
+closed. The **Back** button always closes it too.
 
 ## Pages
 
@@ -211,9 +234,11 @@ to return to the list or **Done** to close Settings.
   - Keep the screen from turning off while the board is open
   - Performance mode: turns off shadows, tap ripples and similar effects
     (and tile see-through and borders) to help older devices stay smooth
+- **Show mode:** on or off, and how the text closes and whether sounds play
+  (see "Show mode").
 
-Everything except Performance mode is saved with the board, so switching
-boards switches these too. Performance mode belongs to the device.
+Everything except Performance mode and Show mode is saved with the board, so
+switching boards switches these too. Those two belong to the device.
 
 ## Label text
 

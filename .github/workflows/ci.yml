@@ -68,6 +68,11 @@ jobs:
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --stacktrace
 
+      # The shared module's tests, on the JVM and compiled to WebAssembly: this is what
+      # keeps shared code building for the web version as well as Android (#193).
+      - name: Shared module tests (JVM + Wasm)
+        run: ./gradlew :shared:allTests --stacktrace
+
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
 
@@ -85,4 +90,12 @@ jobs:
         with:
           name: unit-test-report
           path: app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
+
+      - name: Upload shared test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: shared-test-report
+          path: shared/build/reports/tests/allTests
           if-no-files-found: ignore

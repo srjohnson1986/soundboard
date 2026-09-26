@@ -77,8 +77,10 @@ class BoardRepository(private val context: Context) {
      * file went missing some other way.
      */
     private fun sanitizeMissingSounds(board: Board): Board {
-        fun fix(tile: Tile): Tile =
-            if (tile.fileName != null && !soundFile(tile.fileName).exists()) tile.copy(fileName = null) else tile
+        fun fix(tile: Tile): Tile {
+            val fileName = tile.fileName ?: return tile
+            return if (soundFile(fileName).exists()) tile else tile.copy(fileName = null)
+        }
         return board.copy(
             pages = board.pages.map { page -> page.copy(tiles = page.tiles.map(::fix)) }
         )

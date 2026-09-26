@@ -3,11 +3,27 @@
 MVVM over a single mutable `Board`, with one function (`BoardViewModel.commit()`)
 as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 
+## Modules
+
+| Module | What's in it |
+|---|---|
+| `shared/` | Code that doesn't depend on Android, built for both Android and WebAssembly (Kotlin Multiplatform). Today that's the board model (`shared/src/commonMain/.../model/`); it's where more of the app moves as the web version comes together (#193). |
+| `app/` | The Android app: everything else below, which uses `shared` like any other library. |
+
+`shared` has no Android or Compose dependencies. Keep it that way: something that
+needs Android goes in `app/`, not behind a workaround in `shared`. It uses the
+same packages as before (`com.example.soundboard.model`), so moving a file there
+changes no imports. Its tests run twice, on the JVM and compiled to WebAssembly
+(`./gradlew :shared:allTests`), which is what keeps it building for the web.
+One side effect of the module boundary: Kotlin won't smart-cast a model
+property from `app/` (`if (tile.fileName != null) use(tile.fileName)` fails
+to compile); read it into a local `val` first.
+
 ## Layers
 
 | File | Responsibility |
 |---|---|
-| `model/Board.kt` | `Tile`, `Page`, and `Board` data classes; resize, visibility, reorder, and page-management logic. No Android dependencies. |
+| `shared/.../model/Board.kt` | `Tile`, `Page`, and `Board` data classes; resize, visibility, reorder, and page-management logic. No Android dependencies. |
 | `data/BoardRepository.kt` | Reads/writes `board.json`, copies picked audio into app storage, zips/unzips backups. All file I/O. |
 | `data/SavedBoardRepository.kt` | Reads/writes small `Board`-snapshot JSON files under `filesDir/presets/` — same-device version history, deliberately not carrying its own copy of audio (see "Saved boards" below). |
 | `audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
@@ -32,7 +48,7 @@ never touches `BoardRepository` or `SoundPlayer` directly.
 
 ```kotlin
 data class Tile(
-    val id: String = UUID.randomUUID().toString(),
+    val id: String = Uuid.random().toString(),
     val label: String = "",
     val fileName: String? = null,   // null = empty tile
     val volume: Float = 1f,
@@ -40,7 +56,7 @@ data class Tile(
 )
 
 data class Page(
-    val id: String = UUID.randomUUID().toString(),
+    val id: String = Uuid.random().toString(),
     val name: String = "Page 1",
     val rows: Int = 4,
     val columns: Int = 4,
@@ -691,16 +707,17 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 
 | Layer | File(s) | Runs on |
 |---|---|---|
-| `Page.withGridSize()`/`.withTileMoved()`/`.normalized()`, tile opacity/border fallback, and the landscape grid defaults | `test/.../model/PageTest.kt` | plain JVM (JUnit) |
+| `Page.withGridSize()`/`.withTileMoved()`/`.normalized()`, tile opacity/border fallback, and the landscape grid defaults | `shared/src/commonTest/.../model/PageTest.kt` | JVM and WebAssembly (`kotlin.test`) |
 | Landscape column/row-height math, label size search | `test/.../ui/GridLayoutTest.kt`, `test/.../ui/LabelTextTest.kt` | plain JVM (JUnit) |
-| `Board` page management (`withPageAdded`/`withPageRemoved`/`withPageRenamed`/`withCurrentPage`/`withHomePage`), `updatingTile`/`findTile`, `soundFileNames`, `Tile.isPlayable`, and `hasAnySound` | `test/.../model/BoardTest.kt` | plain JVM (JUnit) |
+| `Board` page management (`withPageAdded`/`withPageRemoved`/`withPageRenamed`/`withCurrentPage`/`withHomePage`), `updatingTile`/`findTile`, `soundFileNames`, `Tile.isPlayable`, and `hasAnySound` | `shared/src/commonTest/.../model/BoardTest.kt` | JVM and WebAssembly (`kotlin.test`) |
 | `BoardRepository`, incl. the legacy-schema and `homePageIndex` migrations and additive-field defaults in `load()` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
 | `SavedBoardRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/SavedBoardRepositoryTest.kt` | Robolectric |
 | `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, and saveBoardAs/openBoard | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
 | `BoardScreen`, incl. the sticky home row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 | Landscape grid, row height cap, drag steps, label size/font/caps, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
 
-`./gradlew test` runs everything except the two `androidTest/` classes;
+`./gradlew test :shared:allTests` runs everything except the two `androidTest/`
+classes (`test` alone skips `shared`, which has no task by that name);
 `./gradlew connectedAndroidTest` runs those against a connected device or
 emulator. In CI, the **CI** workflow runs the former and gates merging. The
 separate **UI tests** workflow (`.github/workflows/ui-tests.yml`) runs the

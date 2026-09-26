@@ -2,7 +2,7 @@ package com.example.soundboard.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /** Whether the app follows the system's light/dark setting or is pinned to one. */
 @Serializable
@@ -73,7 +73,7 @@ data class TileBorder(
  */
 @Serializable
 data class Tile(
-    val id: String = UUID.randomUUID().toString(),
+    val id: String = Uuid.random().toString(),
     val label: String = "",
     val fileName: String? = null,
     val volume: Float = 1f,
@@ -115,7 +115,7 @@ data class Tile(
 /** One grid of tiles within a [Board]; a board can have several, switched via tabs. */
 @Serializable
 data class Page(
-    val id: String = UUID.randomUUID().toString(),
+    val id: String = Uuid.random().toString(),
     val name: String = "Page 1",
     val rows: Int = 4,
     val columns: Int = 4,

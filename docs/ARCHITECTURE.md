@@ -7,7 +7,7 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 
 | Module | What's in it |
 |---|---|
-| `shared/` | Code that doesn't depend on Android, built for both Android and WebAssembly (Kotlin Multiplatform): the board model (`model/`) and the repositories (`data/`). More of the app moves here as the web version comes together (#193). |
+| `shared/` | Code that doesn't depend on Android, built for both Android and WebAssembly (Kotlin Multiplatform): the board model (`model/`), the repositories (`data/`), `BoardViewModel` and `BoardSettingsActions`, and the `Player`/`Recorder`/`Speaker` interfaces (`audio/`). The UI moves here next, as the web version comes together (#193, #195). |
 | `app/` | The Android app: everything else below, which uses `shared` like any other library. |
 
 `shared`'s common code has no Android or Compose dependencies. Keep it that way:
@@ -41,12 +41,13 @@ to compile); read it into a local `val` first.
 | `shared/.../model/Board.kt` | `Tile`, `Page`, and `Board` data classes; resize, visibility, reorder, and page-management logic. No Android dependencies. |
 | `shared/.../data/BoardRepository.kt` | Reads/writes `board.json`, copies picked audio into app storage, zips/unzips backups. All file I/O, through `FileStore`/`ZipCodec`. |
 | `shared/.../data/SavedBoardRepository.kt` | Reads/writes small `Board`-snapshot JSON files under `presets/` — same-device version history, deliberately not carrying its own copy of audio (see "Saved boards" below). |
-| `audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
+| `shared/.../audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
 | `audio/SoundPlayer.kt` | Real `Player` implementation: owns the `SoundPool` and the current `MediaPlayer`. No knowledge of `Board` or `Tile`. |
-| `audio/Recorder.kt` | Interface (`start`/`stop`/`cancel`) that `BoardViewModel` depends on for recording — same fake-in-tests seam as `Player`. |
+| `shared/.../audio/Recorder.kt` | Interface (`start`/`stop`/`cancel`) that `BoardViewModel` depends on for recording — same fake-in-tests seam as `Player`. |
 | `audio/AudioRecorder.kt` | Real `Recorder` implementation: owns a `MediaRecorder`, encoding straight to a file `BoardRepository` hands it. |
-| `BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other layers together, single write path. Takes `BoardRepository`/`Player`/`Recorder`/`SavedBoardRepository`/dispatcher as constructor params (see below) rather than constructing them. |
-| `BoardSettingsActions.kt` | Interface listing every change the Settings dialog can make; `BoardViewModel` implements it, so the dialog takes one object instead of a callback per setting. |
+| `shared/.../BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other layers together, single write path. Takes `BoardRepository`/`Player`/`Recorder`/`SavedBoardRepository`/dispatcher as constructor params (see below) rather than constructing them. An ordinary androidx `ViewModel` on Android, via JetBrains' multiplatform build of `lifecycle-viewmodel`. |
+| `BoardViewModelFactory.kt` | Android only: builds `BoardViewModel` with the real storage, `SoundPlayer`, `AudioRecorder` and `TtsSpeaker`. |
+| `shared/.../BoardSettingsActions.kt` | Interface listing every change the Settings dialog can make; `BoardViewModel` implements it, so the dialog takes one object instead of a callback per setting. |
 | `ui/BoardScreen.kt` | The screen: its state (edit mode, the one open `BoardDialog`, the idle timer), the pager, the sticky home row, and the dialog host. |
 | `ui/BoardTopBar.kt` | Title, page tabs (with the long-press gesture) and the hamburger menu. |
 | `ui/PageGrid.kt` | `PageGrid`, `PinnedRow` and `TileCard`: grid layout, drag-to-reorder, tile colors. |
@@ -401,11 +402,13 @@ class BoardViewModel(
     private val savedBoardRepo: SavedBoardRepository,
     private val speaker: Speaker,
     private val devicePrefs: DevicePreferences,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val recentBoardsRepo: RecentBoardsRepository,
+    private val ioDispatcher: CoroutineDispatcher = defaultIoDispatcher,
+    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() }
 ) : ViewModel()
 ```
 
-`BoardViewModel.Factory(application)` builds the real `BoardRepository`,
+`BoardViewModelFactory(application)` (in `app/`) builds the real `BoardRepository`,
 `SoundPlayer`, `AudioRecorder`, `SavedBoardRepository`, `TtsSpeaker`, and
 `DevicePreferences` and is what `BoardScreen` passes to
 `viewModel(factory = ...)`. Tests construct `BoardViewModel` directly
@@ -414,7 +417,8 @@ instead, passing a real `BoardRepository`, `SavedBoardRepository`, and
 and `SharedPreferences` are cheap enough not to fake), a `FakePlayer` in
 place of `SoundPlayer`, a `FakeRecorder` in place of `AudioRecorder`, and a
 `FakeSpeaker` in place of `TtsSpeaker`. `ioDispatcher` defaults to
-`Dispatchers.IO` in production; tests pass an `UnconfinedTestDispatcher` so
+`Dispatchers.IO` on Android (`Dispatchers.Default` on the web, which has no
+separate I/O pool); `now` exists so a test can pin the recent-boards timestamps; tests pass an `UnconfinedTestDispatcher` so
 the persistence coroutine in `commit()` (below) runs synchronously instead of
 racing a real background thread.
 
@@ -735,6 +739,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | `BoardRepository` wired to real files, zips and assets, incl. the legacy-schema and `homePageIndex` migrations, additive-field defaults in `load()`, and every shipped built-in board | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
 | `SavedBoardRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/SavedBoardRepositoryTest.kt` | Robolectric |
 | `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, and saveBoardAs/openBoard | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
+| `BoardViewModel` smoke test — fallback board, tap to speak, an edit persisting, recent boards — on in-memory storage, proving it runs on the web too | `shared/src/commonTest/.../BoardViewModelCommonTest.kt` | JVM and WebAssembly (`kotlin.test`) |
 | `BoardScreen`, incl. the sticky home row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 | Landscape grid, row height cap, drag steps, label size/font/caps, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
 

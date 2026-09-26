@@ -1,5 +1,6 @@
 package com.example.soundboard.data
 
+import kotlinx.coroutines.test.runTest
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -15,16 +16,16 @@ class RecentBoardsRepositoryTest {
 
     @Before
     fun setUp() {
-        repo = RecentBoardsRepository(ApplicationProvider.getApplicationContext())
+        repo = RecentBoardsRepository(ApplicationProvider.getApplicationContext<android.content.Context>())
     }
 
     @Test
-    fun `recent is empty by default`() {
+    fun `recent is empty by default`() = runTest {
         assertTrue(repo.recent().isEmpty())
     }
 
     @Test
-    fun `recordUsed puts the newest entry first`() {
+    fun `recordUsed puts the newest entry first`() = runTest {
         repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.BUILT_IN, assetName = "jeremy-care-board.zip", label = "Jeremy", usedAt = 1L))
         repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = "abc", label = "My Board", usedAt = 2L))
 
@@ -32,7 +33,7 @@ class RecentBoardsRepositoryTest {
     }
 
     @Test
-    fun `recordUsed on the same preset moves it to the front instead of duplicating it`() {
+    fun `recordUsed on the same preset moves it to the front instead of duplicating it`() = runTest {
         repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = "abc", label = "My Board", usedAt = 1L))
         repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.BUILT_IN, assetName = "jeremy-care-board.zip", label = "Jeremy", usedAt = 2L))
         repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = "abc", label = "My Board (renamed)", usedAt = 3L))
@@ -44,7 +45,7 @@ class RecentBoardsRepositoryTest {
     }
 
     @Test
-    fun `recent caps at 5 entries`() {
+    fun `recent caps at 5 entries`() = runTest {
         repeat(7) { i ->
             repo.recordUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = "id$i", label = "Board $i", usedAt = i.toLong()))
         }
@@ -55,7 +56,7 @@ class RecentBoardsRepositoryTest {
     }
 
     @Test
-    fun `entries written as lowercase kind strings by older builds still read back`() {
+    fun `entries written as lowercase kind strings by older builds still read back`() = runTest {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         java.io.File(context.filesDir, "recent_presets.json").writeText(
             """[{"kind":"saved","id":"abc","label":"Mine","usedAt":2},""" +

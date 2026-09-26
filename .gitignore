@@ -17,3 +17,6 @@ keystore.properties
 
 # Renamed release APK staged for upload — see docs/RELEASING.md
 /soundboard.apk
+
+# Kotlin compiler caches (Kotlin Multiplatform)
+.kotlin/

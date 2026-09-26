@@ -1,5 +1,6 @@
 package com.example.soundboard.data
 
+import kotlinx.coroutines.test.runTest
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.example.soundboard.model.Board
@@ -37,12 +38,16 @@ class BoardRepositoryTest {
         soundsDir = File(context.filesDir, "sounds")
     }
 
+    private fun soundFile(name: String) = File(soundsDir, name)
+
+    private fun backgroundFile(name: String) = File(context.filesDir, "backgrounds/$name")
+
     @Test
-    fun `save then load round-trips including tile ids`() {
+    fun `save then load round-trips including tile ids`() = runTest {
         // load() sanitizes a fileName with no backing file (see the sanitize tests
         // below), so a tile expected to round-trip as filled needs a real file.
-        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
-        repo.soundFile("c.wav").apply { parentFile?.mkdirs() }.writeText("c")
+        soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        soundFile("c.wav").apply { parentFile?.mkdirs() }.writeText("c")
         val board = Board(
             pages = listOf(
                 Page(
@@ -65,7 +70,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `save then load round-trips a tile's ttsScript`() {
+    fun `save then load round-trips a tile's ttsScript`() = runTest {
         val board = Board(
             pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Water", ttsScript = "I would like a glass of water please"))))
         )
@@ -77,22 +82,22 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a full backup export then import round-trips a tile's ttsScript`() {
+    fun `a full backup export then import round-trips a tile's ttsScript`() = runTest {
         val board = Board(
             pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Water", ttsScript = "I would like a glass of water please"))))
         )
         repo.save(board)
         val zip = File(context.filesDir, "backup.zip")
 
-        assertTrue(repo.exportTo(Uri.fromFile(zip)))
-        assertTrue(repo.importFrom(Uri.fromFile(zip)))
+        assertTrue(repo.exportTo(UriSaveTarget(context, Uri.fromFile(zip))))
+        assertTrue(repo.importFrom(UriPickedFile(context, Uri.fromFile(zip))))
         val loaded = repo.load()
 
         assertEquals("I would like a glass of water please", loaded.currentPage.tiles.first { it.id == "a" }.ttsScript)
     }
 
     @Test
-    fun `a full backup export then import round-trips every layout and label setting`() {
+    fun `a full backup export then import round-trips every layout and label setting`() = runTest {
         val board = Board(
             pages = listOf(
                 Page(name = "A", landscapeRows = 2, landscapeColumns = 6, rowHeight = RowHeight.SHORT),
@@ -105,20 +110,20 @@ class BoardRepositoryTest {
         repo.save(board)
         val zip = File(context.filesDir, "backup.zip")
 
-        assertTrue(repo.exportTo(Uri.fromFile(zip)))
+        assertTrue(repo.exportTo(UriSaveTarget(context, Uri.fromFile(zip))))
         repo.save(Board())
-        assertTrue(repo.importFrom(Uri.fromFile(zip)))
+        assertTrue(repo.importFrom(UriPickedFile(context, Uri.fromFile(zip))))
 
         assertEquals(board, repo.load())
     }
 
     @Test
-    fun `load appends a blank row when the saved board's last row is completely full`() {
+    fun `load appends a blank row when the saved board's last row is completely full`() = runTest {
         repo.save(
             Board(pages = listOf(Page(rows = 1, columns = 2, tiles = listOf(Tile(id = "a", fileName = "a.mp3"), Tile(id = "b", fileName = "b.mp3")))))
         )
-        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
-        repo.soundFile("b.mp3").apply { parentFile?.mkdirs() }.writeText("b")
+        soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        soundFile("b.mp3").apply { parentFile?.mkdirs() }.writeText("b")
 
         val loaded = repo.load()
 
@@ -128,7 +133,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `save then load round-trips multiple pages and the current page index`() {
+    fun `save then load round-trips multiple pages and the current page index`() = runTest {
         val board = Board(
             pages = listOf(Page(name = "Requests"), Page(name = "Feelings")),
             currentPageIndex = 1
@@ -141,8 +146,8 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `save then load round-trips sticky home row, home page, page color and tile aspect ratio`() {
-        repo.soundFile("hey.mp3").apply { parentFile?.mkdirs() }.writeText("hey")
+    fun `save then load round-trips sticky home row, home page, page color and tile aspect ratio`() = runTest {
+        soundFile("hey.mp3").apply { parentFile?.mkdirs() }.writeText("hey")
         val board = Board(
             pages = listOf(
                 Page(name = "Trouble", color = 0xFFB74D, tileAspectRatio = 4f / 3f),
@@ -164,7 +169,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a board saved before isHome moved onto Page still loads with its home page intact`() {
+    fun `a board saved before isHome moved onto Page still loads with its home page intact`() = runTest {
         // What repo.save() would have written when home page was a single board-level
         // "homePageIndex" rather than per-page "isHome" — ignoreUnknownKeys silently
         // drops that stray key, so without an explicit migration this board would
@@ -192,7 +197,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a board saved by today's schema still loads when it predates sticky home row, home page and page color`() {
+    fun `a board saved by today's schema still loads when it predates sticky home row, home page and page color`() = runTest {
         // What repo.save() itself would have written before stickyHomeRowEnabled/homePageIndex/
         // Page.color/Page.tileAspectRatio existed: "pages" is present (so no legacy-shape
         // migration kicks in), just missing the newer fields entirely.
@@ -218,7 +223,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a tile whose fileName has no backing file loads as empty rather than silently unplayable`() {
+    fun `a tile whose fileName has no backing file loads as empty rather than silently unplayable`() = runTest {
         // A generic preset can ship a board.json referencing clips that were never
         // recorded (or a partial import), so a tile can claim a fileName with
         // nothing behind it. That should read as "still needs recording," not as
@@ -236,8 +241,8 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a tile whose file does exist keeps its fileName`() {
-        repo.soundFile("real.mp3").apply { parentFile?.mkdirs() }.writeText("real")
+    fun `a tile whose file does exist keeps its fileName`() = runTest {
+        soundFile("real.mp3").apply { parentFile?.mkdirs() }.writeText("real")
         repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", fileName = "real.mp3"))))))
 
         val loaded = repo.load()
@@ -246,7 +251,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a home page tile whose fileName has no backing file also loads as empty`() {
+    fun `a home page tile whose fileName has no backing file also loads as empty`() = runTest {
         repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "missing.mp3")), isHome = true))))
 
         val loaded = repo.load()
@@ -257,7 +262,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `loading with no board json present returns the default board`() {
+    fun `loading with no board json present returns the default board`() = runTest {
         assertFalse(boardFile.exists())
 
         val loaded = repo.load()
@@ -268,7 +273,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `loading truncated json returns the default rather than throwing`() {
+    fun `loading truncated json returns the default rather than throwing`() = runTest {
         boardFile.parentFile?.mkdirs()
         boardFile.writeText("{\"rows\": 3, \"columns\"")
 
@@ -280,7 +285,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `loading malformed json returns the default rather than throwing`() {
+    fun `loading malformed json returns the default rather than throwing`() = runTest {
         boardFile.parentFile?.mkdirs()
         boardFile.writeText("not json at all")
 
@@ -292,7 +297,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a board saved by an older schema still loads`() {
+    fun `a board saved by an older schema still loads`() = runTest {
         boardFile.parentFile?.mkdirs()
         // Extra unknown field at board level ("theme"), extra unknown field on a tile
         // ("isFavorite"), a tile missing the newer "colorArgb" field, and no "pages"
@@ -322,7 +327,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `pruneUnused deletes exactly the files not in the keep set`() {
+    fun `pruneUnused deletes exactly the files not in the keep set`() = runTest {
         soundsDir.mkdirs()
         val keep = File(soundsDir, "keep.mp3").apply { writeText("keep") }
         val drop = File(soundsDir, "drop.mp3").apply { writeText("drop") }
@@ -334,7 +339,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `strayFiles lists exactly the files not in the keep set, without deleting them`() {
+    fun `strayFiles lists exactly the files not in the keep set, without deleting them`() = runTest {
         soundsDir.mkdirs()
         val keep = File(soundsDir, "keep.mp3").apply { writeText("keep") }
         val stray = File(soundsDir, "stray.mp3").apply { writeText("stray") }
@@ -347,7 +352,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `deleteFiles removes exactly the named files`() {
+    fun `deleteFiles removes exactly the named files`() = runTest {
         soundsDir.mkdirs()
         val kept = File(soundsDir, "kept.mp3").apply { writeText("kept") }
         val removed = File(soundsDir, "removed.mp3").apply { writeText("removed") }
@@ -359,13 +364,13 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `exportFiles zips exactly the requested files, flat by name`() {
+    fun `exportFiles zips exactly the requested files, flat by name`() = runTest {
         soundsDir.mkdirs()
         File(soundsDir, "a.mp3").writeText("aaa")
         File(soundsDir, "b.mp3").writeText("bbb")
         val out = File(context.filesDir, "export.zip")
 
-        val ok = repo.exportFiles(listOf("a.mp3"), Uri.fromFile(out))
+        val ok = repo.exportFiles(listOf("a.mp3"), UriSaveTarget(context, Uri.fromFile(out)))
 
         assertTrue(ok)
         val entries = java.util.zip.ZipInputStream(out.inputStream()).use { zip ->
@@ -375,61 +380,61 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `importSound copies bytes and returns a name that resolves through soundFile`() {
+    fun `importSound copies bytes and returns a name that resolves through soundFile`() = runTest {
         val uri = Uri.parse("content://fake/audio.mp3")
         val bytes = "hello world".toByteArray()
         shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream(bytes))
 
-        val name = repo.importSound(uri)
+        val name = repo.importSound(UriPickedFile(context, uri))
 
         assertTrue(name != null)
-        val resolved = repo.soundFile(name!!)
+        val resolved = soundFile(name!!)
         assertTrue(resolved.exists())
         assertEquals("hello world", resolved.readText())
     }
 
     @Test
-    fun `importSound returns null when the uri cannot be opened`() {
+    fun `importSound returns null when the uri cannot be opened`() = runTest {
         val uri = Uri.parse("content://fake/missing.mp3")
 
-        val name = repo.importSound(uri)
+        val name = repo.importSound(UriPickedFile(context, uri))
 
         assertNull(name)
     }
 
     @Test
-    fun `importBackgroundImage copies bytes and returns a name that resolves through backgroundFile`() {
+    fun `importBackgroundImage copies bytes and returns a name that resolves through backgroundFile`() = runTest {
         val uri = Uri.parse("content://fake/background.jpg")
         val bytes = "fake image bytes".toByteArray()
         shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream(bytes))
 
-        val name = repo.importBackgroundImage(uri)
+        val name = repo.importBackgroundImage(UriPickedFile(context, uri))
 
         assertTrue(name != null)
-        val resolved = repo.backgroundFile(name!!)
+        val resolved = backgroundFile(name!!)
         assertTrue(resolved.exists())
         assertEquals("fake image bytes", resolved.readText())
     }
 
     @Test
-    fun `a full backup export then import round-trips the background image`() {
+    fun `a full backup export then import round-trips the background image`() = runTest {
         val uri = Uri.parse("content://fake/background.jpg")
         shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("fake image bytes".toByteArray()))
-        val name = repo.importBackgroundImage(uri)!!
+        val name = repo.importBackgroundImage(UriPickedFile(context, uri))!!
         repo.save(Board(backgroundImageFileName = name))
         val zip = File(context.filesDir, "backup.zip")
 
-        assertTrue(repo.exportTo(Uri.fromFile(zip)))
-        repo.backgroundFile(name).delete()
-        assertTrue(repo.importFrom(Uri.fromFile(zip)))
+        assertTrue(repo.exportTo(UriSaveTarget(context, Uri.fromFile(zip))))
+        backgroundFile(name).delete()
+        assertTrue(repo.importFrom(UriPickedFile(context, Uri.fromFile(zip))))
 
-        val restored = repo.backgroundFile(name)
+        val restored = backgroundFile(name)
         assertTrue(restored.exists())
         assertEquals("fake image bytes", restored.readText())
     }
 
     @Test
-    fun `the bundled jeremy-care-board preset imports and loads as a valid three-page board`() {
+    fun `the bundled jeremy-care-board preset imports and loads as a valid three-page board`() = runTest {
         // Regression coverage for the actual shipped preset (presets/jeremy-care-board.zip,
         // mirrored at app/src/main/assets/jeremy-care-board.zip) — guards against the zip
         // and the app's Board schema drifting apart silently.
@@ -456,13 +461,13 @@ class BoardRepositoryTest {
         // Every referenced sound file actually landed in app storage.
         val allTiles = board.pages.flatMap { it.tiles }
         allTiles.mapNotNull { it.fileName }.forEach { name ->
-            assertTrue("missing sound file $name", repo.soundFile(name).exists())
+            assertTrue("missing sound file $name", soundFile(name).exists())
         }
         assertEquals("chime.wav", allTiles.first { it.label == "Chime" }.fileName)
     }
 
     @Test
-    fun `the bundled tts-care-board preset imports with speech instead of recordings`() {
+    fun `the bundled tts-care-board preset imports with speech instead of recordings`() = runTest {
         // Same layout as jeremy-care-board.zip, but every labeled tile speaks
         // instead of playing a recording — no sounds/ directory at all.
         val imported = repo.importFromAsset("tts-care-board.zip")
@@ -498,7 +503,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `the bundled sarah-care-board preset imports and loads as a valid three-page board`() {
+    fun `the bundled sarah-care-board preset imports and loads as a valid three-page board`() = runTest {
         // Same layout as jeremy-care-board.zip, but recorded with ElevenLabs' Sarah
         // voice, and Trouble's two generic "Get ___" tiles are 5 named contacts instead.
         val imported = repo.importFromAsset("sarah-care-board.zip")
@@ -533,7 +538,7 @@ class BoardRepositoryTest {
         }
         val allTiles = board.pages.flatMap { it.tiles }
         allTiles.mapNotNull { it.fileName }.forEach { name ->
-            assertTrue("missing sound file $name", repo.soundFile(name).exists())
+            assertTrue("missing sound file $name", soundFile(name).exists())
         }
         assertEquals("chime.wav", allTiles.first { it.label == "Chime" }.fileName)
 
@@ -551,7 +556,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `the steve-care-board preset imports and loads as a valid three-page board`() {
+    fun `the steve-care-board preset imports and loads as a valid three-page board`() = runTest {
         // presets/steve-care-board.zip is debug-only now (app/src/debug/assets/), not
         // auto-loaded like jeremy-care-board.zip, so this exercises the same import
         // path a user tapping Import would, via a fake content:// uri pointed at the
@@ -561,7 +566,7 @@ class BoardRepositoryTest {
         val uri = Uri.parse("content://fake/steve-care-board.zip")
         shadowOf(context.contentResolver).registerInputStream(uri, zip.inputStream())
 
-        val imported = repo.importFrom(uri)
+        val imported = repo.importFrom(UriPickedFile(context, uri))
 
         assertTrue(imported)
         val board = repo.load()
@@ -581,7 +586,7 @@ class BoardRepositoryTest {
         }
         val allTiles = board.pages.flatMap { it.tiles }
         allTiles.mapNotNull { it.fileName }.forEach { name ->
-            assertTrue("missing sound file $name", repo.soundFile(name).exists())
+            assertTrue("missing sound file $name", soundFile(name).exists())
         }
         assertEquals("chime.wav", allTiles.first { it.label == "Chime" }.fileName)
     }

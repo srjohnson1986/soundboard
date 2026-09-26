@@ -3,7 +3,7 @@ package com.example.soundboard.audio
 import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
-import java.io.File
+import com.example.soundboard.data.FileSystemStore
 
 /**
  * Wraps [MediaRecorder] for short voice clips, encoded as AAC in an MP4
@@ -11,11 +11,12 @@ import java.io.File
  * format, so a recorded clip needs no conversion before it can be assigned
  * to a tile exactly like an imported file.
  */
-class AudioRecorder(private val context: Context) : Recorder {
+class AudioRecorder(private val context: Context, private val files: FileSystemStore) : Recorder {
     private var active: MediaRecorder? = null
 
-    override fun start(file: File): Boolean {
+    override fun start(path: String): Boolean {
         cancel()
+        val file = files.file(path).apply { parentFile?.mkdirs() }
         val recorder = newRecorder()
         val started = runCatching {
             recorder.apply {

@@ -1,5 +1,9 @@
 package com.example.soundboard
 
+import com.example.soundboard.data.RecentBoardEntry
+import kotlinx.coroutines.runBlocking
+import com.example.soundboard.data.UriSaveTarget
+import com.example.soundboard.data.UriPickedFile
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.example.soundboard.audio.FakePlayer
@@ -65,6 +69,19 @@ class BoardViewModelTest {
         recentBoardsRepo = RecentBoardsRepository(context)
         devicePrefs = DevicePreferences(context)
     }
+
+    private fun storeFile(path: String) = File(context.filesDir, path)
+
+    private fun soundFile(name: String) = storeFile("sounds/$name")
+
+    // The repositories are suspending now; these let a test set up or check disk state inline.
+    private fun BoardRepository.saveBlocking(board: Board) = runBlocking { save(board) }
+    private fun BoardRepository.loadBlocking(): Board = runBlocking { load() }
+    private fun SavedBoardRepository.saveBlocking(board: Board): String = runBlocking { save(board) }
+    private fun SavedBoardRepository.loadBlocking(id: String): Board? = runBlocking { load(id) }
+    private fun SavedBoardRepository.listBlocking() = runBlocking { list() }
+    private fun RecentBoardsRepository.recentBlocking() = runBlocking { recent() }
+    private fun RecentBoardsRepository.recordUsedBlocking(entry: RecentBoardEntry) = runBlocking { recordUsed(entry) }
 
     private fun boardWith(vararg tiles: Tile) = Board(
         pages = listOf(Page(rows = 1, columns = tiles.size, tiles = tiles.toList()))
@@ -150,7 +167,7 @@ class BoardViewModelTest {
 
     @Test
     fun `play speaks an unrecorded labeled tile when the fallback setting is on`() {
-        repo.save(boardWith(Tile(id = "a", label = "Water")))
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "Water")))
         val vm = newViewModel()
         assertTrue(vm.board.value.speakUnrecordedTilesEnabled)
 
@@ -161,7 +178,7 @@ class BoardViewModelTest {
 
     @Test
     fun `play does nothing for an unrecorded labeled tile when the fallback setting is off`() {
-        repo.save(boardWith(Tile(id = "a", label = "Water")).copy(speakUnrecordedTilesEnabled = false))
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "Water")).copy(speakUnrecordedTilesEnabled = false))
         val vm = newViewModel()
 
         vm.play(vm.board.value.currentPage.tiles.first { it.id == "a" })
@@ -171,7 +188,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setSpeakWhenNoSound updates only the target tile`() {
-        repo.save(boardWith(Tile(id = "a"), Tile(id = "b")))
+        repo.saveBlocking(boardWith(Tile(id = "a"), Tile(id = "b")))
         val vm = newViewModel()
 
         vm.setSpeakWhenNoSound("a", true)
@@ -182,7 +199,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setSpeakWhenNoSound edits a home page tile from another page and leaves the current page alone`() {
-        repo.save(
+        repo.saveBlocking(
             Board(
                 pages = listOf(
                     Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))),
@@ -201,7 +218,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setTtsScript updates only the target tile`() {
-        repo.save(boardWith(Tile(id = "a"), Tile(id = "b")))
+        repo.saveBlocking(boardWith(Tile(id = "a"), Tile(id = "b")))
         val vm = newViewModel()
 
         vm.setTtsScript("a", "I would like a glass of water please")
@@ -212,7 +229,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setTtsScript stores null instead of a blank script`() {
-        repo.save(boardWith(Tile(id = "a", ttsScript = "old script")))
+        repo.saveBlocking(boardWith(Tile(id = "a", ttsScript = "old script")))
         val vm = newViewModel()
 
         vm.setTtsScript("a", "   ")
@@ -222,7 +239,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setTtsScript edits a home page tile from another page and leaves the current page alone`() {
-        repo.save(
+        repo.saveBlocking(
             Board(
                 pages = listOf(
                     Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))),
@@ -241,7 +258,7 @@ class BoardViewModelTest {
 
     @Test
     fun `clearTile also turns off speakWhenNoSound`() {
-        repo.save(boardWith(Tile(id = "a", label = "Water", speakWhenNoSound = true)))
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "Water", speakWhenNoSound = true)))
         val vm = newViewModel()
 
         vm.clearTile("a")
@@ -251,7 +268,7 @@ class BoardViewModelTest {
 
     @Test
     fun `clearTile on a home page tile also turns off speakWhenNoSound`() {
-        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", speakWhenNoSound = true)), isHome = true))))
+        repo.saveBlocking(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", speakWhenNoSound = true)), isHome = true))))
         val vm = newViewModel()
 
         vm.clearTile("hey")
@@ -261,7 +278,7 @@ class BoardViewModelTest {
 
     @Test
     fun `removeSound clears the file but keeps the label and speakWhenNoSound`() {
-        repo.save(boardWith(Tile(id = "a", label = "Water", fileName = "a.mp3", speakWhenNoSound = true)))
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "Water", fileName = "a.mp3", speakWhenNoSound = true)))
         val vm = newViewModel()
 
         vm.removeSound("a")
@@ -274,7 +291,7 @@ class BoardViewModelTest {
 
     @Test
     fun `removeSound on a home page tile clears the file but keeps the label and speakWhenNoSound`() {
-        repo.save(
+        repo.saveBlocking(
             Board(
                 pages = listOf(
                     Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3", speakWhenNoSound = true)), isHome = true)
@@ -293,18 +310,18 @@ class BoardViewModelTest {
 
     @Test
     fun `removeSound prunes the now-orphaned file`() {
-        repo.save(boardWith(Tile(id = "a", fileName = "a.mp3")))
-        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        repo.saveBlocking(boardWith(Tile(id = "a", fileName = "a.mp3")))
+        soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
         val vm = newViewModel()
 
         vm.removeSound("a")
 
-        assertFalse(repo.soundFile("a.mp3").exists())
+        assertFalse(soundFile("a.mp3").exists())
     }
 
     @Test
     fun `speakAdHoc speaks arbitrary text without touching any tile`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
         vm.speakAdHoc("I'll be there in five minutes")
@@ -314,7 +331,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setSpeakWhenNoSound persists across a fresh view model`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
         vm.setSpeakWhenNoSound("a", true)
@@ -325,7 +342,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setLabel updates only the target tile`() {
-        repo.save(boardWith(Tile(id = "a", label = "old"), Tile(id = "b", label = "keep")))
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "old"), Tile(id = "b", label = "keep")))
         val vm = newViewModel()
 
         vm.setLabel("a", "new")
@@ -336,13 +353,13 @@ class BoardViewModelTest {
 
     @Test
     fun `assignSound imports the file loads it and points the tile at the returned name`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
         val uri = Uri.parse("content://fake/clip.mp3")
         shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("clip".toByteArray()))
 
-        vm.assignSound("a", uri)
+        vm.assignSound("a", UriPickedFile(context, uri))
 
         val tile = vm.board.value.currentPage.tiles.first { it.id == "a" }
         assertTrue(tile.fileName != null)
@@ -351,12 +368,12 @@ class BoardViewModelTest {
 
     @Test
     fun `filling the last empty tile in the last row grows the page by one row`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
         val uri = Uri.parse("content://fake/clip.mp3")
         shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("clip".toByteArray()))
-        vm.assignSound("a", uri)
+        vm.assignSound("a", UriPickedFile(context, uri))
 
         val page = vm.board.value.currentPage
         assertEquals(2, page.rows)
@@ -366,12 +383,12 @@ class BoardViewModelTest {
 
     @Test
     fun `recording start-stop points the tile at the recorded file and loads it`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
         vm.startRecording()
         assertTrue(vm.isRecording.value)
-        val recordedFile = recorder.startedFile
+        val recordedFile = recorder.startedPath?.let(::storeFile)
         assertTrue(recordedFile != null)
 
         vm.stopRecording("a")
@@ -384,12 +401,12 @@ class BoardViewModelTest {
 
     @Test
     fun `a failed stop leaves the tile untouched deletes the partial file and reports a message`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
         recorder.stopSucceeds = false
 
         vm.startRecording()
-        val recordedFile = recorder.startedFile!!.apply { parentFile?.mkdirs(); writeText("partial") }
+        val recordedFile = recorder.startedPath?.let(::storeFile)!!.apply { parentFile?.mkdirs(); writeText("partial") }
 
         vm.stopRecording("a")
 
@@ -401,11 +418,11 @@ class BoardViewModelTest {
 
     @Test
     fun `cancelRecording discards the in-progress file without touching the tile`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
         vm.startRecording()
-        val recordedFile = recorder.startedFile!!.apply { parentFile?.mkdirs(); writeText("abandoned") }
+        val recordedFile = recorder.startedPath?.let(::storeFile)!!.apply { parentFile?.mkdirs(); writeText("abandoned") }
 
         vm.cancelRecording()
 
@@ -417,11 +434,11 @@ class BoardViewModelTest {
 
     @Test
     fun `stopRecording points a home page tile at the recorded file`() {
-        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey")), isHome = true))))
+        repo.saveBlocking(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey")), isHome = true))))
         val vm = newViewModel()
 
         vm.startRecording()
-        val recordedFile = recorder.startedFile!!
+        val recordedFile = recorder.startedPath?.let(::storeFile)!!
 
         vm.stopRecording("hey")
 
@@ -431,8 +448,8 @@ class BoardViewModelTest {
 
     @Test
     fun `clearTile blanks the tile unloads the clip and deletes the audio file`() {
-        repo.save(boardWith(Tile(id = "a", label = "Air horn", fileName = "a.mp3")))
-        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("data")
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "Air horn", fileName = "a.mp3")))
+        soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("data")
         val vm = newViewModel()
 
         vm.clearTile("a")
@@ -441,38 +458,38 @@ class BoardViewModelTest {
         assertEquals("", tile.label)
         assertNull(tile.fileName)
         assertTrue(player.unloaded.contains("a.mp3"))
-        assertFalse(repo.soundFile("a.mp3").exists())
+        assertFalse(soundFile("a.mp3").exists())
     }
 
     @Test
     fun `replacing a tiles sound unloads the old clip and deletes the old file`() {
-        repo.save(boardWith(Tile(id = "a", fileName = "old.mp3")))
-        repo.soundFile("old.mp3").apply { parentFile?.mkdirs() }.writeText("old")
+        repo.saveBlocking(boardWith(Tile(id = "a", fileName = "old.mp3")))
+        soundFile("old.mp3").apply { parentFile?.mkdirs() }.writeText("old")
         val vm = newViewModel()
 
         val uri = Uri.parse("content://fake/new.mp3")
         shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("new".toByteArray()))
 
-        vm.assignSound("a", uri)
+        vm.assignSound("a", UriPickedFile(context, uri))
 
         assertTrue(player.unloaded.contains("old.mp3"))
-        assertFalse(repo.soundFile("old.mp3").exists())
+        assertFalse(soundFile("old.mp3").exists())
     }
 
     @Test
     fun `clearing a tile whose file is shared does not delete the shared file`() {
-        repo.save(
+        repo.saveBlocking(
             boardWith(
                 Tile(id = "a", fileName = "shared.mp3"),
                 Tile(id = "b", fileName = "shared.mp3")
             )
         )
-        repo.soundFile("shared.mp3").apply { parentFile?.mkdirs() }.writeText("shared")
+        soundFile("shared.mp3").apply { parentFile?.mkdirs() }.writeText("shared")
         val vm = newViewModel()
 
         vm.clearTile("a")
 
-        assertTrue(repo.soundFile("shared.mp3").exists())
+        assertTrue(soundFile("shared.mp3").exists())
     }
 
     @Test
@@ -480,7 +497,7 @@ class BoardViewModelTest {
         // Page.withGridSize() never drops a tile, and Page.normalized() keeps rows from
         // shrinking past the last tile with content — so a sound is never hidden in
         // either orientation, and survives until the tile is cleared directly.
-        repo.save(
+        repo.saveBlocking(
             Board(
                 pages = listOf(
                     Page(
@@ -491,15 +508,15 @@ class BoardViewModelTest {
                 )
             )
         )
-        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
-        repo.soundFile("b.mp3").apply { parentFile?.mkdirs() }.writeText("b")
+        soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        soundFile("b.mp3").apply { parentFile?.mkdirs() }.writeText("b")
         val vm = newViewModel()
 
         vm.resize(0, 1, 1)
 
         val page = vm.board.value.currentPage
-        assertTrue(repo.soundFile("a.mp3").exists())
-        assertTrue(repo.soundFile("b.mp3").exists())
+        assertTrue(soundFile("a.mp3").exists())
+        assertTrue(soundFile("b.mp3").exists())
         assertFalse(player.unloaded.contains("b.mp3"))
         assertEquals(1, page.columns)
         // Two rows reach "b"; that last row is then full, so one blank row follows it.
@@ -508,7 +525,7 @@ class BoardViewModelTest {
 
     @Test
     fun `every mutation persists across a fresh view model`() {
-        repo.save(boardWith(Tile(id = "a", label = "old")))
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "old")))
         val vm = newViewModel()
 
         vm.setLabel("a", "new")
@@ -519,7 +536,7 @@ class BoardViewModelTest {
 
     @Test
     fun `renameBoard updates the board name and persists it`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
         vm.renameBoard("Family Board")
@@ -531,7 +548,7 @@ class BoardViewModelTest {
 
     @Test
     fun `renameBoard falls back to New Board when given a blank name`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
         vm.renameBoard("   ")
@@ -541,7 +558,7 @@ class BoardViewModelTest {
 
     @Test
     fun `addPage appends a page and switches to it and persists`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
         vm.addPage("Feelings")
@@ -554,7 +571,7 @@ class BoardViewModelTest {
 
     @Test
     fun `renamePage updates the page name and persists it`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
         vm.renamePage(0, "Requests")
@@ -566,7 +583,7 @@ class BoardViewModelTest {
 
     @Test
     fun `deletePage removes the page when more than one exists`() {
-        repo.save(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
+        repo.saveBlocking(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
         val vm = newViewModel()
 
         vm.deletePage(0)
@@ -576,7 +593,7 @@ class BoardViewModelTest {
 
     @Test
     fun `switchPage changes the current page without persisting`() {
-        repo.save(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
+        repo.saveBlocking(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
         val vm = newViewModel()
 
         vm.switchPage(1)
@@ -588,7 +605,7 @@ class BoardViewModelTest {
 
     @Test
     fun `a sound referenced only on a non-current page is preloaded and survives pruning`() {
-        repo.save(
+        repo.saveBlocking(
             Board(
                 pages = listOf(
                     Page(name = "A", rows = 1, columns = 1, tiles = listOf(Tile(id = "a", fileName = "a.mp3"))),
@@ -596,20 +613,20 @@ class BoardViewModelTest {
                 )
             )
         )
-        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
-        repo.soundFile("b.mp3").apply { parentFile?.mkdirs() }.writeText("b")
+        soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        soundFile("b.mp3").apply { parentFile?.mkdirs() }.writeText("b")
         val vm = newViewModel()
 
         assertTrue(player.loaded.contains("b.mp3"))
 
         vm.setLabel("a", "renamed")
 
-        assertTrue(repo.soundFile("b.mp3").exists())
+        assertTrue(soundFile("b.mp3").exists())
     }
 
     @Test
     fun `setHomePage marks the current page as home and persists it`() {
-        repo.save(Board(pages = listOf(Page(name = "A"), Page(name = "B")), currentPageIndex = 1))
+        repo.saveBlocking(Board(pages = listOf(Page(name = "A"), Page(name = "B")), currentPageIndex = 1))
         val vm = newViewModel()
 
         vm.setHomePage(1)
@@ -621,7 +638,7 @@ class BoardViewModelTest {
 
     @Test
     fun `a fresh view model resumes the last-viewed page by default`() {
-        repo.save(Board(pages = listOf(Page(name = "A", isHome = true), Page(name = "B")), currentPageIndex = 1))
+        repo.saveBlocking(Board(pages = listOf(Page(name = "A", isHome = true), Page(name = "B")), currentPageIndex = 1))
 
         val vm = newViewModel()
 
@@ -630,7 +647,7 @@ class BoardViewModelTest {
 
     @Test
     fun `openOnHomePage jumps a fresh view model to the home page without touching disk`() {
-        repo.save(
+        repo.saveBlocking(
             Board(
                 pages = listOf(Page(name = "A", isHome = true), Page(name = "B")),
                 currentPageIndex = 1,
@@ -643,12 +660,12 @@ class BoardViewModelTest {
         assertEquals(0, vm.board.value.currentPageIndex)
         // Only the in-memory pager start changed — the saved page (from switchPage's own
         // page-switch semantics) is untouched, same as any other in-session page switch.
-        assertEquals(1, repo.load().currentPageIndex)
+        assertEquals(1, repo.loadBlocking().currentPageIndex)
     }
 
     @Test
     fun `openOnHomePage is a no-op when no page is marked home`() {
-        repo.save(
+        repo.saveBlocking(
             Board(
                 pages = listOf(Page(name = "A"), Page(name = "B")),
                 currentPageIndex = 1,
@@ -752,7 +769,7 @@ class BoardViewModelTest {
         val vm = newViewModel()
         vm.setPerformanceModeEnabled(true)
 
-        vm.openBoard(BoardRef.Saved(savedBoardRepo.save(Board(name = "Other"))))
+        vm.openBoard(BoardRef.Saved(savedBoardRepo.saveBlocking(Board(name = "Other"))))
 
         assertTrue(vm.performanceModeEnabled.value)
     }
@@ -881,7 +898,7 @@ class BoardViewModelTest {
         vm.setShowModeMuteSounds(true)
         vm.setShowModeFlipped(true)
 
-        vm.openBoard(BoardRef.Saved(savedBoardRepo.save(Board(name = "Other"))))
+        vm.openBoard(BoardRef.Saved(savedBoardRepo.saveBlocking(Board(name = "Other"))))
 
         val expected = ShowModeSettings(enabled = true, timerSeconds = 30, tapToClose = true, muteSounds = true, flipped = true)
         assertEquals(expected, vm.showMode.value)
@@ -890,7 +907,7 @@ class BoardViewModelTest {
 
     @Test
     fun `settings are captured by saveBoardAs and restored by openBoard`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
         vm.setOpenOnHomePage(true)
         vm.setIdleTimeoutMinutes(2)
@@ -929,7 +946,7 @@ class BoardViewModelTest {
 
     @Test
     fun `layout and label settings are captured by saveBoardAs and restored by openBoard`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
         val labelStyle = LabelStyle(minSizeSp = 18f, maxSizeSp = 40f, font = LabelFont.LEXEND, bold = true, allCaps = true)
         vm.setLandscapeLayout(LandscapeLayout.FIT_TO_SCREEN)
@@ -961,7 +978,7 @@ class BoardViewModelTest {
     fun `rapid back-to-back commits on a real IO dispatcher leave the latest board on disk`() {
         // Regression for the save race fixed in #144: each commit launches its own save,
         // and on a real thread pool they used to be able to finish out of order.
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = BoardViewModel(repo, player, recorder, savedBoardRepo, speaker, devicePrefs, recentBoardsRepo, ioDispatcher = Dispatchers.IO)
         waitUntil { vm.board.value.currentPage.tiles.any { it.id == "a" } }
 
@@ -971,7 +988,7 @@ class BoardViewModelTest {
         }
         val expected = vm.board.value
 
-        waitUntil { BoardRepository(context).load() == expected }
+        waitUntil { BoardRepository(context).loadBlocking() == expected }
     }
 
     private fun waitUntil(timeoutMillis: Long = 5_000, condition: () -> Boolean) {
@@ -986,7 +1003,7 @@ class BoardViewModelTest {
     @Test
     fun `recording onto a landscape-only tile grows the portrait grid to show it`() {
         // A 4x4 page shows 8x3 = 24 slots in landscape; slot 20 doesn't exist in portrait.
-        repo.save(Board(pages = listOf(Page(rows = 4, columns = 4, tiles = List(16) { Tile(id = "t$it") }))))
+        repo.saveBlocking(Board(pages = listOf(Page(rows = 4, columns = 4, tiles = List(16) { Tile(id = "t$it") }))))
         val vm = newViewModel()
         val landscapeOnly = vm.board.value.currentPage.landscapeTiles[19]
         assertFalse(vm.board.value.currentPage.visibleTiles.contains(landscapeOnly))
@@ -1001,10 +1018,10 @@ class BoardViewModelTest {
 
     @Test
     fun `once a tile's sound is cleared, shrinking the grid can hide it again`() {
-        repo.save(
+        repo.saveBlocking(
             Board(pages = listOf(Page(rows = 2, columns = 2, tiles = listOf(Tile(id = "a"), Tile(id = "b"), Tile(id = "c"), Tile(id = "d", label = "Water", fileName = "d.mp3")))))
         )
-        repo.soundFile("d.mp3").apply { parentFile?.mkdirs() }.writeText("d")
+        soundFile("d.mp3").apply { parentFile?.mkdirs() }.writeText("d")
         val vm = newViewModel()
 
         vm.resize(0, 1, 2)
@@ -1043,7 +1060,7 @@ class BoardViewModelTest {
         val vm = newViewModel()
         val uri = Uri.parse("content://fake/bg.jpg")
         shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("bg".toByteArray()))
-        vm.setBackgroundImage(uri)
+        vm.setBackgroundImage(UriPickedFile(context, uri))
         assertTrue(vm.board.value.backgroundImageFileName != null)
 
         vm.setBackgroundColor(0xFF00FF00.toInt())
@@ -1061,7 +1078,7 @@ class BoardViewModelTest {
         val uri = Uri.parse("content://fake/bg.jpg")
         shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("bg".toByteArray()))
 
-        vm.setBackgroundImage(uri)
+        vm.setBackgroundImage(UriPickedFile(context, uri))
 
         assertTrue(vm.board.value.backgroundImageFileName != null)
         assertEquals(null, vm.board.value.backgroundColorArgb)
@@ -1100,7 +1117,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setPageOpacity overrides only the targeted page`() {
-        repo.save(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
+        repo.saveBlocking(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
         val vm = newViewModel()
 
         vm.setPageOpacity(1, 0.4f)
@@ -1145,7 +1162,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setPageRowHeight overrides only the targeted page and null clears it`() {
-        repo.save(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
+        repo.saveBlocking(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
         val vm = newViewModel()
 
         vm.setPageRowHeight(1, RowHeight.SHORT)
@@ -1160,7 +1177,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setLandscapeGrid and setLandscapeLayout persist across a fresh view model`() {
-        repo.save(Board(pages = listOf(Page(name = "A"))))
+        repo.saveBlocking(Board(pages = listOf(Page(name = "A"))))
         val vm = newViewModel()
 
         vm.setLandscapeGrid(0, 2, 6)
@@ -1174,7 +1191,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setOpacity overrides only the targeted tile`() {
-        repo.save(boardWith(Tile(id = "a"), Tile(id = "b")))
+        repo.saveBlocking(boardWith(Tile(id = "a"), Tile(id = "b")))
         val vm = newViewModel()
 
         vm.setOpacity("a", 0.3f)
@@ -1185,7 +1202,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setOpacity edits the home page's tile even from a different current page`() {
-        repo.save(
+        repo.saveBlocking(
             Board(
                 pages = listOf(
                     Page(name = "Home", isHome = true, tiles = listOf(Tile(id = "a"))),
@@ -1214,7 +1231,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setPageBorder overrides only the targeted page`() {
-        repo.save(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
+        repo.saveBlocking(Board(pages = listOf(Page(name = "A"), Page(name = "B"))))
         val vm = newViewModel()
 
         vm.setPageBorder(1, TileBorder(enabled = true))
@@ -1225,7 +1242,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setBorder overrides only the targeted tile`() {
-        repo.save(boardWith(Tile(id = "a"), Tile(id = "b")))
+        repo.saveBlocking(boardWith(Tile(id = "a"), Tile(id = "b")))
         val vm = newViewModel()
 
         vm.setBorder("a", TileBorder(enabled = true))
@@ -1236,7 +1253,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setBorder edits the home page's tile even from a different current page`() {
-        repo.save(
+        repo.saveBlocking(
             Board(
                 pages = listOf(
                     Page(name = "Home", isHome = true, tiles = listOf(Tile(id = "a"))),
@@ -1270,7 +1287,7 @@ class BoardViewModelTest {
     fun `resize, setTileAspectRatio and setPageColor target the given page, not the current one`() {
         // PageOptionsDialog opens for whichever page was long-pressed, which may not be
         // the page currently on screen — these must not silently fall back to currentPage.
-        repo.save(Board(pages = listOf(Page(name = "A"), Page(rows = 1, columns = 2, name = "B")), currentPageIndex = 0))
+        repo.saveBlocking(Board(pages = listOf(Page(name = "A"), Page(rows = 1, columns = 2, name = "B")), currentPageIndex = 0))
         val vm = newViewModel()
 
         vm.resize(1, 3, 3)
@@ -1292,7 +1309,7 @@ class BoardViewModelTest {
 
     @Test
     fun `setLabel edits a home page tile regardless of the current page`() {
-        repo.save(
+        repo.saveBlocking(
             Board(
                 pages = listOf(
                     Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "old"))),
@@ -1311,8 +1328,8 @@ class BoardViewModelTest {
 
     @Test
     fun `clearing a home row tile unloads and deletes its sound`() {
-        repo.save(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3")), isHome = true))))
-        repo.soundFile("hey.mp3").apply { parentFile?.mkdirs() }.writeText("hey")
+        repo.saveBlocking(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey", fileName = "hey.mp3")), isHome = true))))
+        soundFile("hey.mp3").apply { parentFile?.mkdirs() }.writeText("hey")
         val vm = newViewModel()
 
         vm.clearTile("hey")
@@ -1321,7 +1338,7 @@ class BoardViewModelTest {
         assertEquals("", tile.label)
         assertNull(tile.fileName)
         assertTrue(player.unloaded.contains("hey.mp3"))
-        assertFalse(repo.soundFile("hey.mp3").exists())
+        assertFalse(soundFile("hey.mp3").exists())
     }
 
     @Test
@@ -1347,7 +1364,7 @@ class BoardViewModelTest {
 
     @Test
     fun `applying the same preset twice moves it to the front instead of duplicating it`() {
-        repo.save(boardWith(Tile(id = "a")))
+        repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
         vm.openBoard(BoardRef.BuiltIn("jeremy-care-board.zip", "Jeremy Draft Care Board"))
@@ -1360,7 +1377,7 @@ class BoardViewModelTest {
 
     @Test
     fun `saveBoardAs renames the board and appears in presets`() {
-        repo.save(boardWith(Tile(id = "a", label = "old")))
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "old")))
         val vm = newViewModel()
 
         vm.saveBoardAs("My Layout")
@@ -1371,7 +1388,7 @@ class BoardViewModelTest {
 
     @Test
     fun `saveBoardAs records the new preset in recentBoards`() {
-        repo.save(boardWith(Tile(id = "a", label = "old")))
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "old")))
         val vm = newViewModel()
 
         vm.saveBoardAs("My Layout")
@@ -1382,7 +1399,7 @@ class BoardViewModelTest {
 
     @Test
     fun `openBoard with a saved ref restores that snapshot`() {
-        repo.save(boardWith(Tile(id = "a", label = "first")))
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "first")))
         val vm = newViewModel()
         vm.saveBoardAs("Version 1")
         val savedId = vm.savedBoards.value.first().id
@@ -1395,7 +1412,7 @@ class BoardViewModelTest {
 
     @Test
     fun `openBoard with an unknown saved id reports failure without touching the board`() {
-        repo.save(boardWith(Tile(id = "a", label = "unchanged")))
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "unchanged")))
         val vm = newViewModel()
 
         vm.openBoard(BoardRef.Saved("does-not-exist"))
@@ -1406,21 +1423,21 @@ class BoardViewModelTest {
 
     @Test
     fun `saving a preset protects its sound from being pruned after the live tile changes`() {
-        repo.save(boardWith(Tile(id = "a", fileName = "a.mp3")))
-        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        repo.saveBlocking(boardWith(Tile(id = "a", fileName = "a.mp3")))
+        soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
         val vm = newViewModel()
 
         vm.saveBoardAs("Backup layout")
         vm.clearTile("a")
 
-        assertTrue(repo.soundFile("a.mp3").exists())
+        assertTrue(soundFile("a.mp3").exists())
     }
 
     @Test
     fun `refreshStrayClips finds a file no tile or preset points at`() {
-        repo.save(boardWith(Tile(id = "a", fileName = "used.mp3")))
-        repo.soundFile("used.mp3").apply { parentFile?.mkdirs() }.writeText("used")
-        repo.soundFile("stray.mp3").writeText("stray")
+        repo.saveBlocking(boardWith(Tile(id = "a", fileName = "used.mp3")))
+        soundFile("used.mp3").apply { parentFile?.mkdirs() }.writeText("used")
+        soundFile("stray.mp3").writeText("stray")
         val vm = newViewModel()
 
         vm.refreshStrayClips()
@@ -1430,8 +1447,8 @@ class BoardViewModelTest {
 
     @Test
     fun `refreshStrayClips excludes a file only a saved preset still references`() {
-        repo.save(boardWith(Tile(id = "a", fileName = "a.mp3")))
-        repo.soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
+        repo.saveBlocking(boardWith(Tile(id = "a", fileName = "a.mp3")))
+        soundFile("a.mp3").apply { parentFile?.mkdirs() }.writeText("a")
         val vm = newViewModel()
         vm.saveBoardAs("Backup layout")
         vm.clearTile("a")
@@ -1443,8 +1460,8 @@ class BoardViewModelTest {
 
     @Test
     fun `deleteStrayClips removes the files and clears the list`() {
-        repo.save(boardWith(Tile(id = "a")))
-        val stray = repo.soundFile("stray.mp3").apply { parentFile?.mkdirs() }.also { it.writeText("stray") }
+        repo.saveBlocking(boardWith(Tile(id = "a")))
+        val stray = soundFile("stray.mp3").apply { parentFile?.mkdirs() }.also { it.writeText("stray") }
         val vm = newViewModel()
         vm.refreshStrayClips()
 
@@ -1456,13 +1473,13 @@ class BoardViewModelTest {
 
     @Test
     fun `exportAndDeleteStrayClips only deletes after a successful export`() {
-        repo.save(boardWith(Tile(id = "a")))
-        val stray = repo.soundFile("stray.mp3").apply { parentFile?.mkdirs() }.also { it.writeText("stray") }
+        repo.saveBlocking(boardWith(Tile(id = "a")))
+        val stray = soundFile("stray.mp3").apply { parentFile?.mkdirs() }.also { it.writeText("stray") }
         val vm = newViewModel()
         vm.refreshStrayClips()
         val zipOut = File(context.filesDir, "export.zip")
 
-        vm.exportAndDeleteStrayClips(Uri.fromFile(zipOut))
+        vm.exportAndDeleteStrayClips(UriSaveTarget(context, Uri.fromFile(zipOut)))
 
         assertFalse(stray.exists())
         assertTrue(vm.strayClips.value.isEmpty())

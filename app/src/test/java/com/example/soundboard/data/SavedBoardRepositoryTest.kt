@@ -1,5 +1,6 @@
 package com.example.soundboard.data
 
+import kotlinx.coroutines.test.runTest
 import androidx.test.core.app.ApplicationProvider
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.Page
@@ -33,7 +34,7 @@ class SavedBoardRepositoryTest {
     )
 
     @Test
-    fun `save then load round-trips the board`() {
+    fun `save then load round-trips the board`() = runTest {
         val board = boardNamed("My Layout", Tile(id = "a", label = "Hey", fileName = "a.mp3"))
 
         val id = savedBoardRepo.save(board)
@@ -43,12 +44,12 @@ class SavedBoardRepositoryTest {
     }
 
     @Test
-    fun `load returns null for an id that was never saved`() {
+    fun `load returns null for an id that was never saved`() = runTest {
         assertNull(savedBoardRepo.load("does-not-exist"))
     }
 
     @Test
-    fun `save then load round-trips a tile's ttsScript`() {
+    fun `save then load round-trips a tile's ttsScript`() = runTest {
         val board = boardNamed("My Layout", Tile(id = "a", label = "Water", ttsScript = "I would like a glass of water please"))
 
         val id = savedBoardRepo.save(board)
@@ -58,7 +59,7 @@ class SavedBoardRepositoryTest {
     }
 
     @Test
-    fun `list returns saved presets newest first`() {
+    fun `list returns saved presets newest first`() = runTest {
         val firstId = savedBoardRepo.save(boardNamed("First"))
         File(savedBoardsDir, "$firstId.json").setLastModified(1_000L)
         val secondId = savedBoardRepo.save(boardNamed("Second"))
@@ -70,7 +71,7 @@ class SavedBoardRepositoryTest {
     }
 
     @Test
-    fun `list skips a preset file that fails to decode rather than crashing`() {
+    fun `list skips a preset file that fails to decode rather than crashing`() = runTest {
         savedBoardRepo.save(boardNamed("Good"))
         savedBoardsDir.mkdirs()
         File(savedBoardsDir, "corrupt.json").writeText("not json at all")
@@ -81,7 +82,7 @@ class SavedBoardRepositoryTest {
     }
 
     @Test
-    fun `allReferencedFileNames collects fileNames across every saved preset`() {
+    fun `allReferencedFileNames collects fileNames across every saved preset`() = runTest {
         savedBoardRepo.save(boardNamed("A", Tile(id = "1", fileName = "one.mp3")))
         savedBoardRepo.save(
             Board(
@@ -99,7 +100,7 @@ class SavedBoardRepositoryTest {
     }
 
     @Test
-    fun `allReferencedFileNames is empty when nothing has been saved`() {
+    fun `allReferencedFileNames is empty when nothing has been saved`() = runTest {
         assertTrue(savedBoardRepo.allReferencedFileNames().isEmpty())
     }
 }

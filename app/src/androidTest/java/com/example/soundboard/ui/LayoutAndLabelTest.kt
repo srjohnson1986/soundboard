@@ -1,5 +1,7 @@
 package com.example.soundboard.ui
 
+import java.io.File
+import kotlinx.coroutines.runBlocking
 import android.app.UiAutomation
 import android.content.res.Configuration
 import androidx.activity.ComponentActivity
@@ -83,9 +85,9 @@ class LayoutAndLabelTest {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val repo = BoardRepository(context)
         board.pages.flatMap { it.tiles }.mapNotNull { it.fileName }.forEach { name ->
-            repo.soundFile(name).apply { parentFile?.mkdirs() }.writeText(name)
+            File(context.filesDir, "sounds/$name").apply { parentFile?.mkdirs() }.writeText(name)
         }
-        repo.save(board)
+        runBlocking { repo.save(board) }
         vm = BoardViewModel(repo, FakePlayer(), FakeRecorder(), SavedBoardRepository(context), FakeSpeaker(), DevicePreferences(context), RecentBoardsRepository(context))
         composeRule.setContent {
             if (fontScale == null) {

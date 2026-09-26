@@ -1,7 +1,5 @@
 package com.example.soundboard.audio
 
-import java.io.File
-
 /** Records calls instead of touching real audio. Loads and plays are treated as instant. */
 class FakePlayer : Player {
     val loaded = mutableListOf<String>()
@@ -13,7 +11,7 @@ class FakePlayer : Player {
     var cleared = false
     var released = false
 
-    override fun load(key: String, file: File) {
+    override fun load(key: String, path: String) {
         loaded += key
     }
 

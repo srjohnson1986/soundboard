@@ -65,8 +65,16 @@ From the command line:
 ./gradlew testDebugUnitTest
 ```
 
-That runs the unit tests: the model, repositories and view model, on the JVM
+That runs the app's unit tests: the repositories and view model, on the JVM
 with Robolectric.
+
+```bash
+./gradlew :shared:allTests
+```
+
+That runs the board model's tests from the `shared` module, which holds code
+the Android app and the upcoming web version share. They run twice: on the JVM
+and compiled to WebAssembly.
 
 ```bash
 ./gradlew connectedDebugAndroidTest
@@ -74,8 +82,8 @@ with Robolectric.
 
 That runs the Compose UI tests on a connected device or emulator.
 
-GitHub Actions runs lint, the unit tests and a debug build on every pull
-request, plus the UI tests on an emulator (advisory; emulators occasionally
+GitHub Actions runs lint, both sets of unit tests and a debug build on every
+pull request, plus the UI tests on an emulator (advisory; emulators occasionally
 flake). Pull requests that only change Markdown skip both.
 
 ## Work on it

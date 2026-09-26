@@ -65,7 +65,6 @@ import com.example.soundboard.model.Page
 import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
-import com.example.soundboard.model.resolvedColor
 import kotlin.math.roundToInt
 
 /** Horizontal padding on each side of a page's grid (and the pinned row above it). */

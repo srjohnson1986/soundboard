@@ -74,6 +74,10 @@ jobs:
       - name: Shared module tests (JVM + Wasm)
         run: ./gradlew :shared:allTests --stacktrace
 
+      # The web app's recording and playback, against headless Chrome's fake microphone.
+      - name: Web app tests
+        run: ./gradlew :web:allTests --stacktrace
+
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
 
@@ -111,5 +115,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: shared-test-report
-          path: shared/build/reports/tests/allTests
+          path: |
+            shared/build/reports/tests/allTests
+            web/build/reports/tests/allTests
           if-no-files-found: ignore

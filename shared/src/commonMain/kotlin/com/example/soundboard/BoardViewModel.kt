@@ -173,7 +173,7 @@ class BoardViewModel(
     fun startRecording() {
         if (_isRecording.value) return
         viewModelScope.launch {
-            val path = boardRepo.newRecordingPath()
+            val path = boardRepo.newRecordingPath(recorder.fileExtension)
             val started = withContext(ioDispatcher) { recorder.start(path) }
             if (started) {
                 pendingRecordingPath = path

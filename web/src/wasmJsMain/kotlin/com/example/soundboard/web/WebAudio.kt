@@ -5,6 +5,7 @@ import com.example.soundboard.audio.Recorder
 import com.example.soundboard.audio.Speaker
 import com.example.soundboard.data.FileStore
 import com.example.soundboard.data.toUint8Array
+import com.example.soundboard.data.uint8ArrayToByteArray
 import kotlin.js.Promise
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.await
@@ -39,6 +40,9 @@ class WebAudioPlayer(private val files: FileStore, private val scope: CoroutineS
         clips -= key
     }
 
+    /** Whether [key] has finished loading and decoding; for tests. */
+    internal fun isLoaded(key: String): Boolean = key in clips
+
     override fun clear() {
         clips.clear()
     }
@@ -61,11 +65,45 @@ class WebSpeaker : Speaker {
     override fun shutdown() = stopSpeaking()
 }
 
-/** Stands in until recording arrives on the web: it never starts, so the app says it couldn't record. */
-class UnavailableRecorder : Recorder {
-    override fun start(path: String): Boolean = false
-    override fun stop(): Boolean = false
-    override fun cancel() {}
+/**
+ * [Recorder] on the browser's MediaRecorder. Starting asks for the microphone (the browser
+ * prompts the first time; saying no means recording doesn't start). Chrome and Firefox record
+ * Opus in WebM and Safari AAC in MP4; the Android app plays both, so recordings made here
+ * survive a backup to the phone.
+ */
+class WebRecorder(private val files: FileStore) : Recorder {
+
+    private val mimeType: String = supportedRecordingType()
+
+    override val fileExtension: String = if (mimeType.startsWith("audio/mp4")) "m4a" else "webm"
+
+    private var active: JsAny? = null
+    private var activePath: String? = null
+
+    override suspend fun start(path: String): Boolean {
+        cancel()
+        val recording = runCatching { startRecording(mimeType).await<JsAny?>() }.getOrNull() ?: return false
+        active = recording
+        activePath = path
+        return true
+    }
+
+    override suspend fun stop(): Boolean {
+        val recording = active ?: return false
+        val path = activePath ?: return false
+        active = null
+        activePath = null
+        val bytes = runCatching { finishRecording(recording).await<JsAny>().uint8ArrayToByteArray() }.getOrNull()
+        if (bytes == null || bytes.isEmpty()) return false
+        files.write(path, bytes)
+        return true
+    }
+
+    override fun cancel() {
+        active?.let(::abandonRecording)
+        active = null
+        activePath = null
+    }
 }
 
 // One AudioContext for the page. Browsers start it suspended until the user interacts, so
@@ -101,3 +139,52 @@ private fun speakText(text: String): Unit = js(
 )
 
 private fun stopSpeaking(): Unit = js("{ speechSynthesis.cancel(); }")
+
+/** The first recording format the browser supports, or "" to let it choose. */
+private fun supportedRecordingType(): String = js(
+    """(() => {
+        if (typeof MediaRecorder === 'undefined') return '';
+        for (const type of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']) {
+            if (MediaRecorder.isTypeSupported(type)) return type;
+        }
+        return '';
+    })()"""
+)
+
+/** Asks for the microphone and starts recording; resolves to the recording, or null if it couldn't start. */
+private fun startRecording(mimeType: String): Promise<JsAny?> = js(
+    """(async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const recorder = new MediaRecorder(stream, mimeType ? { mimeType: mimeType } : undefined);
+            const recording = { stream: stream, recorder: recorder, chunks: [] };
+            recorder.ondataavailable = event => { if (event.data.size > 0) recording.chunks.push(event.data); };
+            recorder.start();
+            return recording;
+        } catch (e) {
+            return null;
+        }
+    })()"""
+)
+
+/** Stops the recording and resolves to everything it captured. */
+private fun finishRecording(recording: JsAny): Promise<JsAny> = js(
+    """new Promise((resolve, reject) => {
+        const recorder = recording.recorder;
+        recorder.onstop = async () => {
+            recording.stream.getTracks().forEach(track => track.stop());
+            const blob = new Blob(recording.chunks, { type: recorder.mimeType });
+            resolve(new Uint8Array(await blob.arrayBuffer()));
+        };
+        recorder.onerror = event => reject(event.error);
+        recorder.stop();
+    })"""
+)
+
+private fun abandonRecording(recording: JsAny): Unit = js(
+    """{
+        recording.recorder.onstop = null;
+        try { recording.recorder.stop(); } catch (e) {}
+        recording.stream.getTracks().forEach(track => track.stop());
+    }"""
+)

@@ -14,7 +14,9 @@ import com.example.soundboard.data.FileSystemStore
 class AudioRecorder(private val context: Context, private val files: FileSystemStore) : Recorder {
     private var active: MediaRecorder? = null
 
-    override fun start(path: String): Boolean {
+    override val fileExtension: String = "m4a"
+
+    override suspend fun start(path: String): Boolean {
         cancel()
         val file = files.file(path).apply { parentFile?.mkdirs() }
         val recorder = newRecorder()
@@ -37,7 +39,7 @@ class AudioRecorder(private val context: Context, private val files: FileSystemS
     }
 
     /** False also covers MediaRecorder's own "stop failed" case — too little audio was captured to finalize the file. */
-    override fun stop(): Boolean {
+    override suspend fun stop(): Boolean {
         val recorder = active ?: return false
         active = null
         return runCatching { recorder.stop() }

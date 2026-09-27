@@ -17,11 +17,24 @@ kotlin {
             commonWebpackConfig {
                 outputFileName = "soundboard.js"
             }
+            // Headless Chrome with a fake microphone; see karma.config.d/fake-media.js.
+            testTask {
+                useKarma {
+                    useChromeHeadless()
+                }
+            }
         }
         binaries.executable()
     }
 
     sourceSets {
+        wasmJsTest {
+            languageSettings.optIn("kotlin.js.ExperimentalWasmJsInterop")
+            dependencies {
+                implementation(kotlin("test"))
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+            }
+        }
         wasmJsMain {
             languageSettings.optIn("kotlin.js.ExperimentalWasmJsInterop")
             dependencies {

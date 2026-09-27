@@ -50,7 +50,7 @@ feature, and `scripts/sync-wiki.sh` copies it to the wiki at release time.
 The same app also runs in a web browser, built from the same code (see
 [Architecture](docs/ARCHITECTURE.md), "Modules"). It starts with the text-to-speech
 board, keeps everything in the browser's own storage, and reads and writes the
-same backup zips as the Android app. Recording isn't there yet. To try it locally:
+same backup zips as the Android app, recordings included. To try it locally:
 
 ```bash
 ./gradlew :web:wasmJsBrowserDevelopmentRun

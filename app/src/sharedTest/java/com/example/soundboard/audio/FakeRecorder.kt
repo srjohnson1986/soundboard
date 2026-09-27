@@ -8,13 +8,15 @@ class FakeRecorder : Recorder {
         private set
     var stopSucceeds = true
 
-    override fun start(path: String): Boolean {
+    override val fileExtension: String = "m4a"
+
+    override suspend fun start(path: String): Boolean {
         startedPath = path
         cancelled = false
         return true
     }
 
-    override fun stop(): Boolean {
+    override suspend fun stop(): Boolean {
         startedPath = null
         return stopSucceeds
     }

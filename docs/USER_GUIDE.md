@@ -335,8 +335,10 @@ The web version works like the app, with a few differences:
   the browser's site data erases it, and a browser can clear it on its own when
   it's short of space, so **Export backup** anything you want to keep. The backup
   is a download; **Import backup** reads one back, in the web version or the app.
-- **Recording isn't available yet.** A tile can still play a sound file you pick,
-  or speak.
+- **Recording asks for the microphone** the first time, in the browser's own
+  prompt; if you say no, recording doesn't start. Recordings made in Chrome or
+  Firefox are WebM files and in Safari M4A; the app plays both, so they come
+  through a backup to the phone and back.
 - **Keep screen awake** works where the browser supports it, and only while the
   page is showing.
 

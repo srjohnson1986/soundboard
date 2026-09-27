@@ -8,7 +8,7 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 | Module | What's in it |
 |---|---|
 | `shared/` | Code that doesn't depend on Android, built for both Android and WebAssembly (Kotlin Multiplatform): the board model (`model/`), the repositories (`data/`), `BoardViewModel` and `BoardSettingsActions`, the `Player`/`Recorder`/`Speaker` interfaces (`audio/`), and the whole Compose UI (`ui/`), with its fonts as Compose Resources (`composeResources/font/`). |
-| `web/` | The web app: `main()` (`WebMain.kt`), the browser's audio and speech (`WebAudioPlayer`, `WebSpeaker`), and `index.html`. It serves the TTS board from `presets/` as `boards/tts-care-board.zip`. |
+| `web/` | The web app: `main()` (`WebMain.kt`), the browser's audio and speech (`WebAudioPlayer` on Web Audio, `WebRecorder` on MediaRecorder, `WebSpeaker` on speechSynthesis), and `index.html`. It serves the TTS board from `presets/` as `boards/tts-care-board.zip`. |
 | `app/` | The Android app: `MainActivity`, `BoardViewModelFactory`, the audio and speech implementations (`SoundPlayer`, `AudioRecorder`, `TtsSpeaker`), the manifest, launcher icons and built-in board assets. It uses `shared` like any other library. |
 
 `shared`'s common code has no Android or Compose dependencies. Keep it that way:
@@ -369,6 +369,12 @@ imported board, so stale keys from the previous state can't linger.
 `release()` is the real teardown, called once from `onCleared()`.
 
 ## Audio recording
+
+`Recorder.start()`/`stop()` suspend, since a browser only grants the microphone
+asynchronously, and each recorder names the file extension it records
+(`Recorder.fileExtension`), which `newRecordingPath()` uses: `.m4a` on Android;
+on the web `WebRecorder` records WebM/Opus (Chrome, Firefox) or MP4/AAC (Safari),
+all of which Android's player handles.
 
 `AudioRecorder` wraps `MediaRecorder`, encoding to AAC in an MPEG-4 (`.m4a`)
 container — `SoundPlayer` branches on file size, not extension, so a
@@ -758,6 +764,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | `SavedBoardRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/SavedBoardRepositoryTest.kt` | Robolectric |
 | `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, and saveBoardAs/openBoard | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
 | `BoardViewModel` smoke test — fallback board, tap to speak, an edit persisting, recent boards — on in-memory storage, proving it runs on the web too | `shared/src/commonTest/.../BoardViewModelCommonTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
+| The web app's recording and playback: `WebRecorder` records from headless Chrome's fake microphone into OPFS, `WebAudioPlayer` decodes the result, a cancelled recording saves nothing | `web/src/wasmJsTest/.../web/WebAudioTest.kt` (fake mic: `web/karma.config.d/fake-media.js`) | WebAssembly in headless Chrome |
 | `BoardScreen`, incl. the sticky home row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 | Landscape grid, row height cap, drag steps, label size/font/caps, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
 

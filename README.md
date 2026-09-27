@@ -102,7 +102,7 @@ They run twice: on the JVM, and compiled to WebAssembly in headless Chrome
 That runs the Compose UI tests on a connected device or emulator.
 
 ```bash
-./gradlew :koverHtmlReportUnit :koverVerifyCore
+./gradlew :koverHtmlReportUnit :verifyCoreCoverage
 ```
 
 That measures the JVM tests' coverage (report in `build/reports/kover/htmlUnit`) and

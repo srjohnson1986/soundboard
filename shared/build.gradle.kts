@@ -126,12 +126,10 @@ kotlin {
     }
 }
 
-// Coverage (#222): the Android host tests, reported together with the app's in the root project
-// (see there for the two variants).
+// Coverage (#222): the Android host tests, reported together with the app's in the root project.
 kover {
     currentProject {
         createVariant("unit") { add("android") }
-        createVariant("core") { add("android") }
     }
 }
 

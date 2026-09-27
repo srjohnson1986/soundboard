@@ -147,7 +147,7 @@ jobs:
 
   # Test coverage of the JVM tests (the app's and shared's), with a floor for the core (#222):
   # the data and model packages and BoardViewModel each keep at least 90% of their lines
-  # covered. See the kover block in build.gradle.kts. It runs beside the other two, since
+  # covered. See build.gradle.kts (kover, verifyCoreCoverage). It runs beside the other two, since
   # measuring means running the tests again with Kover's agent.
   coverage:
     needs: changes
@@ -170,7 +170,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Coverage report and floor
-        run: ./gradlew :koverHtmlReportUnit :koverLogUnit :koverVerifyCore --continue --stacktrace
+        run: ./gradlew :koverHtmlReportUnit :verifyCoreCoverage --continue --stacktrace
 
       - name: Upload coverage report
         if: always()

@@ -82,12 +82,10 @@ kotlin {
     }
 }
 
-// Coverage (#222): the debug unit tests, reported together with shared's in the root project
-// (see there for the two variants).
+// Coverage (#222): the debug unit tests, reported together with shared's in the root project.
 kover {
     currentProject {
         createVariant("unit") { add("debug") }
-        createVariant("core") { add("debug") }
     }
 }
 

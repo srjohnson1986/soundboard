@@ -861,10 +861,12 @@ the `ui-test-report` artifact. `LayoutAndLabelTest` rotates the device itself
 tests and `shared`'s Android host tests together, configured in the root
 `build.gradle.kts`. `./gradlew :koverHtmlReportUnit` writes the report for all the
 code to `build/reports/kover/htmlUnit` (CI uploads it as the `coverage-report`
-artifact), and `./gradlew :koverVerifyCore` fails if the `data` or `model` package or
-`BoardViewModel` drops below 90% of lines covered. The UI and the Android audio have no
-floor: the audio is tested on the emulator, which Kover doesn't measure, and so is the
-web-only code, which runs as WebAssembly.
+artifact), and `./gradlew :verifyCoreCoverage` fails if the `data` or `model` package or
+`BoardViewModel` drops below 90% of lines covered, each on its own. That task reads
+Kover's XML report itself: a Kover rule with class filters didn't reliably apply them to
+the app module's classes. The UI and the Android audio have no floor: the audio is tested
+on the emulator, which Kover doesn't measure, and so is the web-only code, which runs as
+WebAssembly.
 
 - **`FakePlayer`** (a `Player`) exists twice — once under `test/`, once under
   `androidTest/` (`UiTestFakes.kt`) — since those source sets don't share code by default. Keep

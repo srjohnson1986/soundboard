@@ -87,11 +87,24 @@ internal fun baseLabelTextStyle(labelStyle: LabelStyle): TextStyle {
     }
 }
 
+/** The smallest a single label shrinks to, below its grid's size, to keep a word whole. */
+internal const val LABEL_FLOOR_SP = 10
+
 /**
- * The single label size for a grid whose tiles leave a [boxWidthPx] x [boxHeightPx] box for
- * text: the largest whole sp in [LabelStyle.minSizeSp]..[LabelStyle.maxSizeSp] at which every
- * one of [texts] fits (see [labelFits]). Falls back to the minimum when even that doesn't fit —
- * a too-long label then ellipsizes, as it always has.
+ * The label styles for one grid: [base] for every label, except the few in [exceptions]
+ * (keyed by display text) that only fit at a smaller size — see [rememberGridLabelStyle].
+ */
+internal class GridLabelStyle(val base: TextStyle, private val exceptions: Map<String, TextStyle> = emptyMap()) {
+    fun forText(text: String): TextStyle = exceptions[text] ?: base
+}
+
+/**
+ * The label styles for a grid whose tiles leave a [boxWidthPx] x [boxHeightPx] box for text.
+ * Every label shares one size: the largest whole sp in [LabelStyle.minSizeSp]..[LabelStyle.maxSizeSp]
+ * at which all of [texts] fit (see [labelFits]), or the minimum when even that doesn't fit.
+ * A label that still doesn't fit at that size (typically one word wider than its tile, which
+ * would otherwise be split mid-word, #209) gets a size of its own, as large as lets it fit,
+ * down to [LABEL_FLOOR_SP]; one that fits at no size keeps the shared one and ellipsizes.
  */
 @Composable
 internal fun rememberGridLabelStyle(
@@ -99,23 +112,37 @@ internal fun rememberGridLabelStyle(
     boxWidthPx: Int,
     boxHeightPx: Int,
     labelStyle: LabelStyle
-): TextStyle {
+): GridLabelStyle {
     val base = baseLabelTextStyle(labelStyle)
     val measurer = rememberTextMeasurer()
     // Order doesn't change what fits, so a drag-reorder doesn't redo the measuring.
     val distinct = remember(texts) { texts.distinct().sorted() }
     return remember(distinct, boxWidthPx, boxHeightPx, base, labelStyle.minSizeSp, labelStyle.maxSizeSp) {
         val min = labelStyle.minSizeSp.toInt()
-        val size = if (boxWidthPx <= 0 || boxHeightPx <= 0) {
-            min
-        } else {
-            largestFittingSize(min, labelStyle.maxSizeSp.toInt()) { sp ->
-                val style = base.copy(fontSize = sp.sp)
-                distinct.all { measurer.labelFits(it, style, boxWidthPx, boxHeightPx) }
-            }
-        }
-        base.copy(fontSize = size.sp)
+        if (boxWidthPx <= 0 || boxHeightPx <= 0) return@remember GridLabelStyle(base.copy(fontSize = min.sp))
+        fun fits(text: String, sp: Int) = measurer.labelFits(text, base.copy(fontSize = sp.sp), boxWidthPx, boxHeightPx)
+        val size = largestFittingSize(min, labelStyle.maxSizeSp.toInt()) { sp -> distinct.all { fits(it, sp) } }
+        val exceptions = labelSizeExceptions(distinct, size, LABEL_FLOOR_SP, ::fits)
+        GridLabelStyle(base.copy(fontSize = size.sp), exceptions.mapValues { (_, sp) -> base.copy(fontSize = sp.sp) })
     }
+}
+
+/**
+ * The labels among [texts] that don't fit at their grid's shared [gridSp], each with the
+ * largest size in [floorSp] until [gridSp] at which it does. A label that fits at [gridSp], or
+ * at no smaller size either, isn't in the result.
+ */
+internal fun labelSizeExceptions(
+    texts: Collection<String>,
+    gridSp: Int,
+    floorSp: Int,
+    fits: (text: String, sp: Int) -> Boolean
+): Map<String, Int> {
+    if (floorSp >= gridSp) return emptyMap()
+    return texts.filterNot { fits(it, gridSp) }.mapNotNull { text ->
+        val sp = largestFittingSize(floorSp, gridSp - 1) { fits(text, it) }
+        if (fits(text, sp)) text to sp else null
+    }.toMap()
 }
 
 /**

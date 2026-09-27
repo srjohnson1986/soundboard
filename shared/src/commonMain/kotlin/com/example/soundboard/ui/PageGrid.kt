@@ -87,7 +87,7 @@ private fun rememberTilesLabelStyle(
     tileWidthPx: Float,
     tileHeightPx: Float,
     labelStyle: LabelStyle
-): TextStyle {
+): GridLabelStyle {
     val insetPx = with(LocalDensity.current) { (TILE_CONTENT_PADDING * 2).toPx() }
     val texts = remember(tiles, labelStyle.allCaps) { tiles.map { tileDisplayText(it, labelStyle.allCaps) } }
     return rememberGridLabelStyle(
@@ -164,7 +164,7 @@ internal fun PinnedRow(
                 editMode = editMode,
                 aspectRatio = homePage.tileAspectRatio,
                 rowHeight = rowHeight,
-                labelTextStyle = labelTextStyle,
+                labelStyles = labelTextStyle,
                 allCaps = labelStyle.allCaps,
                 pageColor = homePage.color?.let { Color(it) },
                 opacity = homePage.opacityFor(tile, globalTileOpacity),
@@ -370,7 +370,7 @@ internal fun PageGrid(
                         editMode = editMode,
                         aspectRatio = page.tileAspectRatio,
                         rowHeight = pinnedRowHeight,
-                        labelTextStyle = pinnedLabelTextStyle,
+                        labelStyles = pinnedLabelTextStyle,
                         allCaps = labelStyle.allCaps,
                         pageColor = pageColor,
                         opacity = page.opacityFor(tile, globalTileOpacity),
@@ -401,7 +401,7 @@ internal fun PageGrid(
                     editMode = editMode,
                     aspectRatio = page.tileAspectRatio,
                     rowHeight = rowHeight,
-                    labelTextStyle = labelTextStyle,
+                    labelStyles = labelTextStyle,
                     allCaps = labelStyle.allCaps,
                     pageColor = pageColor,
                     opacity = page.opacityFor(tile, globalTileOpacity),
@@ -433,8 +433,8 @@ private fun TileCard(
     // setting, and landscape's page grid keeps them at their portrait height even though
     // its tiles are a different width.
     rowHeight: Dp? = null,
-    // The grid's shared label style, already sized by rememberGridLabelStyle.
-    labelTextStyle: TextStyle,
+    // The grid's label styles, already sized by rememberGridLabelStyle.
+    labelStyles: GridLabelStyle,
     allCaps: Boolean,
     modifier: Modifier = Modifier,
     onTap: () -> Unit,
@@ -500,7 +500,7 @@ private fun TileCard(
                 textAlign = TextAlign.Center,
                 maxLines = LABEL_MAX_LINES,
                 overflow = TextOverflow.Ellipsis,
-                style = labelTextStyle,
+                style = labelStyles.forText(tileDisplayText(tile, allCaps)),
                 color = contentColor,
                 modifier = Modifier.align(Alignment.Center)
             )

@@ -64,6 +64,18 @@ response to fall back on. The page hands the worker the files it loaded before t
 worker started, and the worker fetches the fonts and built-in board up front, so
 one visit is enough. It isn't registered on the local dev server (port 8080).
 
+**The production bundle's smoke test** (#223), `web/smoke/smoke.mjs`, runs on master
+(CI's `web` job, after it builds the bundle) and before every publish (`web.yml`). It
+serves the bundle from a `/soundboard/` subpath, as GitHub Pages does, and drives
+headless Chrome with Puppeteer: the page is a single canvas, so it taps where the TTS
+board's Water tile is and checks that `speechSynthesis` was asked to say "Water,
+please." (speech is recorded, not spoken). It also checks that the manifest and its
+icons load, that nothing logs an error or 404s, that the service worker registers with
+the subpath as its scope and caches the app and the built-in board, and that with the
+server stopped the page reloads and the tap still speaks. Run it locally after
+`./gradlew :web:wasmJsBrowserDistribution` with `npm ci` then `node smoke.mjs` in
+`web/smoke` (it finds Chrome, or takes `CHROME_PATH`).
+
 ## Layers
 
 | File | Responsibility |
@@ -822,6 +834,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | `SavedBoardRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/SavedBoardRepositoryTest.kt` | Robolectric |
 | `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, and saveBoardAs/openBoard | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
 | `BoardViewModel` smoke test — fallback board, tap to speak, an edit persisting, recent boards — on in-memory storage, proving it runs on the web too | `shared/src/commonTest/.../BoardViewModelCommonTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
+| The production web bundle from a `/soundboard/` subpath, online and then offline: a tap speaks, the manifest and icons, the service worker, no console errors | `web/smoke/smoke.mjs` | Headless Chrome (Puppeteer), on master and before publishing |
 | The web app's recording and playback: `WebRecorder` records from headless Chrome's fake microphone into OPFS, `WebAudioPlayer` decodes the result, a cancelled recording saves nothing | `web/src/wasmJsTest/.../web/WebAudioTest.kt` (fake mic: `web/karma.config.d/fake-media.js`) | WebAssembly in headless Chrome |
 | `BoardScreen`'s flows: a tap playing or editing, the tile editor's Save/Cancel and Restore original sound, edit mode, Switch board, Save board as, Settings groups (Recording included), Show mode, the page tab row and page options, the sticky home row, idle-timeout auto-return; tile label sizes (no word split, #209), bold/caps, and the landscape grid in a landscape window | `shared/src/commonTest/.../ui/BoardScreenUiTest.kt`, `LabelAndLayoutUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
 | What needs a device: drag-to-reorder, long-press previews, swiping between pages, scrolling under the sticky row | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
@@ -846,8 +859,8 @@ classes (`test` alone skips `shared`, which has no task by that name);
 emulator. In CI, the **CI** workflow runs the former and gates merging, as three
 jobs side by side: `android` (lint, the app's unit tests, the debug APK),
 `web` (`:shared:allTests` on the JVM and in headless Chrome, `:web:allTests`,
-and on master the production web bundle) and `coverage` (below), with
-`build-and-test`, the required check, passing when all three do. The build cache is saved by runs on master and
+and on master the production web bundle and its smoke test) and `coverage` (below),
+with `build-and-test`, the required check, passing when all three do. The build cache is saved by runs on master and
 read by pull requests, so a PR only rebuilds and retests what it changed. The
 separate **UI tests** workflow (`.github/workflows/ui-tests.yml`) runs the
 latter on an API 35 emulator for every PR, after every merge to master (which

@@ -68,9 +68,11 @@ never `assembleRelease`, so it doesn't need this file at all).
    git push origin vX.Y.Z
    ```
    Pushing the tag also publishes the web version: the **Publish web app**
-   workflow (`.github/workflows/web.yml`) builds it from the tagged commit and
-   deploys it to https://srjohnson1986.github.io/soundboard/, so the site and the
-   APK are always the same version. Check the workflow went green, then open the
+   workflow (`.github/workflows/web.yml`) builds it from the tagged commit,
+   smoke-tests it (`web/smoke/smoke.mjs`: from a `/soundboard/` subpath, online and
+   offline) and deploys it to https://srjohnson1986.github.io/soundboard/, so the
+   site and the APK are always the same version. A failed smoke test stops the
+   deploy. Check the workflow went green, then open the
    site and check the menu shows the new version. (**Run workflow** on it
    republishes without a new tag.) The `github-pages` environment only accepts
    deploys from `master` and `v*` tags (Settings → Environments →

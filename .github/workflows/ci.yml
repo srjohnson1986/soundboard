@@ -127,6 +127,15 @@ jobs:
         if: github.event_name != 'pull_request'
         run: ./gradlew :web:wasmJsBrowserDistribution --stacktrace
 
+      # Serves the bundle from /soundboard/ as GitHub Pages does and checks it in headless
+      # Chrome, online and offline (#223; web/smoke/smoke.mjs).
+      - name: Smoke-test the web app
+        if: github.event_name != 'pull_request'
+        working-directory: web/smoke
+        run: |
+          npm ci --no-audit --no-fund
+          node smoke.mjs
+
       - name: Upload web app
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7

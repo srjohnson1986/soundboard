@@ -107,6 +107,24 @@ class SoundPlayer(
         longClips.clear()
     }
 
+    /** For tests: whether [key] can play now (a short clip once decoded; a long one at once). */
+    internal fun isReady(key: String): Boolean =
+        longClips.containsKey(key) || soundIds[key]?.let { it in ready } == true
+
+    /** For tests: which path the clip playing now went through, if any. */
+    internal val activePath: PlaybackPath?
+        get() = when {
+            activePlayer != null -> PlaybackPath.MEDIA_PLAYER
+            activeStreamId != null -> PlaybackPath.SOUND_POOL
+            else -> null
+        }
+
+    /** For tests: whether the long clip playing now has actually started. */
+    internal val isMediaPlayerPlaying: Boolean
+        get() = runCatching { activePlayer?.isPlaying == true }.getOrDefault(false)
+
+    internal enum class PlaybackPath { SOUND_POOL, MEDIA_PLAYER }
+
     private fun stopActive() {
         activeStreamId?.let { pool.stop(it) }
         activeStreamId = null

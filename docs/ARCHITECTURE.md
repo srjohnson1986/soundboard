@@ -74,7 +74,7 @@ one visit is enough. It isn't registered on the local dev server (port 8080).
 | `shared/.../audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
 | `audio/SoundPlayer.kt` | Real `Player` implementation: owns the `SoundPool` and the current `MediaPlayer`. No knowledge of `Board` or `Tile`. |
 | `shared/.../audio/Recorder.kt` | Interface (`start`/`stop`/`cancel`) that `BoardViewModel` depends on for recording — same fake-in-tests seam as `Player`. |
-| `audio/AudioRecorder.kt` | Real `Recorder` implementation: owns a `MediaRecorder`, encoding straight to a file `BoardRepository` hands it. |
+| `audio/AudioRecorder.kt` | Real `Recorder` implementation: owns a `MediaRecorder`, encoding straight to a file `BoardRepository` hands it. Trims the end with `trimAudioEnd` (`audio/AudioTrim.kt`). |
 | `shared/.../BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other layers together, single write path. Takes `BoardRepository`/`Player`/`Recorder`/`SavedBoardRepository`/dispatcher as constructor params (see below) rather than constructing them. An ordinary androidx `ViewModel` on Android, via JetBrains' multiplatform build of `lifecycle-viewmodel`. |
 | `BoardViewModelFactory.kt` | Android only: builds `BoardViewModel` with the real storage, `SoundPlayer`, `AudioRecorder` and `TtsSpeaker`. |
 | `shared/.../BoardSettingsActions.kt` | Interface listing every change the Settings dialog can make; `BoardViewModel` implements it, so the dialog takes one object instead of a callback per setting. |
@@ -393,9 +393,10 @@ about 48 KB a second.
 **Trimming the end** (#204). `Recorder.stop(trimEndMillis)` leaves off the end of
 the recording, where the tap on Stop is, by `DevicePreferences.recordingTrimEndMillis`
 (default 250 ms, set in Settings → Recording; per device, since how loud that tap
-is depends on the device). `AudioRecorder` copies the encoded AAC frames up to
-that point into a new file with `MediaExtractor`/`MediaMuxer`, so nothing is
-re-encoded; `WebRecorder` cuts it while converting to WAV. Both keep a recording
+is depends on the device). `AudioRecorder` calls `trimAudioEnd` (`audio/AudioTrim.kt`),
+which copies the encoded AAC frames up to that point into a new file with
+`MediaExtractor`/`MediaMuxer`, so nothing is re-encoded. It keeps whole frames, so it cuts
+in steps of one frame (1024 samples: 128 ms at MediaRecorder's default 8 kHz); `WebRecorder` cuts it while converting to WAV. Both keep a recording
 whole if trimming would leave less than 0.3 s, and `AudioRecorder` keeps it whole
 if trimming fails for any reason.
 
@@ -824,6 +825,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | The web app's recording and playback: `WebRecorder` records from headless Chrome's fake microphone into OPFS, `WebAudioPlayer` decodes the result, a cancelled recording saves nothing | `web/src/wasmJsTest/.../web/WebAudioTest.kt` (fake mic: `web/karma.config.d/fake-media.js`) | WebAssembly in headless Chrome |
 | `BoardScreen`'s flows: a tap playing or editing, the tile editor's Save/Cancel and Restore original sound, edit mode, Switch board, Save board as, Settings groups (Recording included), Show mode, the page tab row and page options, the sticky home row, idle-timeout auto-return; tile label sizes (no word split, #209), bold/caps, and the landscape grid in a landscape window | `shared/src/commonTest/.../ui/BoardScreenUiTest.kt`, `LabelAndLayoutUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
 | What needs a device: drag-to-reorder, long-press previews, swiping between pages, scrolling under the sticky row | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
+| Android audio (#220): `trimAudioEnd` on AAC files made on the device (trimmed by the amount asked, a too-short clip kept whole, a broken file left alone); `AudioRecorder` recording, trimming and cancelling on the real `MediaRecorder`; `SoundPlayer` loading and playing through SoundPool and MediaPlayer, exclusively; `TtsSpeaker` speaking and stopping | `androidTest/.../audio/AudioTrimTest.kt`, `AudioRecorderTest.kt`, `SoundPlayerTest.kt`, `TtsSpeakerTest.kt` (test files from `TestAudioFiles.kt`) | Instrumented, real device/emulator. The recorder and speech tests skip on a device without a microphone or speech engine |
 | Landscape grid, row height cap, drag steps, label size/font, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
 
 **The shared UI tests** (#219) run the same `commonTest` code on both platforms with
@@ -912,12 +914,11 @@ the `ui-test-report` artifact. `LayoutAndLabelTest` rotates the device itself
   practice — each saved board is a few KB of JSON, not a copy of any audio —
   but old, no-longer-wanted saves will accumulate indefinitely until a delete
   action is added.
-- **Recording is untested against a real microphone.** `BoardViewModelTest`
-  covers the start/stop/cancel state machine against `FakeRecorder`, but
-  nothing exercises `AudioRecorder` against actual `MediaRecorder` I/O —
-  emulators' virtual mic is often silent by default, so even a passing
-  instrumented test wouldn't confirm real voice quality or latency. Verify
-  on a physical device before relying on this for an actual care board.
+- **Recording is only tested against an emulator's microphone.** `AudioRecorderTest`
+  runs `AudioRecorder` on the real `MediaRecorder` (the file, the trim, cancelling),
+  but an emulator's virtual mic records silence, so it can't confirm real voice
+  quality or latency. Verify on a physical device before relying on this for an
+  actual care board.
 - **A permanently denied `RECORD_AUDIO` permission has no recovery path.**
   `EditTileDialog` shows an inline "permission is needed" message and lets
   the user try again, but Android stops showing its own permission dialog

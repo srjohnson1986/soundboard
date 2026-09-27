@@ -15,20 +15,22 @@ plugins {
 
 // The app's version, from gradle.properties, as a constant the shared UI can show (the
 // menu's version link). The Android app reads the same properties for versionName/Code.
-val appVersionName = providers.gradleProperty("appVersionName").get()
-val generateAppVersion by tasks.registering {
-    val outputDir = layout.buildDirectory.dir("generated/appVersion/commonMain/kotlin")
-    inputs.property("appVersionName", appVersionName)
-    outputs.dir(outputDir)
+val generateAppVersion = tasks.register("generateAppVersion") {
+    // Only plain values are captured below, not the build script, so the task works with
+    // Gradle's configuration cache.
+    val versionName = providers.gradleProperty("appVersionName").get()
+    val outputFile = layout.buildDirectory.file("generated/appVersion/commonMain/kotlin/com/example/soundboard/AppVersion.kt")
+    inputs.property("appVersionName", versionName)
+    outputs.file(outputFile)
     doLast {
-        val file = outputDir.get().file("com/example/soundboard/AppVersion.kt").asFile
+        val file = outputFile.get().asFile
         file.parentFile.mkdirs()
         file.writeText(
             """
             |package com.example.soundboard
             |
             |/** Generated from gradle.properties' appVersionName; don't edit. */
-            |const val APP_VERSION_NAME = "$appVersionName"
+            |const val APP_VERSION_NAME = "$versionName"
             |""".trimMargin()
         )
     }
@@ -72,7 +74,7 @@ kotlin {
             languageSettings.optIn("kotlin.js.ExperimentalWasmJsInterop")
         }
         commonMain {
-            kotlin.srcDir(generateAppVersion)
+            kotlin.srcDir(generateAppVersion.map { layout.buildDirectory.dir("generated/appVersion/commonMain/kotlin").get() })
             dependencies {
                 api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
                 api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")

@@ -828,9 +828,15 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 `./gradlew test :shared:allTests` runs everything except the two `androidTest/`
 classes (`test` alone skips `shared`, which has no task by that name);
 `./gradlew connectedAndroidTest` runs those against a connected device or
-emulator. In CI, the **CI** workflow runs the former and gates merging. The
+emulator. In CI, the **CI** workflow runs the former and gates merging, as two
+jobs side by side: `android` (lint, the app's unit tests, the debug APK) and
+`web` (`:shared:allTests` on the JVM and in headless Chrome, `:web:allTests`,
+and on master the production web bundle), with `build-and-test`, the required
+check, passing when both do. The build cache is saved by runs on master and
+read by pull requests, so a PR only rebuilds and retests what it changed. The
 separate **UI tests** workflow (`.github/workflows/ui-tests.yml`) runs the
-latter on an API 35 emulator for every PR, and on demand via **Run workflow**.
+latter on an API 35 emulator for every PR, after every merge to master (which
+keeps the emulator snapshot cached for PRs), and on demand via **Run workflow**.
 It's advisory, not a merge gate, because emulators on shared runners
 occasionally flake on timing-sensitive gestures. Its HTML report is uploaded as
 the `ui-test-report` artifact. `LayoutAndLabelTest` rotates the device itself

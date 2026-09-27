@@ -39,33 +39,32 @@ import kotlinx.coroutines.delay
 /** Fixed accent for the Preview/Play clip icon in [EditTileDialog]; not theme-derived since Material3 has no "success" role. */
 private val PlayGreen = Color(0xFF2E7D32)
 
+/**
+ * Edits a draft of [tile]: every change stays in the dialog until Save hands the whole draft
+ * to [onSave], and Cancel (or dismissing) calls [onDismiss] to throw it away, including any
+ * sound picked or recorded meanwhile (#207). A picked or recorded sound arrives through the
+ * callback [onPickSound]/[onStopRecording] are given, as the new file's name.
+ */
 @Composable
 internal fun EditTileDialog(
     tile: Tile,
     isRecording: Boolean,
     speakUnrecordedTilesEnabled: Boolean,
-    onLabelChange: (String) -> Unit,
-    onTtsScriptChange: (String) -> Unit,
-    onSoundPicked: (PickedFile) -> Unit,
+    onPickSound: (PickedFile, onPicked: (String) -> Unit) -> Unit,
     onClear: () -> Unit,
-    onRemoveSound: () -> Unit,
-    onVolumeChange: (Float) -> Unit,
-    onColorChange: (Int?) -> Unit,
-    onOpacityChange: (Float?) -> Unit,
-    onBorderChange: (TileBorder?) -> Unit,
-    onSpeakWhenNoSoundChange: (Boolean) -> Unit,
     onPlay: (Tile) -> Unit,
     onStartRecording: () -> Unit,
-    onStopRecording: () -> Unit,
+    onStopRecording: (onRecorded: (String) -> Unit) -> Unit,
+    onSave: (Tile) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var label by remember(tile.id) { mutableStateOf(tile.label) }
-    var ttsScript by remember(tile.id) { mutableStateOf(tile.ttsScript.orEmpty()) }
-    var volume by remember(tile.id) { mutableStateOf(tile.volume) }
+    var draft by remember(tile.id) { mutableStateOf(tile) }
     var micPermissionDenied by remember(tile.id) { mutableStateOf(false) }
     var recordingSeconds by remember(tile.id) { mutableIntStateOf(0) }
 
-    val pickSound = rememberOpenFileLauncher(listOf("audio/*"), onSoundPicked)
+    val pickSound = rememberOpenFileLauncher(listOf("audio/*")) { file ->
+        onPickSound(file) { name -> draft = draft.copy(fileName = name) }
+    }
 
     val requestMicrophone = rememberMicrophoneAccess { granted ->
         micPermissionDenied = !granted
@@ -91,14 +90,14 @@ internal fun EditTileDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
-                    value = label,
-                    onValueChange = { label = it },
+                    value = draft.label,
+                    onValueChange = { draft = draft.copy(label = it) },
                     label = { Text("Name") },
                     placeholder = { Text("e.g. \"Call Mom\"") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (tile.fileName != null) {
+                if (draft.fileName != null) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
@@ -111,7 +110,7 @@ internal fun EditTileDialog(
                             Text("Replace sound")
                         }
                         OutlinedButton(
-                            onClick = onRemoveSound,
+                            onClick = { draft = draft.copy(fileName = null) },
                             enabled = !isRecording,
                             modifier = Modifier.weight(1f)
                         ) {
@@ -129,15 +128,15 @@ internal fun EditTileDialog(
                 }
                 SwitchRow(
                     label = "Speak the label instead",
-                    checked = tile.speakWhenNoSound,
-                    onCheckedChange = onSpeakWhenNoSoundChange,
+                    checked = draft.speakWhenNoSound,
+                    onCheckedChange = { draft = draft.copy(speakWhenNoSound = it) },
                     modifier = Modifier.padding(vertical = 4.dp),
                     supportingText = "Used when there's no sound file",
                     labelStyle = MaterialTheme.typography.bodyMedium
                 )
                 OutlinedTextField(
-                    value = ttsScript,
-                    onValueChange = { ttsScript = it },
+                    value = draft.ttsScript.orEmpty(),
+                    onValueChange = { draft = draft.copy(ttsScript = it) },
                     label = { Text("What to say") },
                     placeholder = { Text("Defaults to the name above") },
                     minLines = 2,
@@ -148,8 +147,8 @@ internal fun EditTileDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     OutlinedButton(
-                        onClick = { onPlay(tile.copy(label = label, ttsScript = ttsScript)) },
-                        enabled = tile.copy(label = label, ttsScript = ttsScript).isPlayable(speakUnrecordedTilesEnabled) && !isRecording,
+                        onClick = { onPlay(draft) },
+                        enabled = draft.isPlayable(speakUnrecordedTilesEnabled) && !isRecording,
                         modifier = Modifier.weight(1f)
                     ) {
                         Icon(
@@ -159,12 +158,12 @@ internal fun EditTileDialog(
                             modifier = Modifier.size(ButtonDefaults.IconSize)
                         )
                         Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Text(if (tile.fileName == null) "Preview" else "Play clip")
+                        Text(if (draft.fileName == null) "Preview" else "Play clip")
                     }
                     OutlinedButton(
                         onClick = {
                             if (isRecording) {
-                                onStopRecording()
+                                onStopRecording { name -> draft = draft.copy(fileName = name) }
                             } else {
                                 micPermissionDenied = false
                                 requestMicrophone()
@@ -193,33 +192,33 @@ internal fun EditTileDialog(
                 Column {
                     Text("Volume", style = MaterialTheme.typography.labelMedium)
                     Slider(
-                        value = volume,
-                        onValueChange = { volume = it },
-                        onValueChangeFinished = { onVolumeChange(volume) }
+                        value = draft.volume,
+                        onValueChange = { draft = draft.copy(volume = it) }
                     )
                 }
 
                 Column {
                     Text("Color", style = MaterialTheme.typography.labelMedium)
-                    ColorPicker(selectedArgb = tile.colorArgb, onSelect = onColorChange)
+                    ColorPicker(selectedArgb = draft.colorArgb, onSelect = { draft = draft.copy(colorArgb = it) })
                 }
 
                 OverrideSection(
                     label = "Override opacity",
-                    value = tile.opacity,
+                    value = draft.opacity,
                     initialOverride = 1f,
-                    onChange = onOpacityChange,
+                    onChange = { draft = draft.copy(opacity = it) },
                     labelStyle = MaterialTheme.typography.labelMedium
-                ) { opacity -> OpacityControls(opacity, onOpacityChange) }
+                ) { opacity -> OpacityControls(opacity) { draft = draft.copy(opacity = it) } }
 
                 OverrideSection(
                     label = "Override border",
-                    value = tile.border,
+                    value = draft.border,
                     initialOverride = TileBorder(enabled = true),
-                    onChange = onBorderChange,
+                    onChange = { draft = draft.copy(border = it) },
                     labelStyle = MaterialTheme.typography.labelMedium
-                ) { border -> BorderControls(border, onBorderChange) }
+                ) { border -> BorderControls(border) { draft = draft.copy(border = it) } }
 
+                // Clearing is its own, immediate action on the saved tile, not part of the draft.
                 if (tile.hasSound) {
                     TextButton(
                         onClick = {
@@ -234,11 +233,7 @@ internal fun EditTileDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = {
-                onLabelChange(label.trim())
-                onTtsScriptChange(ttsScript.trim())
-                onDismiss()
-            }) { Text("Save") }
+            TextButton(onClick = { onSave(draft) }, enabled = !isRecording) { Text("Save") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

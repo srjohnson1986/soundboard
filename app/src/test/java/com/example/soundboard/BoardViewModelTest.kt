@@ -351,19 +351,143 @@ class BoardViewModelTest {
         assertEquals("keep", vm.board.value.currentPage.tiles.first { it.id == "b" }.label)
     }
 
+    private fun tile(vm: BoardViewModel, id: String) = vm.board.value.findTile(id)!!
+
+    /** Picks a sound in the tile editor the way the dialog does; returns the new file's name. */
+    private fun pickSound(vm: BoardViewModel, content: String = "clip"): String {
+        val uri = Uri.parse("content://fake/${content.hashCode()}.mp3")
+        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream(content.toByteArray()))
+        var picked: String? = null
+        vm.importSound(UriPickedFile(context, uri)) { picked = it }
+        return picked!!
+    }
+
+    /** Records and stops in the tile editor the way the dialog does; returns the new file's name. */
+    private fun record(vm: BoardViewModel): String {
+        vm.startRecording()
+        storeFile(recorder.startedPath!!).apply { parentFile?.mkdirs(); writeText("recorded") }
+        var recorded: String? = null
+        vm.stopRecording { recorded = it }
+        return recorded!!
+    }
+
     @Test
-    fun `assignSound imports the file loads it and points the tile at the returned name`() {
+    fun `a picked sound is loaded for the editor but only reaches the tile on Save`() {
         repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
-        val uri = Uri.parse("content://fake/clip.mp3")
-        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("clip".toByteArray()))
+        val name = pickSound(vm)
 
-        vm.assignSound("a", UriPickedFile(context, uri))
+        assertTrue(player.loaded.contains(name))
+        assertNull(tile(vm, "a").fileName)
 
-        val tile = vm.board.value.currentPage.tiles.first { it.id == "a" }
-        assertTrue(tile.fileName != null)
-        assertTrue(player.loaded.contains(tile.fileName))
+        vm.saveTile("a", tile(vm, "a").copy(fileName = name))
+
+        assertEquals(name, tile(vm, "a").fileName)
+        assertTrue(soundFile(name).exists())
+    }
+
+    @Test
+    fun `cancelling the editor after recording deletes the new clip and keeps the old one`() {
+        // #207: a recording used to replace the tile's clip the moment it stopped, even if
+        // the edit was then cancelled.
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "Hey", fileName = "old.m4a")))
+        soundFile("old.m4a").apply { parentFile?.mkdirs() }.writeText("old")
+        val vm = newViewModel()
+
+        val recorded = record(vm)
+        vm.discardTileEdits()
+
+        assertEquals("old.m4a", tile(vm, "a").fileName)
+        assertTrue(soundFile("old.m4a").exists())
+        assertFalse(soundFile(recorded).exists())
+        assertFalse(player.loaded.contains(recorded))
+    }
+
+    @Test
+    fun `saving a recording over a tile's clip replaces it and deletes the old file`() {
+        repo.saveBlocking(boardWith(Tile(id = "a", label = "Hey", fileName = "old.m4a")))
+        soundFile("old.m4a").apply { parentFile?.mkdirs() }.writeText("old")
+        val vm = newViewModel()
+
+        val recorded = record(vm)
+        vm.saveTile("a", tile(vm, "a").copy(fileName = recorded))
+
+        assertEquals(recorded, tile(vm, "a").fileName)
+        assertTrue(soundFile(recorded).exists())
+        assertFalse(soundFile("old.m4a").exists())
+    }
+
+    @Test
+    fun `saving keeps only the last of several sounds tried in one edit`() {
+        repo.saveBlocking(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        val first = pickSound(vm, "first")
+        val second = record(vm)
+        vm.saveTile("a", tile(vm, "a").copy(fileName = second))
+
+        assertEquals(second, tile(vm, "a").fileName)
+        assertFalse(soundFile(first).exists())
+        assertFalse(player.loaded.contains(first))
+    }
+
+    @Test
+    fun `a sound added in the editor survives another board edit made before Save`() {
+        repo.saveBlocking(boardWith(Tile(id = "a"), Tile(id = "b")))
+        val vm = newViewModel()
+
+        val name = pickSound(vm)
+        vm.renameBoard("Something else") // commits, which prunes unreferenced sounds
+
+        assertTrue(soundFile(name).exists())
+        vm.saveTile("a", tile(vm, "a").copy(fileName = name))
+        assertEquals(name, tile(vm, "a").fileName)
+    }
+
+    @Test
+    fun `a recording that finishes after its edit was cancelled is deleted, not handed back`() {
+        repo.saveBlocking(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+        vm.startRecording()
+        val path = recorder.startedPath!!
+        storeFile(path).apply { parentFile?.mkdirs(); writeText("late") }
+        var handedBack: String? = null
+
+        // The edit ends without the recorder being cancelled first, so Stop's result
+        // arrives after the edit it was recorded in is over.
+        vm.saveTile("a", tile(vm, "a"))
+        vm.stopRecording { handedBack = it }
+
+        assertNull(handedBack)
+        assertFalse(storeFile(path).exists())
+    }
+
+    @Test
+    fun `saveTile saves every field at once, trimmed and clamped`() {
+        repo.saveBlocking(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        vm.saveTile(
+            "a",
+            tile(vm, "a").copy(
+                label = "  Water  ",
+                ttsScript = "   ",
+                volume = 1.5f,
+                colorArgb = 0xFF00FF00.toInt(),
+                opacity = -1f,
+                speakWhenNoSound = true
+            )
+        )
+
+        val saved = tile(vm, "a")
+        assertEquals("Water", saved.label)
+        assertNull(saved.ttsScript)
+        assertEquals(1f, saved.volume)
+        assertEquals(0xFF00FF00.toInt(), saved.colorArgb)
+        assertEquals(0f, saved.opacity)
+        assertTrue(saved.speakWhenNoSound)
+        assertEquals("a", saved.id)
     }
 
     @Test
@@ -371,9 +495,7 @@ class BoardViewModelTest {
         repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
-        val uri = Uri.parse("content://fake/clip.mp3")
-        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("clip".toByteArray()))
-        vm.assignSound("a", UriPickedFile(context, uri))
+        vm.saveTile("a", tile(vm, "a").copy(fileName = pickSound(vm)))
 
         val page = vm.board.value.currentPage
         assertEquals(2, page.rows)
@@ -382,7 +504,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `recording start-stop points the tile at the recorded file and loads it`() {
+    fun `recording start-stop hands back the recorded file, loaded, for the tile to save`() {
         repo.saveBlocking(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
@@ -390,13 +512,14 @@ class BoardViewModelTest {
         assertTrue(vm.isRecording.value)
         val recordedFile = recorder.startedPath?.let(::storeFile)
         assertTrue(recordedFile != null)
+        var recorded: String? = null
 
-        vm.stopRecording("a")
+        vm.stopRecording { recorded = it }
 
         assertFalse(vm.isRecording.value)
-        val tile = vm.board.value.currentPage.tiles.first { it.id == "a" }
-        assertEquals(recordedFile!!.name, tile.fileName)
-        assertTrue(player.loaded.contains(tile.fileName))
+        assertEquals(recordedFile!!.name, recorded)
+        assertTrue(player.loaded.contains(recorded))
+        assertNull(tile(vm, "a").fileName)
     }
 
     @Test
@@ -407,9 +530,11 @@ class BoardViewModelTest {
 
         vm.startRecording()
         val recordedFile = recorder.startedPath?.let(::storeFile)!!.apply { parentFile?.mkdirs(); writeText("partial") }
+        var recorded: String? = null
 
-        vm.stopRecording("a")
+        vm.stopRecording { recorded = it }
 
+        assertNull(recorded)
         assertFalse(vm.isRecording.value)
         assertNull(vm.board.value.currentPage.tiles.first { it.id == "a" }.fileName)
         assertFalse(recordedFile.exists())
@@ -433,17 +558,15 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `stopRecording points a home page tile at the recorded file`() {
+    fun `a recording saves onto a home page tile`() {
         repo.saveBlocking(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "hey", label = "Hey")), isHome = true))))
         val vm = newViewModel()
 
-        vm.startRecording()
-        val recordedFile = recorder.startedPath?.let(::storeFile)!!
-
-        vm.stopRecording("hey")
+        val recorded = record(vm)
+        vm.saveTile("hey", tile(vm, "hey").copy(fileName = recorded))
 
         val tile = vm.board.value.homePage!!.tiles.first { it.id == "hey" }
-        assertEquals(recordedFile.name, tile.fileName)
+        assertEquals(recorded, tile.fileName)
     }
 
     @Test
@@ -467,10 +590,7 @@ class BoardViewModelTest {
         soundFile("old.mp3").apply { parentFile?.mkdirs() }.writeText("old")
         val vm = newViewModel()
 
-        val uri = Uri.parse("content://fake/new.mp3")
-        shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream("new".toByteArray()))
-
-        vm.assignSound("a", UriPickedFile(context, uri))
+        vm.saveTile("a", tile(vm, "a").copy(fileName = pickSound(vm, "new")))
 
         assertTrue(player.unloaded.contains("old.mp3"))
         assertFalse(soundFile("old.mp3").exists())
@@ -1008,8 +1128,7 @@ class BoardViewModelTest {
         val landscapeOnly = vm.board.value.currentPage.landscapeTiles[19]
         assertFalse(vm.board.value.currentPage.visibleTiles.contains(landscapeOnly))
 
-        vm.startRecording()
-        vm.stopRecording(landscapeOnly.id)
+        vm.saveTile(landscapeOnly.id, tile(vm, landscapeOnly.id).copy(fileName = record(vm)))
 
         val page = vm.board.value.currentPage
         assertEquals(5, page.rows)

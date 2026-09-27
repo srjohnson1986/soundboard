@@ -103,6 +103,26 @@ class BoardScreenTest {
     }
 
     @Test
+    fun tileEditorCancelDiscardsChangesAndSaveKeepsThem() {
+        // #207: the editor works on a draft; nothing reaches the tile until Save.
+        launchWith(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))))
+
+        composeRule.onNodeWithText("+").performClick()
+        composeRule.onNode(hasSetTextAction() and hasText("Name")).performTextInput("Water")
+        composeRule.onNodeWithText("Cancel").performClick()
+
+        composeRule.onNodeWithText("Edit tile").assertDoesNotExist()
+        assertEquals("", vm.board.value.findTile("a")?.label)
+
+        composeRule.onNodeWithText("+").performClick()
+        composeRule.onNode(hasSetTextAction() and hasText("Name")).performTextInput("Water")
+        composeRule.onNodeWithText("Save").performClick()
+
+        composeRule.waitForIdle()
+        assertEquals("Water", vm.board.value.findTile("a")?.label)
+    }
+
+    @Test
     fun editModeTogglePutsFilledTileTapsIntoEditDialog() {
         // Edit mode is toggled from the menu rather than always-on per tile (a
         // permanent pencil crowded small tiles); once on, a pencil reappears on

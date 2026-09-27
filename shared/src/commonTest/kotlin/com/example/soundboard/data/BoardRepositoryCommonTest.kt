@@ -142,4 +142,54 @@ class BoardRepositoryCommonTest {
         assertEquals(setOf("a.m4a", "b.m4a"), saved.allReferencedFileNames())
         assertEquals("First", saved.load(first)?.name)
     }
+
+    private fun builtInZip(vararg tiles: Tile, sounds: Map<String, ByteArray> = emptyMap()) = zip.write(
+        listOf(ZipEntryData("board.json", BoardJson.encodeToString(boardWith(*tiles).copy(name = "Built in")).encodeToByteArray())) +
+            sounds.map { (name, bytes) -> ZipEntryData("sounds/$name", bytes) }
+    )
+
+    @Test
+    fun `importing a built-in board remembers where it came from`() = runTest {
+        val repo = BoardRepository(files, zip, FakeBundledBoards(mapOf("built-in.zip" to builtInZip(Tile(id = "a", label = "Hey")))))
+
+        repo.importFromAsset("built-in.zip")
+
+        assertEquals("built-in.zip", repo.load().builtInSource)
+    }
+
+    @Test
+    fun `originalTile finds a built-in tile by name, ignoring case and spaces, with its clip`() = runTest {
+        val repo = BoardRepository(
+            files, zip,
+            FakeBundledBoards(mapOf("built-in.zip" to builtInZip(Tile(id = "w", label = "Water", fileName = "water.wav", volume = 0.5f), sounds = mapOf("water.wav" to byteArrayOf(4, 2)))))
+        )
+
+        val original = repo.originalTile("built-in.zip", "  wATer ")
+
+        assertEquals("water.wav", original?.tile?.fileName)
+        assertEquals(0.5f, original?.tile?.volume)
+        assertContentEquals(byteArrayOf(4, 2), original?.sound)
+    }
+
+    @Test
+    fun `originalTile gives a speaking tile's speech, and nothing for a tile that makes no sound`() = runTest {
+        val repo = BoardRepository(
+            files, zip,
+            FakeBundledBoards(
+                mapOf(
+                    "built-in.zip" to builtInZip(
+                        Tile(id = "s", label = "Hey", speakWhenNoSound = true, ttsScript = "Hey there"),
+                        Tile(id = "b", label = "Blank label only")
+                    )
+                )
+            )
+        )
+
+        val speech = repo.originalTile("built-in.zip", "Hey")
+        assertEquals("Hey there", speech?.tile?.ttsScript)
+        assertNull(speech?.sound)
+        assertNull(repo.originalTile("built-in.zip", "Blank label only"))
+        assertNull(repo.originalTile("built-in.zip", "Not on this board"))
+        assertNull(repo.originalTile("missing.zip", "Hey"))
+    }
 }

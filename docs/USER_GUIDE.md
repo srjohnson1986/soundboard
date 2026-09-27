@@ -74,6 +74,10 @@ In the editor:
   copied into the app, so moving or deleting the original later doesn't
   break the tile.
 - **Remove sound:** takes the sound off the tile but keeps its name.
+- **Restore original sound:** puts back the sound this tile had on the built-in
+  board you started from, found by the tile's name: handy after trying things
+  out. It's part of the edit, so **Save** keeps it and **Cancel** doesn't. If
+  that board has no tile by this name, the editor says so and nothing changes.
 - **Speak the label instead:** makes the tile speak using the device's
   text-to-speech voice when it has no sound file.
 - **What to say:** the words spoken aloud, if they should differ from the

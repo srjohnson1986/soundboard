@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.example.soundboard.OriginalSound
 import com.example.soundboard.data.PickedFile
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
@@ -55,12 +56,14 @@ internal fun EditTileDialog(
     onPlay: (Tile) -> Unit,
     onStartRecording: () -> Unit,
     onStopRecording: (onRecorded: (String) -> Unit) -> Unit,
+    onRestoreOriginal: (label: String, onResult: (OriginalSound) -> Unit) -> Unit,
     onSave: (Tile) -> Unit,
     onDismiss: () -> Unit
 ) {
     var draft by remember(tile.id) { mutableStateOf(tile) }
     var micPermissionDenied by remember(tile.id) { mutableStateOf(false) }
     var recordingSeconds by remember(tile.id) { mutableIntStateOf(0) }
+    var restoreMessage by remember(tile.id) { mutableStateOf<String?>(null) }
 
     val pickSound = rememberOpenFileLauncher(listOf("audio/*")) { file ->
         onPickSound(file) { name -> draft = draft.copy(fileName = name) }
@@ -125,6 +128,37 @@ internal fun EditTileDialog(
                     ) {
                         Text("Choose sound")
                     }
+                }
+                // Puts back the sound this tile had on the built-in board the board came from (#208):
+                // into the draft, like any other change, so Save keeps it and Cancel doesn't.
+                TextButton(
+                    onClick = {
+                        restoreMessage = null
+                        val name = draft.label.trim()
+                        onRestoreOriginal(name) { result ->
+                            restoreMessage = when (result) {
+                                is OriginalSound.Restored -> {
+                                    draft = draft.copy(
+                                        fileName = result.tile.fileName,
+                                        volume = result.tile.volume,
+                                        speakWhenNoSound = result.tile.speakWhenNoSound,
+                                        ttsScript = result.tile.ttsScript
+                                    )
+                                    "Restored the original sound from ${result.boardLabel}. Tap Save to keep it."
+                                }
+                                is OriginalSound.NotFound ->
+                                    "No original clip found for the \u201c$name\u201d tile" +
+                                        (result.boardLabel?.let { " in $it" } ?: "") + "."
+                            }
+                        }
+                    },
+                    enabled = !isRecording && draft.label.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Restore original sound")
+                }
+                restoreMessage?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 SwitchRow(
                     label = "Speak the label instead",

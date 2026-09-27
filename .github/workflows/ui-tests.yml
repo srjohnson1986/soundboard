@@ -6,7 +6,13 @@ name: UI tests
 # before a release.
 
 # Documentation-only changes skip the emulator run (see the matching note in ci.yml).
+# It also runs on master after each merge: that's what fills the caches pull requests read
+# (GitHub keeps each branch's caches to itself, apart from master's), so they can reuse the
+# emulator snapshot instead of recreating it every time.
 on:
+  push:
+    branches: [master]
+    paths-ignore: ['**/*.md', 'docs/**']
   pull_request:
     branches: [master]
     paths-ignore: ['**/*.md', 'docs/**']

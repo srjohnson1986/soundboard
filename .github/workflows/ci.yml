@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same pull request makes the older run pointless; cancel it. Runs on
+# master are never cancelled, so every merge gets a full result.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Documentation-only changes skip the build: nothing in a Markdown file can break it.
   # This is a job-level skip rather than a workflow-level paths-ignore on purpose:
@@ -42,7 +48,11 @@ jobs:
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
 
-  build-and-test:
+  # The two halves run side by side, each on its own runner; build-and-test below waits for
+  # both. Gradle's parallel mode, build cache and configuration cache are on in
+  # gradle.properties, and setup-gradle keeps the build cache between runs (written by runs
+  # on master, read by pull requests), so unchanged modules aren't rebuilt.
+  android:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
@@ -62,35 +72,9 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Lint
-        run: ./gradlew lintDebug :shared:lintAndroidMain --stacktrace
-
-      - name: Unit tests
-        run: ./gradlew testDebugUnitTest --stacktrace
-
-      # The shared module's tests, on the JVM and compiled to WebAssembly (run in the
-      # runner's headless Chrome): this is what keeps shared code building for the web
-      # version as well as Android (#193).
-      - name: Shared module tests (JVM + Wasm)
-        run: ./gradlew :shared:allTests --stacktrace
-
-      # The web app's recording and playback, against headless Chrome's fake microphone.
-      - name: Web app tests
-        run: ./gradlew :web:allTests --stacktrace
-
-      - name: Assemble debug APK
-        run: ./gradlew assembleDebug --stacktrace
-
-      # The web version's production bundle: static files that run in any current browser.
-      - name: Build web app
-        run: ./gradlew :web:wasmJsBrowserDistribution --stacktrace
-
-      - name: Upload web app
-        uses: actions/upload-artifact@v7
-        with:
-          name: web-app
-          path: web/build/dist/wasmJs/productionExecutable
-          if-no-files-found: error
+      # One Gradle run, so tasks run in parallel; --continue reports every failure, not just the first.
+      - name: Lint, unit tests and debug APK
+        run: ./gradlew lintDebug :shared:lintAndroidMain testDebugUnitTest assembleDebug --continue --stacktrace
 
       - name: Upload lint report
         if: always()
@@ -110,6 +94,47 @@ jobs:
           path: app/build/reports/tests/testDebugUnitTest
           if-no-files-found: ignore
 
+  # The shared module's tests, on the JVM and compiled to WebAssembly (run in the runner's
+  # headless Chrome), and the web app's own tests: this is what keeps shared code building
+  # for the web version as well as Android (#193).
+  web:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Shared and web app tests (JVM + Wasm)
+        run: ./gradlew :shared:allTests :web:allTests --continue --stacktrace
+
+      # The production bundle takes a while to optimize, and the tests above already build the
+      # web app, so it's only built on master, where it's kept as an artifact. Releases build
+      # their own (web.yml).
+      - name: Build web app
+        if: github.event_name != 'pull_request'
+        run: ./gradlew :web:wasmJsBrowserDistribution --stacktrace
+
+      - name: Upload web app
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-app
+          path: web/build/dist/wasmJs/productionExecutable
+          if-no-files-found: error
+
       - name: Upload shared test report
         if: always()
         uses: actions/upload-artifact@v7
@@ -119,3 +144,18 @@ jobs:
             shared/build/reports/tests/allTests
             web/build/reports/tests/allTests
           if-no-files-found: ignore
+
+  # The required check. It passes when both halves passed, or when they were skipped because
+  # only docs changed; it runs even then (always()), so the check always reports (#183).
+  build-and-test:
+    needs: [changes, android, web]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Both halves passed, or only docs changed
+        run: |
+          echo "changes: ${{ needs.changes.result }}, code: ${{ needs.changes.outputs.code }}"
+          echo "android: ${{ needs.android.result }}, web: ${{ needs.web.result }}"
+          if [ "${{ needs.changes.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.changes.outputs.code }}" != "true" ]; then exit 0; fi
+          [ "${{ needs.android.result }}" = "success" ] && [ "${{ needs.web.result }}" = "success" ]

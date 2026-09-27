@@ -168,7 +168,41 @@ class BoardRepository(
      */
     suspend fun importFromAsset(assetName: String): Boolean = runCatching {
         importZip(bundled.read(assetName))
+        // Remember where the board came from, for restoring a tile's original sound. Through
+        // load(), so an older board.json shape is migrated first.
+        save(load().copy(builtInSource = assetName))
     }.isSuccess
+
+    /**
+     * The first tile on built-in board [assetName] named [label] (ignoring case and surrounding
+     * spaces) that plays or speaks something, with its sound file's content when it has one; null
+     * if there's no such tile, or the board isn't packaged. The tile's own `fileName` is the one
+     * inside the built-in board, not a file in app storage.
+     */
+    suspend fun originalTile(assetName: String, label: String): OriginalTile? = runCatching {
+        val entries = zip.read(bundled.read(assetName)).associate { it.name to it.bytes }
+        val board = json.decodeFromString<Board>(entries.getValue(BOARD_FILE).decodeToString())
+        val wanted = label.trim()
+        val tile = board.pages.asSequence().flatMap { it.tiles }
+            .firstOrNull { it.label.trim().equals(wanted, ignoreCase = true) && it.hasSound }
+        val sound = tile?.fileName?.let { entries["$ZIP_SOUNDS_DIR$it"] }
+        when {
+            tile == null -> null
+            sound != null -> OriginalTile(tile, sound)
+            // Its clip is missing from the built-in board: only its speech is left to restore.
+            tile.speakWhenNoSound -> OriginalTile(tile.copy(fileName = null), null)
+            else -> null
+        }
+    }.getOrNull()
+
+    /** Copies [bytes] into app storage as a new sound file with [extension]; returns its name, or null on failure. */
+    suspend fun importSoundBytes(bytes: ByteArray, extension: String): String? =
+        copyIntoAppStorage(BytesFile(bytes, extension), SOUNDS_DIR)
+
+    private class BytesFile(private val bytes: ByteArray, private val extension: String) : PickedFile {
+        override suspend fun extension(): String = extension
+        override suspend fun readBytes(): ByteArray = bytes
+    }
 
     /** Whether [assetName] is packaged in this build — some built-in boards only ship in debug builds. */
     fun hasAsset(assetName: String): Boolean = bundled.has(assetName)
@@ -199,6 +233,9 @@ class BoardRepository(
         const val ZIP_BACKGROUNDS_DIR = "background/"
     }
 }
+
+/** A tile as a built-in board has it, and its sound file's content if it has one; see [BoardRepository.originalTile]. */
+class OriginalTile(val tile: Tile, val sound: ByteArray?)
 
 /** Shape of board.json before pages existed; only used to migrate on [BoardRepository.load]. */
 @Serializable

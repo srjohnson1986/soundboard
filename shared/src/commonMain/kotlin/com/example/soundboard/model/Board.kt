@@ -299,6 +299,12 @@ data class Board(
     val rowHeight: RowHeight = RowHeight.STANDARD,
     /** Font, size range, weight and case for every tile label on the board. */
     val labelStyle: LabelStyle = LabelStyle(),
+    /**
+     * The built-in board this one was opened from (its asset name, e.g. "jeremy-care-board.zip"),
+     * for restoring a tile's original sound (#208); null when unknown. It travels with the board
+     * into saved boards and backups.
+     */
+    val builtInSource: String? = null,
     /** Forward-looking marker for the on-disk schema shape; not branched on yet. */
     val schemaVersion: Int = CURRENT_SCHEMA_VERSION
 ) {

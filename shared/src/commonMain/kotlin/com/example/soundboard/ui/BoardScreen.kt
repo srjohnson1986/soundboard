@@ -367,6 +367,7 @@ fun BoardScreen(vm: BoardViewModel) {
                 onPlay = vm::play,
                 onStartRecording = vm::startRecording,
                 onStopRecording = vm::stopRecording,
+                onRestoreOriginal = vm::restoreOriginalSound,
                 onSave = { edited ->
                     vm.saveTile(editing.id, edited)
                     closeDialog()

@@ -1604,4 +1604,76 @@ class BoardViewModelTest {
         assertTrue(vm.strayClips.value.isEmpty())
         assertTrue(zipOut.exists())
     }
+
+    /** Asks for [label]'s original sound the way the tile editor does, and returns the result. */
+    private fun restoreOriginal(vm: BoardViewModel, label: String): OriginalSound {
+        var result: OriginalSound? = null
+        vm.restoreOriginalSound(label) { result = it }
+        return result!!
+    }
+
+    @Test
+    fun `restoring a tile's original sound brings back its clip from the built-in board, pending until Save`() {
+        // #208, against the real bundled Jeremy board: its "Water" tile plays water.wav.
+        repo.saveBlocking(boardWith(Tile(id = "w", label = "Water", fileName = "mine.m4a")).copy(builtInSource = "jeremy-care-board.zip"))
+        soundFile("mine.m4a").apply { parentFile?.mkdirs() }.writeText("mine")
+        val vm = newViewModel()
+
+        val result = restoreOriginal(vm, "Water") as OriginalSound.Restored
+
+        val restored = result.tile.fileName!!
+        assertEquals("Jeremy Draft Care Board", result.boardLabel)
+        assertTrue(restored.endsWith(".wav"))
+        assertTrue(soundFile(restored).length() > 1_000)
+        assertTrue(player.loaded.contains(restored))
+        assertEquals("mine.m4a", tile(vm, "w").fileName)
+
+        vm.saveTile("w", tile(vm, "w").copy(fileName = restored))
+
+        assertEquals(restored, tile(vm, "w").fileName)
+        assertFalse(soundFile("mine.m4a").exists())
+    }
+
+    @Test
+    fun `cancelling after restoring the original sound keeps the tile's own clip`() {
+        repo.saveBlocking(boardWith(Tile(id = "w", label = "Water", fileName = "mine.m4a")).copy(builtInSource = "jeremy-care-board.zip"))
+        soundFile("mine.m4a").apply { parentFile?.mkdirs() }.writeText("mine")
+        val vm = newViewModel()
+
+        val restored = (restoreOriginal(vm, "Water") as OriginalSound.Restored).tile.fileName!!
+        vm.discardTileEdits()
+
+        assertEquals("mine.m4a", tile(vm, "w").fileName)
+        assertFalse(soundFile(restored).exists())
+    }
+
+    @Test
+    fun `a tile with no counterpart on the built-in board reports which board was searched`() {
+        repo.saveBlocking(boardWith(Tile(id = "x", label = "My own phrase")).copy(builtInSource = "jeremy-care-board.zip"))
+        val vm = newViewModel()
+
+        val result = restoreOriginal(vm, "My own phrase")
+
+        assertEquals("Jeremy Draft Care Board", (result as OriginalSound.NotFound).boardLabel)
+    }
+
+    @Test
+    fun `a board from before its source was recorded finds its built-in board by name`() {
+        repo.saveBlocking(boardWith(Tile(id = "h", label = "Hey")).copy(name = "Sarah (ElevenLabs) Care Board"))
+        val vm = newViewModel()
+
+        val result = restoreOriginal(vm, "Hey")
+
+        assertEquals("Sarah (ElevenLabs) Care Board", (result as OriginalSound.Restored).boardLabel)
+    }
+
+    @Test
+    fun `opening a built-in board records it as the board's source`() {
+        repo.saveBlocking(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        vm.openBoard(BoardRef.BuiltIn("tts-care-board.zip", "TTS Care Board"))
+
+        assertEquals("tts-care-board.zip", vm.board.value.builtInSource)
+    }
 }

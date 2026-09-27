@@ -12,6 +12,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.compose")
     id("com.android.lint")
+    id("io.github.takahirom.roborazzi")
 }
 
 // The app's version, from gradle.properties, as a constant the shared UI can show (the
@@ -118,6 +119,9 @@ kotlin {
             implementation("org.robolectric:robolectric:4.17")
             implementation("androidx.test:core:1.7.0")
             implementation("junit:junit:4.13.2")
+            // Screenshot tests (#221).
+            implementation("io.github.takahirom.roborazzi:roborazzi:1.75.0")
+            implementation("io.github.takahirom.roborazzi:roborazzi-compose:1.75.0")
             // Back, to close a menu (closeMenu).
             implementation("androidx.test.espresso:espresso-core:3.7.0")
             // Declares the empty activity runComposeUiTest starts on Android.
@@ -131,6 +135,12 @@ kover {
     currentProject {
         createVariant("unit") { add("android") }
     }
+}
+
+// The screenshot tests' reference images (#221) are inputs of the host tests, so changing one
+// runs them again instead of reusing the last result.
+tasks.withType<Test>().configureEach {
+    inputs.dir(layout.projectDirectory.dir("screenshots")).withPropertyName("screenshots").optional()
 }
 
 compose.resources {

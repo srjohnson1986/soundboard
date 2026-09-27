@@ -837,6 +837,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | The production web bundle from a `/soundboard/` subpath, online and then offline: a tap speaks, the manifest and icons, the service worker, no console errors | `web/smoke/smoke.mjs` | Headless Chrome (Puppeteer), on master and before publishing |
 | The web app's recording and playback: `WebRecorder` records from headless Chrome's fake microphone into OPFS, `WebAudioPlayer` decodes the result, a cancelled recording saves nothing | `web/src/wasmJsTest/.../web/WebAudioTest.kt` (fake mic: `web/karma.config.d/fake-media.js`) | WebAssembly in headless Chrome |
 | `BoardScreen`'s flows: a tap playing or editing, the tile editor's Save/Cancel and Restore original sound, edit mode, Switch board, Save board as, Settings groups (Recording included), Show mode, the page tab row and page options, the sticky home row, idle-timeout auto-return; tile label sizes (no word split, #209), bold/caps, and the landscape grid in a landscape window | `shared/src/commonTest/.../ui/BoardScreenUiTest.kt`, `LabelAndLayoutUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
+| Screenshots of the board (portrait, landscape, the sticky row on another page, dark theme, each label font), the tile editor, Settings and Show mode, against the reference images in `shared/screenshots` | `shared/src/androidHostTest/.../ui/ScreenshotTest.kt` | Roborazzi on the JVM (Robolectric's native graphics) |
 | What needs a device: drag-to-reorder, long-press previews, swiping between pages, scrolling under the sticky row | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 | Android audio (#220): `trimAudioEnd` on AAC files made on the device (trimmed by the amount asked, a too-short clip kept whole, a broken file left alone); `AudioRecorder` recording, trimming and cancelling on the real `MediaRecorder`; `SoundPlayer` loading and playing through SoundPool and MediaPlayer, exclusively; `TtsSpeaker` speaking and stopping | `androidTest/.../audio/AudioTrimTest.kt`, `AudioRecorderTest.kt`, `SoundPlayerTest.kt`, `TtsSpeakerTest.kt` (test files from `TestAudioFiles.kt`) | Instrumented, real device/emulator. The recorder and speech tests skip on a device without a microphone or speech engine |
 | Landscape grid, row height cap, drag steps, label size/font, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
@@ -852,6 +853,17 @@ size both can do. `BoardUiTest` builds the real `BoardViewModel` on in-memory st
 browser a test can't wait for real ones. Closing a menu differs by platform, so it's
 `closeMenu`: Back on Android; on the web a click outside, then a spare click, since the
 browser loses the click after one that closes a menu.
+
+**Screenshot tests** (#221) compare what Robolectric draws with the reference images in
+`shared/screenshots`, as part of every host test run (`roborazzi.test.verify=true` in
+`gradle.properties`; the images are an input of the test task, so changing one reruns it).
+After a change to how the screen looks on purpose, `./gradlew
+:shared:recordRoborazziAndroidHostTest` records them again, and the changed PNGs show up in
+the pull request as image diffs. A failed comparison leaves `<name>_actual.png` and
+`<name>_compare.png` in `shared/build/outputs/roborazzi` (CI uploads them as
+`screenshot-differences`). They're Android only: Compose on the web draws into a canvas that
+the browser tests don't capture. They use the same 320×640dp window as the shared UI tests,
+where a four-column row is too narrow for "Something's" even at the smallest label size.
 
 `./gradlew test :shared:allTests` runs everything except the two `androidTest/`
 classes (`test` alone skips `shared`, which has no task by that name);

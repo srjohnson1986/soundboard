@@ -51,7 +51,9 @@ feature, and `scripts/sync-wiki.sh` copies it to the wiki at release time.
 app, built from the same code (see [Architecture](docs/ARCHITECTURE.md), "Modules"),
 nothing to install. It starts with the text-to-speech board, keeps everything in
 the browser's own storage, and reads and writes the same backup zips as the
-Android app, recordings included. The site is republished with every release. To
+Android app, recordings included. It can be installed like an app (the browser's
+**Install** or **Add to Home Screen**) and works offline after the first visit.
+The site is republished with every release. To
 run it locally instead:
 
 ```bash

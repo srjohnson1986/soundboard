@@ -28,7 +28,7 @@ fun main() {
     val vm = BoardViewModel(
         boardRepo = BoardRepository(files, FflateZipCodec(), WebBundledBoards("boards/", BUNDLED_BOARDS)),
         player = WebAudioPlayer(files, MainScope()),
-        recorder = UnavailableRecorder(),
+        recorder = WebRecorder(files),
         savedBoardRepo = SavedBoardRepository(files),
         speaker = WebSpeaker(),
         devicePrefs = DevicePreferences(LocalStorageKeyValueStore("soundboard.")),

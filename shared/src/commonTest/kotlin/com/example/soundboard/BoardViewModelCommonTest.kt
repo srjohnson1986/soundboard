@@ -113,8 +113,9 @@ private class RecordingPlayer : Player {
 }
 
 private class NoRecorder : Recorder {
-    override fun start(path: String): Boolean = false
-    override fun stop(): Boolean = false
+    override val fileExtension: String = "m4a"
+    override suspend fun start(path: String): Boolean = false
+    override suspend fun stop(): Boolean = false
     override fun cancel() {}
 }
 

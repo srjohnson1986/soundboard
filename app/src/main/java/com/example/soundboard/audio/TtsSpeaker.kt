@@ -11,7 +11,7 @@ import java.util.Locale
  */
 class TtsSpeaker(context: Context) : Speaker {
 
-    private var ready = false
+    @Volatile private var ready = false
     private var pendingText: String? = null
 
     private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
@@ -29,6 +29,15 @@ class TtsSpeaker(context: Context) : Speaker {
         tts.language = Locale.getDefault()
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
     }
+
+    /** For tests: whether the engine has started up. */
+    internal val isReady: Boolean get() = ready
+
+    /** For tests: whether it's speaking now. */
+    internal val isSpeaking: Boolean get() = tts.isSpeaking
+
+    /** For tests: whether the device has a speech engine at all. */
+    internal val hasEngine: Boolean get() = tts.engines.isNotEmpty()
 
     override fun stop() {
         pendingText = null

@@ -167,8 +167,8 @@ page. `stickyHomeRowEnabled` replaced it: when on, `BoardScreen` renders
 isn't the home page (hidden on the home page itself, since it's already
 showing there as ordinary content). Editing a tile from that banner writes
 straight into the home page's tile list through the same `BoardViewModel`
-tile editors as any other tile (`setLabel`, `assignSound`, `stopRecording`,
-…): they go through `Board.updatingTile(tileId)`, which finds the tile on
+tile editors as any other tile (`saveTile`, `clearTile`, `setLabel`, …): they
+go through `Board.updatingTile(tileId)`, which finds the tile on
 whichever page holds it. That works because tile ids are unique across a
 board — the banner shows the home page's own tiles, never copies (#155).
 There's no separate width setting either — the banner is simply as wide as
@@ -407,23 +407,35 @@ The flow, split between `EditTileDialog` (permission + button state) and
    through `FileSystemStore.file()`. The path is tracked as
    `pendingRecordingPath` and `_isRecording` flips true, which is what turns
    the dialog's button into `Stop (Ns)`.
-3. Tapping **Stop** calls `vm.stopRecording(tileId)` (the same call for a
-   tile edited via the sticky home row banner), which stops the recorder, `player.load()`s the
-   resulting file, and writes `fileName` onto the tile through the normal
-   `updateTile`/`commit()` path — recording is assigned exactly as
-   immediately as picking a file is, not gated behind the dialog's Save
-   button.
+3. Tapping **Stop** calls `vm.stopRecording { name -> … }`, which stops the
+   recorder, `player.load()`s the file, and hands its name back to the
+   dialog's draft; the tile itself only changes on **Save** (see "The tile
+   editor works on a draft" below).
 4. A failed `MediaRecorder.stop()` (thrown when too little audio was
    captured to finalize the file — e.g. tapping Stop instantly after Record)
    is treated as failure: the partial file is deleted and the tile is left
    untouched, with a "Recording failed" message.
-5. **Nothing commits a recording that isn't explicitly stopped.**
-   `vm.cancelRecording()` — called from the dialog's `onDismiss` and from the
-   page-switch effect that closes a `PageTile` dialog (auto-return can fire
-   mid-recording) — stops the recorder without touching the tile and deletes
-   the abandoned file. It's a no-op when nothing is recording, so it's safe
-   to call unconditionally on every dialog exit path (Save, Cancel, or
-   dismiss).
+5. **Nothing commits a recording that isn't explicitly stopped and saved.**
+   `vm.cancelRecording()` stops the recorder without touching the tile and
+   deletes the abandoned file; `vm.discardTileEdits()` (the dialog's Cancel
+   and dismiss, and the page-switch effect that closes a page tile's editor,
+   since auto-return can fire mid-recording) calls it and then deletes any
+   clip recorded or picked during the edit. Both are no-ops when there's
+   nothing to discard, so they're safe on every exit path.
+
+**The tile editor works on a draft** (#207). `EditTileDialog` keeps a copy of
+the tile and changes only that; **Save** hands the whole draft to
+`vm.saveTile(tileId, draft)`, one commit (trimming the name and script and
+clamping volume and opacity on the way), and **Cancel** calls
+`vm.discardTileEdits()`. A picked or recorded sound is a real file from the
+start, so **Play clip** can play it, but until the edit ends it's *pending*:
+`BoardViewModel.pendingSounds` keeps it out of `commit()`'s pruning (like a
+saved board's sounds, and the recording in progress), Save keeps the one the
+tile ended up with, and everything else pending is unloaded and deleted. Each
+edit is a numbered session (`editSession`), and a pick or recording belongs to
+the session it started in, so one that finishes after its edit has ended is
+deleted rather than handed to a dialog that's gone. **Clear tile** stays an
+immediate action on the saved tile.
 
 ## Dependency injection
 
@@ -747,6 +759,15 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   `largestFittingSize`/`breaksInsideWord` search tile labels use, not
   Compose's `TextAutoSize`, which only checks height and will happily split
   "doctor" across two lines.
+- **Tile labels share a size per grid, with exceptions.** `rememberGridLabelStyle`
+  picks the largest size in the board's range at which every label on the grid
+  fits without a word split across lines, falling back to the minimum. A label
+  that still doesn't fit there, typically one word wider than its tile, gets its
+  own size from `labelSizeExceptions`: the largest from `LABEL_FLOOR_SP` (10) up
+  that fits, so "Something's wrong" in a narrow four-column row shrinks a little
+  instead of breaking as "Something / 's" (#209), while its neighbors keep the
+  grid's size. It returns a `GridLabelStyle`, and each `TileCard` asks it for its
+  own text's style.
 
 ## Threading
 

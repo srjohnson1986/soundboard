@@ -154,12 +154,12 @@ fun BoardScreen(vm: BoardViewModel) {
     // a tile on the page the user just left, no longer on screen. A home-row-tile
     // dialog is unaffected — its tile stays visible (in the sticky row or on the home
     // page itself) whichever page is current. Auto-return (below) can trigger this
-    // while a recording is in progress, so cancel it too.
+    // mid-edit, even mid-recording, so the unsaved edit is thrown away like a Cancel.
     LaunchedEffect(board.currentPageIndex) {
         val editing = openDialog as? BoardDialog.EditTile
         if (editing != null && !editing.fromStickyRow) {
             closeDialog()
-            vm.cancelRecording()
+            vm.discardTileEdits()
         }
     }
 
@@ -362,21 +362,17 @@ fun BoardScreen(vm: BoardViewModel) {
                 tile = editing,
                 isRecording = isRecording,
                 speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
-                onLabelChange = { vm.setLabel(editing.id, it) },
-                onTtsScriptChange = { vm.setTtsScript(editing.id, it) },
-                onSoundPicked = { vm.assignSound(editing.id, it) },
+                onPickSound = vm::importSound,
                 onClear = { vm.clearTile(editing.id) },
-                onRemoveSound = { vm.removeSound(editing.id) },
-                onVolumeChange = { vm.setVolume(editing.id, it) },
-                onColorChange = { vm.setColor(editing.id, it) },
-                onOpacityChange = { vm.setOpacity(editing.id, it) },
-                onBorderChange = { vm.setBorder(editing.id, it) },
-                onSpeakWhenNoSoundChange = { vm.setSpeakWhenNoSound(editing.id, it) },
                 onPlay = vm::play,
                 onStartRecording = vm::startRecording,
-                onStopRecording = { vm.stopRecording(editing.id) },
+                onStopRecording = vm::stopRecording,
+                onSave = { edited ->
+                    vm.saveTile(editing.id, edited)
+                    closeDialog()
+                },
                 onDismiss = {
-                    vm.cancelRecording()
+                    vm.discardTileEdits()
                     closeDialog()
                 }
             )

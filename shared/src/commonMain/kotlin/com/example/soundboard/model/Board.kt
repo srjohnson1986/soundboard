@@ -39,7 +39,9 @@ enum class LabelFont { DEFAULT, CONDENSED, SERIF, ATKINSON_HYPERLEGIBLE, LEXEND 
 /**
  * How tile labels are drawn. Each grid uses one font size for all of its labels — the
  * largest in [minSizeSp]..[maxSizeSp] at which every label fits its tile — so labels grow
- * on big tiles (few columns) without one short label towering over its neighbors.
+ * on big tiles (few columns) without one short label towering over its neighbors. A label
+ * that doesn't fit even at [minSizeSp] (a word wider than its tile) gets a smaller size of
+ * its own rather than a word split across lines; see `rememberGridLabelStyle`.
  */
 @Serializable
 data class LabelStyle(

@@ -758,6 +758,15 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   `largestFittingSize`/`breaksInsideWord` search tile labels use, not
   Compose's `TextAutoSize`, which only checks height and will happily split
   "doctor" across two lines.
+- **Tile labels share a size per grid, with exceptions.** `rememberGridLabelStyle`
+  picks the largest size in the board's range at which every label on the grid
+  fits without a word split across lines, falling back to the minimum. A label
+  that still doesn't fit there, typically one word wider than its tile, gets its
+  own size from `labelSizeExceptions`: the largest from `LABEL_FLOOR_SP` (10) up
+  that fits, so "Something's wrong" in a narrow four-column row shrinks a little
+  instead of breaking as "Something / 's" (#209), while its neighbors keep the
+  grid's size. It returns a `GridLabelStyle`, and each `TileCard` asks it for its
+  own text's style.
 
 ## Threading
 

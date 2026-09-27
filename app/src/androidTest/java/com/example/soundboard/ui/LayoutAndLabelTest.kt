@@ -45,6 +45,7 @@ import kotlin.math.abs
 import kotlin.math.min
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -362,13 +363,26 @@ class LayoutAndLabelTest {
     }
 
     @Test
-    fun aFourColumnPageWithALongLabelStaysAtTheMinimumSize() {
+    fun aFourColumnPageWithALongLabelStaysAtTheMinimumSizeWithoutSplittingAWord() {
         rotate(landscape = false)
         val labels = listOf("Hey", "Something's wrong", "Call the doctor", "911")
         val tiles = labels.mapIndexed { i, label -> Tile(id = "t$i", label = label, fileName = "t$i.mp3") }
         launchWith(Board(pages = listOf(Page(rows = 1, columns = 4, tiles = tiles, tileAspectRatio = 4f / 3f))))
 
-        labels.forEach { assertEquals(it, 14f, labelTextStyle(it).fontSize.value) }
+        // The row shares the minimum size; only a label whose word is wider than its tile
+        // may shrink below it, on its own, so the word isn't split across lines (#209).
+        listOf("Hey", "Call the doctor", "911").forEach { assertEquals(it, 14f, labelTextStyle(it).fontSize.value) }
+        assertTrue(labelTextStyle("Something's wrong").fontSize.value in 10f..14f)
+        labels.forEach { assertFalse("$it is split mid-word", splitsAWord(textLayout(it))) }
+    }
+
+    /** Whether any line of [layout] ends in the middle of a word, rather than at a space or hyphen. */
+    private fun splitsAWord(layout: TextLayoutResult): Boolean {
+        val text = layout.layoutInput.text.text
+        return (0 until layout.lineCount - 1).any { line ->
+            val end = layout.getLineEnd(line)
+            end in 1 until text.length && !text[end - 1].isWhitespace() && !text[end].isWhitespace() && text[end - 1] != '-'
+        }
     }
 
     @Test

@@ -257,9 +257,11 @@ switching boards switches these too. Those two belong to the device.
     license texts are in `assets/licenses/`.
 - **Text size:** a smallest and a largest size. All labels on a page share
   one size: the largest that still fits every tile on that page. Pages with
-  fewer, bigger tiles get bigger text, and text never goes below the smallest
-  size. A label too long even at the smallest size wraps onto up to 3 lines
-  and ends in "…".
+  fewer, bigger tiles get bigger text. A label that doesn't fit even at the
+  smallest size, usually a word wider than its tile, gets a smaller size of
+  its own (down to 10) rather than having the word split across two lines;
+  the rest of the page keeps the shared size. A label too long even then
+  wraps onto up to 3 lines and ends in "…".
 - **Bold** and **All caps:** for extra legibility.
 - **Preview:** two sample tiles show your choices at both ends of the size
   range, a long phrase at the smallest size and a short word at the largest.

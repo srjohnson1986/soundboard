@@ -8,6 +8,7 @@ plugins {
     id("org.jetbrains.kotlin.multiplatform")
     id("com.android.kotlin.multiplatform.library")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("org.jetbrains.kotlinx.kover")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.compose")
     id("com.android.lint")
@@ -122,6 +123,13 @@ kotlin {
             // Declares the empty activity runComposeUiTest starts on Android.
             implementation("androidx.compose.ui:ui-test-manifest:1.12.1")
         }
+    }
+}
+
+// Coverage (#222): the Android host tests, reported together with the app's in the root project.
+kover {
+    currentProject {
+        createVariant("unit") { add("android") }
     }
 }
 

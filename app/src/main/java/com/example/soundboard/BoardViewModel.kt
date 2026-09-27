@@ -1,7 +1,6 @@
 package com.example.soundboard
 
 import android.app.Application
-import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -13,6 +12,9 @@ import com.example.soundboard.audio.Speaker
 import com.example.soundboard.audio.TtsSpeaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
+import com.example.soundboard.data.PickedFile
+import com.example.soundboard.data.SaveTarget
+import com.example.soundboard.data.appFileStore
 import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.RecentBoardEntry
 import com.example.soundboard.data.RecentBoardKind
@@ -26,9 +28,10 @@ import com.example.soundboard.model.ShowModeSettings
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
-import java.io.File
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -81,8 +84,8 @@ class BoardViewModel(
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
-    /** The file the active recording is writing to; only meaningful while [isRecording] is true. */
-    private var pendingRecordingFile: File? = null
+    /** Where the active recording is writing to; only meaningful while [isRecording] is true. */
+    private var pendingRecordingPath: String? = null
 
     init {
         viewModelScope.launch {
@@ -155,10 +158,10 @@ class BoardViewModel(
 
     fun setSpeakWhenNoSound(tileId: String, value: Boolean) = updateTile(tileId) { it.copy(speakWhenNoSound = value) }
 
-    fun assignSound(tileId: String, uri: Uri) {
+    fun assignSound(tileId: String, file: PickedFile) {
         viewModelScope.launch {
-            val name = withContext(ioDispatcher) { boardRepo.importSound(uri) } ?: return@launch
-            withContext(ioDispatcher) { player.load(name, boardRepo.soundFile(name)) }
+            val name = withContext(ioDispatcher) { boardRepo.importSound(file) } ?: return@launch
+            withContext(ioDispatcher) { player.load(name, boardRepo.soundPath(name)) }
             updateTile(tileId) { it.copy(fileName = name) }
         }
     }
@@ -172,10 +175,10 @@ class BoardViewModel(
     fun startRecording() {
         if (_isRecording.value) return
         viewModelScope.launch {
-            val file = withContext(ioDispatcher) { boardRepo.newRecordingFile() }
-            val started = withContext(ioDispatcher) { recorder.start(file) }
+            val path = boardRepo.newRecordingPath()
+            val started = withContext(ioDispatcher) { recorder.start(path) }
             if (started) {
-                pendingRecordingFile = file
+                pendingRecordingPath = path
                 _isRecording.value = true
             } else {
                 _message.value = "Couldn't start recording"
@@ -197,8 +200,9 @@ class BoardViewModel(
         viewModelScope.launch {
             withContext(ioDispatcher) { recorder.cancel() }
             _isRecording.value = false
-            pendingRecordingFile?.delete()
-            pendingRecordingFile = null
+            val path = pendingRecordingPath
+            pendingRecordingPath = null
+            if (path != null) withContext(ioDispatcher) { boardRepo.deleteRecording(path) }
         }
     }
 
@@ -207,15 +211,16 @@ class BoardViewModel(
         if (!_isRecording.value) return null
         val ok = withContext(ioDispatcher) { recorder.stop() }
         _isRecording.value = false
-        val file = pendingRecordingFile
-        pendingRecordingFile = null
-        if (!ok || file == null) {
-            file?.delete()
+        val path = pendingRecordingPath
+        pendingRecordingPath = null
+        if (!ok || path == null) {
+            if (path != null) withContext(ioDispatcher) { boardRepo.deleteRecording(path) }
             _message.value = "Recording failed"
             return null
         }
-        withContext(ioDispatcher) { player.load(file.name, file) }
-        return file.name
+        val name = path.substringAfterLast('/')
+        withContext(ioDispatcher) { player.load(name, path) }
+        return name
     }
 
     /** Whether the home page's first row shows fixed above every other page. */
@@ -356,9 +361,9 @@ class BoardViewModel(
     override fun setBackgroundColor(argb: Int?) = replaceBackground(colorArgb = argb, imageFileName = null)
 
     /** Background image picked from the gallery; replaces any solid background color. */
-    fun setBackgroundImage(uri: Uri) {
+    fun setBackgroundImage(file: PickedFile) {
         viewModelScope.launch {
-            val name = withContext(ioDispatcher) { boardRepo.importBackgroundImage(uri) } ?: return@launch
+            val name = withContext(ioDispatcher) { boardRepo.importBackgroundImage(file) } ?: return@launch
             replaceBackground(colorArgb = null, imageFileName = name)
         }
     }
@@ -375,12 +380,12 @@ class BoardViewModel(
         val previousImage = _board.value.backgroundImageFileName
         commit(_board.value.copy(backgroundColorArgb = colorArgb, backgroundImageFileName = imageFileName))
         if (previousImage != null && previousImage != imageFileName) {
-            viewModelScope.launch(ioDispatcher) { boardRepo.backgroundFile(previousImage).delete() }
+            viewModelScope.launch(ioDispatcher) { boardRepo.deleteBackground(previousImage) }
         }
     }
 
-    /** File backing [Board.backgroundImageFileName], for the UI to decode and render. */
-    fun backgroundImageFile(name: String): File = boardRepo.backgroundFile(name)
+    /** The image behind [Board.backgroundImageFileName], for the UI to decode and render; null if it's gone. */
+    suspend fun backgroundImage(name: String): ByteArray? = withContext(ioDispatcher) { boardRepo.readBackground(name) }
 
     fun renameBoard(name: String) {
         commit(_board.value.copy(name = name.ifBlank { "New Board" }))
@@ -425,16 +430,16 @@ class BoardViewModel(
         commit(_board.value)
     }
 
-    fun exportBoard(uri: Uri) {
+    fun exportBoard(target: SaveTarget) {
         viewModelScope.launch {
-            val ok = withContext(ioDispatcher) { boardRepo.exportTo(uri) }
+            val ok = withContext(ioDispatcher) { boardRepo.exportTo(target) }
             _message.value = if (ok) "Exported backup" else "Export failed"
         }
     }
 
-    fun importBoard(uri: Uri) {
+    fun importBoard(file: PickedFile) {
         viewModelScope.launch {
-            val ok = withContext(ioDispatcher) { boardRepo.importFrom(uri) }
+            val ok = withContext(ioDispatcher) { boardRepo.importFrom(file) }
             replaceBoardAfterImport(ok, "Imported backup", "Import failed")
         }
     }
@@ -451,16 +456,16 @@ class BoardViewModel(
         viewModelScope.launch {
             _strayClips.value = withContext(ioDispatcher) {
                 val keep = _board.value.soundFileNames + savedBoardRepo.allReferencedFileNames()
-                boardRepo.strayFiles(keep).map { StrayClip(it.name, it.length()) }
+                boardRepo.strayFiles(keep).map { StrayClip(it.name, it.sizeBytes) }
             }
         }
     }
 
-    /** Zips [strayClips] to [uri] and, only if that succeeds, deletes them. */
-    fun exportAndDeleteStrayClips(uri: Uri) {
+    /** Zips [strayClips] to [target] and, only if that succeeds, deletes them. */
+    fun exportAndDeleteStrayClips(target: SaveTarget) {
         val fileNames = _strayClips.value.map { it.fileName }
         viewModelScope.launch {
-            val ok = withContext(ioDispatcher) { boardRepo.exportFiles(fileNames, uri) }
+            val ok = withContext(ioDispatcher) { boardRepo.exportFiles(fileNames, target) }
             if (ok) {
                 withContext(ioDispatcher) { boardRepo.deleteFiles(fileNames) }
                 _strayClips.value = emptyList()
@@ -575,7 +580,7 @@ class BoardViewModel(
 
     private fun loadSounds(board: Board) {
         board.soundFileNames.forEach { name ->
-            player.load(name, boardRepo.soundFile(name))
+            player.load(name, boardRepo.soundPath(name))
         }
     }
 
@@ -612,7 +617,11 @@ class BoardViewModel(
 
     override fun onCleared() {
         recorder.cancel()
-        pendingRecordingFile?.delete()
+        // viewModelScope is already cancelled here, so the abandoned file is deleted on a
+        // scope of its own. Missing it would only leave a stray clip for the next prune.
+        pendingRecordingPath?.let { path ->
+            CoroutineScope(ioDispatcher + NonCancellable).launch { boardRepo.deleteRecording(path) }
+        }
         player.release()
         speaker.shutdown()
         super.onCleared()
@@ -623,8 +632,8 @@ class BoardViewModel(
             @Suppress("UNCHECKED_CAST")
             return BoardViewModel(
                 BoardRepository(app),
-                SoundPlayer(),
-                AudioRecorder(app),
+                SoundPlayer(appFileStore(app)),
+                AudioRecorder(app, appFileStore(app)),
                 SavedBoardRepository(app),
                 TtsSpeaker(app),
                 DevicePreferences(app),

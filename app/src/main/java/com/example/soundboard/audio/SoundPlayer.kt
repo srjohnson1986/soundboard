@@ -3,6 +3,7 @@ package com.example.soundboard.audio
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.SoundPool
+import com.example.soundboard.data.FileSystemStore
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
@@ -12,7 +13,11 @@ import java.util.concurrent.ConcurrentHashMap
  * gapless playback; bigger files stream through MediaPlayer instead. Playback
  * is exclusive on both paths: starting a clip stops whatever was playing.
  */
-class SoundPlayer(maxStreams: Int = 8, private val longClipThresholdBytes: Long = 300_000L) : Player {
+class SoundPlayer(
+    private val files: FileSystemStore,
+    maxStreams: Int = 8,
+    private val longClipThresholdBytes: Long = 300_000L
+) : Player {
 
     /** Shared by both playback paths so short and long clips route and duck the same way. */
     private val audioAttributes = AudioAttributes.Builder()
@@ -40,7 +45,8 @@ class SoundPlayer(maxStreams: Int = 8, private val longClipThresholdBytes: Long 
         }
     }
 
-    override fun load(key: String, file: File) {
+    override fun load(key: String, path: String) {
+        val file = files.file(path)
         if (soundIds.containsKey(key) || longClips.containsKey(key) || !file.exists()) return
         if (file.length() > longClipThresholdBytes) {
             longClips[key] = file

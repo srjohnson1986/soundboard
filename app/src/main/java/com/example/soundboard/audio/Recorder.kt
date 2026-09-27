@@ -1,10 +1,8 @@
 package com.example.soundboard.audio
 
-import java.io.File
-
 interface Recorder {
-    /** Starts recording into [file]; returns false if the recorder couldn't start. */
-    fun start(file: File): Boolean
+    /** Starts recording into [path] (a [com.example.soundboard.data.FileStore] path); returns false if the recorder couldn't start. */
+    fun start(path: String): Boolean
 
     /** Stops the current recording; returns false if nothing usable was captured. */
     fun stop(): Boolean

@@ -1,5 +1,6 @@
 package com.example.soundboard.ui
 
+import kotlinx.coroutines.runBlocking
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
@@ -61,9 +62,9 @@ class BoardScreenTest {
         // load() treats a fileName with no file behind it as "needs recording" (see
         // BoardRepository.sanitizeMissingSounds), so give every referenced sound a file.
         board.pages.flatMap { it.tiles }.mapNotNull { it.fileName }.forEach { name ->
-            repo.soundFile(name).apply { parentFile?.mkdirs() }.writeText(name)
+            File(context.filesDir, "sounds/$name").apply { parentFile?.mkdirs() }.writeText(name)
         }
-        repo.save(board)
+        runBlocking { repo.save(board) }
         player = FakePlayer()
         speaker = FakeSpeaker()
         // Show mode lives in device prefs, which outlive each test — start every test with it off.

@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -38,12 +39,15 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.soundboard.BoardViewModel
 import com.example.soundboard.BoardRef
+import com.example.soundboard.data.UriPickedFile
+import com.example.soundboard.data.UriSaveTarget
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.TileBorder
-import java.io.File
 import kotlin.time.Duration.Companion.minutes
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collect
 
 /**
@@ -96,6 +100,7 @@ fun BoardScreen(
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
     var isDragActive by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     /** Restarts the auto-return idle timer (see the LaunchedEffect keyed on [lastInteractionAt]). */
     fun recordInteraction() {
@@ -228,26 +233,26 @@ fun BoardScreen(
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri -> uri?.let(vm::exportBoard) }
+    ) { uri -> uri?.let { vm.exportBoard(UriSaveTarget(context, it)) } }
 
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
-    ) { uri -> uri?.let(vm::importBoard) }
+    ) { uri -> uri?.let { vm.importBoard(UriPickedFile(context, it)) } }
 
     val strayExportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri -> uri?.let(vm::exportAndDeleteStrayClips) }
+    ) { uri -> uri?.let { vm.exportAndDeleteStrayClips(UriSaveTarget(context, it)) } }
 
     val backgroundImagePicker = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
-    ) { uri -> uri?.let(vm::setBackgroundImage) }
+    ) { uri -> uri?.let { vm.setBackgroundImage(UriPickedFile(context, it)) } }
 
     // Performance mode drops translucency and borders board-wide, whatever the settings say.
     val globalTileOpacity = if (performanceModeEnabled) 1f else board.tileOpacity
     val globalTileBorder = if (performanceModeEnabled) TileBorder() else board.tileBorder
 
     Box(modifier = Modifier.fillMaxSize()) {
-        val hasCustomBackground = BoardBackground(board, vm::backgroundImageFile)
+        val hasCustomBackground = BoardBackground(board, vm::backgroundImage)
         Scaffold(
             containerColor = if (hasCustomBackground) Color.Transparent else MaterialTheme.colorScheme.background,
             snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -387,7 +392,7 @@ fun BoardScreen(
                 speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                 onLabelChange = { vm.setLabel(editing.id, it) },
                 onTtsScriptChange = { vm.setTtsScript(editing.id, it) },
-                onSoundPicked = { vm.assignSound(editing.id, it) },
+                onSoundPicked = { vm.assignSound(editing.id, UriPickedFile(context, it)) },
                 onClear = { vm.clearTile(editing.id) },
                 onRemoveSound = { vm.removeSound(editing.id) },
                 onVolumeChange = { vm.setVolume(editing.id, it) },
@@ -581,20 +586,20 @@ fun BoardScreen(
  * everything, and returns whether there was one (so the Scaffold can go transparent).
  */
 @Composable
-private fun BoardBackground(board: Board, imageFile: (String) -> File): Boolean {
+private fun BoardBackground(board: Board, readImage: suspend (String) -> ByteArray?): Boolean {
     // Decoded once per file name change, not on every recomposition — a board with a
     // background image reloads this exactly once per app launch (or right after picking
-    // a new one), not on every tile tap.
+    // a new one), not on every tile tap — and off the main thread.
     val backgroundImageFileName = board.backgroundImageFileName
-    val backgroundBitmap: ImageBitmap? = if (backgroundImageFileName != null) {
-        remember(backgroundImageFileName) {
-            runCatching {
-                BitmapFactory.decodeFile(imageFile(backgroundImageFileName).path)?.asImageBitmap()
-            }.getOrNull()
+    val backgroundBitmap: ImageBitmap? = produceState<ImageBitmap?>(null, backgroundImageFileName) {
+        value = backgroundImageFileName?.let { name ->
+            withContext(Dispatchers.Default) {
+                runCatching {
+                    readImage(name)?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
+                }.getOrNull()
+            }
         }
-    } else {
-        null
-    }
+    }.value
     val backgroundColorArgb = board.backgroundColorArgb
     if (backgroundBitmap != null) {
         Image(

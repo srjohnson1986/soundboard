@@ -7,13 +7,28 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 
 | Module | What's in it |
 |---|---|
-| `shared/` | Code that doesn't depend on Android, built for both Android and WebAssembly (Kotlin Multiplatform). Today that's the board model (`shared/src/commonMain/.../model/`); it's where more of the app moves as the web version comes together (#193). |
+| `shared/` | Code that doesn't depend on Android, built for both Android and WebAssembly (Kotlin Multiplatform): the board model (`model/`) and the repositories (`data/`). More of the app moves here as the web version comes together (#193). |
 | `app/` | The Android app: everything else below, which uses `shared` like any other library. |
 
-`shared` has no Android or Compose dependencies. Keep it that way: something that
-needs Android goes in `app/`, not behind a workaround in `shared`. It uses the
-same packages as before (`com.example.soundboard.model`), so moving a file there
-changes no imports. Its tests run twice, on the JVM and compiled to WebAssembly
+`shared`'s common code has no Android or Compose dependencies. Keep it that way:
+anything that needs a platform goes behind one of the small interfaces in
+`shared/.../data/Storage.kt`, with an implementation per platform:
+
+| Interface | What it is | Android implementation |
+|---|---|---|
+| `FileStore` | App-private files by relative path (`board.json`, `sounds/<name>`) | `FileSystemStore(filesDir)` (`shared/src/androidMain`) |
+| `ZipCodec` | Reads/writes zip archives (backups, built-in boards) | `JavaZipCodec`, on `java.util.zip` (`shared/src/androidMain`) |
+| `PickedFile` / `SaveTarget` | A file the user picked to open / somewhere they picked to save | `UriPickedFile` / `UriSaveTarget`, on content URIs (`app/.../data/AndroidStorage.kt`) |
+| `BundledBoards` | The built-in board zips packaged with the build | `AssetBundledBoards`, on APK assets (same file) |
+| `KeyValueStore` | Small device-local settings (`DevicePreferences`) | `SharedPreferencesStore` (same file) |
+
+`AndroidStorage.kt` also has factory functions named after the repositories
+(`BoardRepository(context)` and so on) that wire them to those implementations,
+which is what the app and the Android tests call. `FileStore` is suspending
+because the web's storage is asynchronous. A new platform capability follows the
+same pattern: an interface in `shared`, and an implementation for each platform
+in the same change. Moved code keeps its package (`com.example.soundboard.model`,
+`...data`), so moving a file there changes no imports. Its tests run twice, on the JVM and compiled to WebAssembly
 (`./gradlew :shared:allTests`), which is what keeps it building for the web.
 One side effect of the module boundary: Kotlin won't smart-cast a model
 property from `app/` (`if (tile.fileName != null) use(tile.fileName)` fails
@@ -24,8 +39,8 @@ to compile); read it into a local `val` first.
 | File | Responsibility |
 |---|---|
 | `shared/.../model/Board.kt` | `Tile`, `Page`, and `Board` data classes; resize, visibility, reorder, and page-management logic. No Android dependencies. |
-| `data/BoardRepository.kt` | Reads/writes `board.json`, copies picked audio into app storage, zips/unzips backups. All file I/O. |
-| `data/SavedBoardRepository.kt` | Reads/writes small `Board`-snapshot JSON files under `filesDir/presets/` — same-device version history, deliberately not carrying its own copy of audio (see "Saved boards" below). |
+| `shared/.../data/BoardRepository.kt` | Reads/writes `board.json`, copies picked audio into app storage, zips/unzips backups. All file I/O, through `FileStore`/`ZipCodec`. |
+| `shared/.../data/SavedBoardRepository.kt` | Reads/writes small `Board`-snapshot JSON files under `presets/` — same-device version history, deliberately not carrying its own copy of audio (see "Saved boards" below). |
 | `audio/Player.kt` | Interface (`load`/`play`/`unload`/`clear`/`release`) that `BoardViewModel` depends on. The seam that lets tests substitute a fake instead of real audio. |
 | `audio/SoundPlayer.kt` | Real `Player` implementation: owns the `SoundPool` and the current `MediaPlayer`. No knowledge of `Board` or `Tile`. |
 | `audio/Recorder.kt` | Interface (`start`/`stop`/`cancel`) that `BoardViewModel` depends on for recording — same fake-in-tests seam as `Player`. |
@@ -204,7 +219,7 @@ to pre-validate. `Board`'s own mutators (`withPageRemoved`, `withPageRenamed`,
   other reasons. Rather than let a tile render as "filled" while silently
   doing nothing when tapped, `sanitizeMissingSounds` walks every page's tiles
   (the home page's, sticky-row-eligible or not, included — there's no
-  separate list anymore) and resets `fileName` to `null` wherever `soundFile(fileName)`
+  separate list anymore) and resets `fileName` to `null` wherever `sounds/<fileName>`
   doesn't exist — same label, now honestly without a sound (`!hasSound`). This runs unconditionally
   on every load, not just right after an import, so it also self-heals a
   board whose sound file went missing some other way. It does not rewrite
@@ -224,7 +239,7 @@ different board switches those too — see the settings-on-board comment atop
 the drag-reorder scale effect, see "The UI layer" below) describes the
 device the app happens to be running on, not the board's content, so it
 lives in ordinary `SharedPreferences` (`DevicePreferences`, a small
-`Context`-backed wrapper) instead — opening a different board must not
+wrapper over a `KeyValueStore`) instead — opening a different board must not
 silently turn it back off. `BoardViewModel` reads it once at construction
 into its own `performanceModeEnabled: StateFlow<Boolean>`, separate from
 `board`. Show mode (`ShowModeSettings`: on/off, display timer, tap to close,
@@ -238,7 +253,11 @@ such a combination on read, so the text screen can never strand anyone.
 at the zip root, every file under `sounds/` mirrored into a `sounds/` entry.
 Both go through Storage Access Framework document pickers
 (`CreateDocument`/`OpenDocument`), so no storage permission is needed here
-either. `importFrom()` overwrites `board.json` and merges files into
+either. A backup is built and read whole, in memory, rather than streamed, since
+that's what the web can do too; boards with a few hundred short clips are a few
+MB. `importFrom()` only takes files that land directly in their own folder (an
+entry like `sounds/../board.json` is skipped), and fails on a file that isn't a
+zip rather than seeming to work. It overwrites `board.json` and merges files into
 `sounds/` — it does not clear `sounds/` first, so an import after manually
 adding stray files there could leave orphans; in practice the app is the only
 thing that ever writes there, so this hasn't mattered.
@@ -345,10 +364,11 @@ The flow, split between `EditTileDialog` (permission + button state) and
    asks for it and only starts recording once granted, showing an inline
    error otherwise. This lives in the UI layer because permission requests
    need an `Activity` context a `ViewModel` shouldn't hold.
-2. `vm.startRecording()` calls `repo.newRecordingFile()` for a fresh
-   UUID-named `.m4a` path in `soundsDir` — the same directory `importSound()`
-   writes into — then `recorder.start(file)`. The file is tracked as
-   `pendingRecordingFile` and `_isRecording` flips true, which is what turns
+2. `vm.startRecording()` calls `repo.newRecordingPath()` for a fresh
+   UUID-named `.m4a` path in `sounds/` — the same directory `importSound()`
+   writes into — then `recorder.start(path)`, which resolves it to a real file
+   through `FileSystemStore.file()`. The path is tracked as
+   `pendingRecordingPath` and `_isRecording` flips true, which is what turns
    the dialog's button into `Stop (Ns)`.
 3. Tapping **Stop** calls `vm.stopRecording(tileId)` (the same call for a
    tile edited via the sticky home row banner), which stops the recorder, `player.load()`s the
@@ -710,7 +730,9 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | `Page.withGridSize()`/`.withTileMoved()`/`.normalized()`, tile opacity/border fallback, and the landscape grid defaults | `shared/src/commonTest/.../model/PageTest.kt` | JVM and WebAssembly (`kotlin.test`) |
 | Landscape column/row-height math, label size search | `test/.../ui/GridLayoutTest.kt`, `test/.../ui/LabelTextTest.kt` | plain JVM (JUnit) |
 | `Board` page management (`withPageAdded`/`withPageRemoved`/`withPageRenamed`/`withCurrentPage`/`withHomePage`), `updatingTile`/`findTile`, `soundFileNames`, `Tile.isPlayable`, and `hasAnySound` | `shared/src/commonTest/.../model/BoardTest.kt` | JVM and WebAssembly (`kotlin.test`) |
-| `BoardRepository`, incl. the legacy-schema and `homePageIndex` migrations and additive-field defaults in `load()` | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
+| `BoardRepository`'s own logic — save/load, missing-sound sanitizing, backup round-trip, the zip path guard, bundled boards — plus `SavedBoardRepository` basics, against in-memory storage | `shared/src/commonTest/.../data/BoardRepositoryCommonTest.kt` | JVM and WebAssembly (`kotlin.test`) |
+| The `FileStore` contract every implementation must meet; `JavaZipCodec` reading every zip in `presets/` | `shared/src/commonTest/.../data/FileStoreContractTest.kt` (in-memory store), `shared/src/androidHostTest/.../data/AndroidStorageTest.kt` (`FileSystemStore`, `JavaZipCodec`) | JVM and WebAssembly / JVM |
+| `BoardRepository` wired to real files, zips and assets, incl. the legacy-schema and `homePageIndex` migrations, additive-field defaults in `load()`, and every shipped built-in board | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
 | `SavedBoardRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/SavedBoardRepositoryTest.kt` | Robolectric |
 | `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, and saveBoardAs/openBoard | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
 | `BoardScreen`, incl. the sticky home row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |

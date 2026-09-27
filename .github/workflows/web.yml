@@ -43,6 +43,13 @@ jobs:
       - name: Build web app
         run: ./gradlew :web:wasmJsBrowserDistribution --stacktrace
 
+      # The same check as on master (ci.yml): from /soundboard/, online and offline (#223).
+      - name: Smoke-test the web app
+        working-directory: web/smoke
+        run: |
+          npm ci --no-audit --no-fund
+          node smoke.mjs
+
       - name: Upload for Pages
         uses: actions/upload-pages-artifact@v5
         with:

@@ -20,3 +20,4 @@ keystore.properties
 
 # Kotlin compiler caches (Kotlin Multiplatform)
 .kotlin/
+web/smoke/node_modules/

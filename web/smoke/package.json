@@ -1,0 +1,12 @@
+{
+  "name": "soundboard-web-smoke-test",
+  "private": true,
+  "description": "Loads the production web bundle in headless Chrome from a /soundboard/ subpath, like GitHub Pages serves it (#223).",
+  "type": "module",
+  "scripts": {
+    "smoke": "node smoke.mjs"
+  },
+  "devDependencies": {
+    "puppeteer-core": "25.12.0"
+  }
+}

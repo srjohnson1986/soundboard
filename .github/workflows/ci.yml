@@ -48,8 +48,8 @@ jobs:
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # The two halves run side by side, each on its own runner; build-and-test below waits for
-  # both. Gradle's parallel mode, build cache and configuration cache are on in
+  # The jobs below run side by side, each on its own runner; build-and-test waits for all
+  # of them. Gradle's parallel mode, build cache and configuration cache are on in
   # gradle.properties, and setup-gradle keeps the build cache between runs (written by runs
   # on master, read by pull requests), so unchanged modules aren't rebuilt.
   android:
@@ -145,17 +145,52 @@ jobs:
             web/build/reports/tests/allTests
           if-no-files-found: ignore
 
-  # The required check. It passes when both halves passed, or when they were skipped because
+  # Test coverage of the JVM tests (the app's and shared's), with a floor for the core (#222):
+  # the data and model packages and BoardViewModel each keep at least 90% of their lines
+  # covered. See the kover block in build.gradle.kts. It runs beside the other two, since
+  # measuring means running the tests again with Kover's agent.
+  coverage:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Coverage report and floor
+        run: ./gradlew :koverHtmlReportUnit :koverLogUnit :koverVerifyCore --continue --stacktrace
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: build/reports/kover/htmlUnit
+          if-no-files-found: ignore
+
+  # The required check. It passes when all three jobs passed, or when they were skipped because
   # only docs changed; it runs even then (always()), so the check always reports (#183).
   build-and-test:
-    needs: [changes, android, web]
+    needs: [changes, android, web, coverage]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Both halves passed, or only docs changed
+      - name: All three passed, or only docs changed
         run: |
           echo "changes: ${{ needs.changes.result }}, code: ${{ needs.changes.outputs.code }}"
-          echo "android: ${{ needs.android.result }}, web: ${{ needs.web.result }}"
+          echo "android: ${{ needs.android.result }}, web: ${{ needs.web.result }}, coverage: ${{ needs.coverage.result }}"
           if [ "${{ needs.changes.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.changes.outputs.code }}" != "true" ]; then exit 0; fi
-          [ "${{ needs.android.result }}" = "success" ] && [ "${{ needs.web.result }}" = "success" ]
+          [ "${{ needs.android.result }}" = "success" ] && [ "${{ needs.web.result }}" = "success" ] && [ "${{ needs.coverage.result }}" = "success" ]

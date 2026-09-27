@@ -5,6 +5,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("org.jetbrains.kotlinx.kover")
 }
 
 // Release signing is opt-in via a local, gitignored keystore.properties — see
@@ -78,6 +79,15 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
+// Coverage (#222): the debug unit tests, reported together with shared's in the root project
+// (see there for the two variants).
+kover {
+    currentProject {
+        createVariant("unit") { add("debug") }
+        createVariant("core") { add("debug") }
     }
 }
 

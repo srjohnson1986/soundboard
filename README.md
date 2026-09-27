@@ -101,10 +101,17 @@ They run twice: on the JVM, and compiled to WebAssembly in headless Chrome
 
 That runs the Compose UI tests on a connected device or emulator.
 
-GitHub Actions runs lint, the unit tests, the browser tests and a debug build on
-every pull request, split into two jobs that run side by side, plus the UI tests
-on an emulator (advisory; emulators occasionally flake). Pull requests that only
-change Markdown skip both. Gradle's build cache, parallel mode and configuration
+```bash
+./gradlew :koverHtmlReportUnit :koverVerifyCore
+```
+
+That measures the JVM tests' coverage (report in `build/reports/kover/htmlUnit`) and
+fails if the core (`data`, `model`, `BoardViewModel`) drops below 90%.
+
+GitHub Actions runs lint, the unit tests, the browser tests, a debug build and a
+coverage check on every pull request, split into three jobs that run side by side,
+plus the UI tests on an emulator (advisory; emulators occasionally flake). Pull
+requests that only change Markdown skip them. Gradle's build cache, parallel mode and configuration
 cache are on (`gradle.properties`), so repeat builds, locally and in CI, only
 redo what changed.
 
@@ -117,7 +124,7 @@ code, and keep `docs/` current in the same pull request.
 A "Protect master" ruleset enforces that workflow:
 - `master` can't be deleted or force-pushed.
 - Changes reach it only through a pull request; no approval is needed.
-- The CI `build-and-test` check must pass before merging. It passes when both
-  of CI's jobs (`android` and `web`) passed, or when a pull request only
-  changes Markdown, which skips them.
+- The CI `build-and-test` check must pass before merging. It passes when all
+  of CI's jobs (`android`, `web` and `coverage`) passed, or when a pull request
+  only changes Markdown, which skips them.
 - Repository admins can bypass the rules in an emergency.

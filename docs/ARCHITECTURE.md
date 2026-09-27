@@ -843,11 +843,11 @@ browser loses the click after one that closes a menu.
 `./gradlew test :shared:allTests` runs everything except the two `androidTest/`
 classes (`test` alone skips `shared`, which has no task by that name);
 `./gradlew connectedAndroidTest` runs those against a connected device or
-emulator. In CI, the **CI** workflow runs the former and gates merging, as two
-jobs side by side: `android` (lint, the app's unit tests, the debug APK) and
+emulator. In CI, the **CI** workflow runs the former and gates merging, as three
+jobs side by side: `android` (lint, the app's unit tests, the debug APK),
 `web` (`:shared:allTests` on the JVM and in headless Chrome, `:web:allTests`,
-and on master the production web bundle), with `build-and-test`, the required
-check, passing when both do. The build cache is saved by runs on master and
+and on master the production web bundle) and `coverage` (below), with
+`build-and-test`, the required check, passing when all three do. The build cache is saved by runs on master and
 read by pull requests, so a PR only rebuilds and retests what it changed. The
 separate **UI tests** workflow (`.github/workflows/ui-tests.yml`) runs the
 latter on an API 35 emulator for every PR, after every merge to master (which
@@ -856,6 +856,15 @@ It's advisory, not a merge gate, because emulators on shared runners
 occasionally flake on timing-sensitive gestures. Its HTML report is uploaded as
 the `ui-test-report` artifact. `LayoutAndLabelTest` rotates the device itself
 (`UiAutomation.setRotation`) and restores portrait afterwards.
+
+**Coverage** (#222) is measured with Kover over the JVM tests: the app's debug unit
+tests and `shared`'s Android host tests together, configured in the root
+`build.gradle.kts`. `./gradlew :koverHtmlReportUnit` writes the report for all the
+code to `build/reports/kover/htmlUnit` (CI uploads it as the `coverage-report`
+artifact), and `./gradlew :koverVerifyCore` fails if the `data` or `model` package or
+`BoardViewModel` drops below 90% of lines covered. The UI and the Android audio have no
+floor: the audio is tested on the emulator, which Kover doesn't measure, and so is the
+web-only code, which runs as WebAssembly.
 
 - **`FakePlayer`** (a `Player`) exists twice — once under `test/`, once under
   `androidTest/` (`UiTestFakes.kt`) — since those source sets don't share code by default. Keep

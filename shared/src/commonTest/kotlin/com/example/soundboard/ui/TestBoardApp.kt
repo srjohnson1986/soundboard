@@ -1,5 +1,7 @@
 package com.example.soundboard.ui
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import com.example.soundboard.BoardViewModel
@@ -17,6 +19,7 @@ import com.example.soundboard.data.RecentBoardsRepository
 import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.ZipEntryData
 import com.example.soundboard.model.Board
+import com.example.soundboard.ui.theme.SoundboardTheme
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlinx.coroutines.CoroutineDispatcher
@@ -81,11 +84,14 @@ abstract class BoardUiTest : UiTest() {
     @AfterTest
     fun resetMain() = Dispatchers.resetMain()
 
-    /** Shows [BoardScreen] for a [TestBoardApp] on [board]. */
+    /** Shows [BoardScreen] for a [TestBoardApp] on [board], in the board's theme as the apps do. */
     fun ComposeUiTest.launchBoard(board: Board, builtIns: Map<String, BuiltInBoard> = emptyMap()): TestBoardApp {
         val app = TestBoardApp(board, builtIns, dispatcher)
         check(app.vm.board.value.pages.first().id == board.pages.first().id) { "the board didn't load" }
-        setContent { BoardScreen(vm = app.vm) }
+        setContent {
+            val shown by app.vm.board.collectAsState()
+            SoundboardTheme(themeMode = shown.themeMode) { BoardScreen(vm = app.vm) }
+        }
         waitForIdle()
         return app
     }

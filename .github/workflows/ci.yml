@@ -144,6 +144,15 @@ jobs:
           path: web/build/dist/wasmJs/productionExecutable
           if-no-files-found: error
 
+      # A screenshot test that failed leaves the new image and a comparison next to it (#221).
+      - name: Upload screenshot differences
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshot-differences
+          path: shared/build/outputs/roborazzi
+          if-no-files-found: ignore
+
       - name: Upload shared test report
         if: always()
         uses: actions/upload-artifact@v7

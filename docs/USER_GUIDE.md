@@ -326,7 +326,8 @@ https://github.com/srjohnson1986/soundboard/releases/latest/download/soundboard.
 
 ## The web version
 
-The web version works like the app, with a few differences:
+The web version, at https://srjohnson1986.github.io/soundboard/, works like the
+app, with a few differences:
 
 - **It starts with the TTS Care Board**, whose tiles speak with the browser's own
   text-to-speech voice. It's the only built-in board on the web, since it has no

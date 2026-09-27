@@ -52,6 +52,12 @@ One side effect of the module boundary: Kotlin won't smart-cast a model
 property from `app/` (`if (tile.fileName != null) use(tile.fileName)` fails
 to compile); read it into a local `val` first.
 
+**Publishing the web version.** `:web:wasmJsBrowserDistribution` builds it as plain
+static files (`web/build/dist/wasmJs/productionExecutable`), which run from any
+folder, since every path in them is relative. CI builds them on every pull request
+(the `web-app` artifact), and `.github/workflows/web.yml` publishes them to GitHub
+Pages when a release tag is pushed, so the site always matches the newest APK.
+
 ## Layers
 
 | File | Responsibility |

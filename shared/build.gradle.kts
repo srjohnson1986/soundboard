@@ -65,6 +65,12 @@ kotlin {
     }
 
     sourceSets {
+        wasmJsMain {
+            languageSettings.optIn("kotlin.js.ExperimentalWasmJsInterop")
+        }
+        wasmJsTest {
+            languageSettings.optIn("kotlin.js.ExperimentalWasmJsInterop")
+        }
         commonMain {
             kotlin.srcDir(generateAppVersion)
             dependencies {
@@ -82,6 +88,9 @@ kotlin {
                 implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
                 implementation("org.jetbrains.compose.components:components-resources:1.12.1")
             }
+        }
+        wasmJsMain.dependencies {
+            implementation(npm("fflate", "0.8.3"))
         }
         androidMain.dependencies {
             implementation("androidx.activity:activity-compose:1.9.3")

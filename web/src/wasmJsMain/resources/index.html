@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A communication board: tap a tile to hear its words spoken aloud.">
+    <title>Soundboard</title>
+    <style>
+        html, body { margin: 0; height: 100%; overflow: hidden; background: #1c1b1f; }
+        #loading {
+            position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+            padding: 16px; text-align: center; color: #e6e1e5;
+            font: 18px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        }
+    </style>
+    <script>
+        // Kotlin/Wasm needs WebAssembly garbage collection: current Chrome, Edge, Firefox,
+        // and Safari 18.2 or later. Say so instead of leaving a blank page.
+        window.addEventListener('DOMContentLoaded', () => {
+            let supported = false;
+            try {
+                supported = WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 95, 1, 120, 0]));
+            } catch (e) {}
+            if (!supported) {
+                document.getElementById('loading').textContent =
+                    'Soundboard needs a newer browser: a current Chrome, Edge or Firefox, or Safari 18.2 or later.';
+            }
+        });
+    </script>
+    <script type="application/javascript" src="soundboard.js"></script>
+</head>
+<body>
+    <div id="loading">Loading Soundboard…</div>
+</body>
+</html>

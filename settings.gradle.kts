@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 rootProject.name = "Soundboard"
 include(":app")
 include(":shared")
+include(":web")

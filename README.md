@@ -45,6 +45,20 @@ guide, architecture and releasing docs for anyone browsing there. `docs/` is
 the source of truth: update the relevant doc in the same change as the
 feature, and `scripts/sync-wiki.sh` copies it to the wiki at release time.
 
+## Web version
+
+The same app also runs in a web browser, built from the same code (see
+[Architecture](docs/ARCHITECTURE.md), "Modules"). It starts with the text-to-speech
+board, keeps everything in the browser's own storage, and reads and writes the
+same backup zips as the Android app. Recording isn't there yet. To try it locally:
+
+```bash
+./gradlew :web:wasmJsBrowserDevelopmentRun
+```
+
+That serves it at http://localhost:8080. It needs a current browser: Chrome, Edge
+or Firefox, or Safari 18.2 or later.
+
 ## Build it
 
 Requires Android Studio (or a JDK 17+ and the Android SDK). The app targets

@@ -8,26 +8,35 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 | Module | What's in it |
 |---|---|
 | `shared/` | Code that doesn't depend on Android, built for both Android and WebAssembly (Kotlin Multiplatform): the board model (`model/`), the repositories (`data/`), `BoardViewModel` and `BoardSettingsActions`, the `Player`/`Recorder`/`Speaker` interfaces (`audio/`), and the whole Compose UI (`ui/`), with its fonts as Compose Resources (`composeResources/font/`). |
+| `web/` | The web app: `main()` (`WebMain.kt`), the browser's audio and speech (`WebAudioPlayer`, `WebSpeaker`), and `index.html`. It serves the TTS board from `presets/` as `boards/tts-care-board.zip`. |
 | `app/` | The Android app: `MainActivity`, `BoardViewModelFactory`, the audio and speech implementations (`SoundPlayer`, `AudioRecorder`, `TtsSpeaker`), the manifest, launcher icons and built-in board assets. It uses `shared` like any other library. |
 
 `shared`'s common code has no Android or Compose dependencies. Keep it that way:
 anything that needs a platform goes behind one of the small interfaces in
 `shared/.../data/Storage.kt`, with an implementation per platform:
 
-| Interface | What it is | Android implementation |
-|---|---|---|
-| `FileStore` | App-private files by relative path (`board.json`, `sounds/<name>`) | `FileSystemStore(filesDir)` (`shared/src/androidMain`) |
-| `ZipCodec` | Reads/writes zip archives (backups, built-in boards) | `JavaZipCodec`, on `java.util.zip` (`shared/src/androidMain`) |
-| `PickedFile` / `SaveTarget` | A file the user picked to open / somewhere they picked to save | `UriPickedFile` / `UriSaveTarget`, on content URIs (`shared/src/androidMain/.../data/AndroidStorage.kt`) |
-| `BundledBoards` | The built-in board zips packaged with the build | `AssetBundledBoards`, on APK assets (same file) |
-| `KeyValueStore` | Small device-local settings (`DevicePreferences`) | `SharedPreferencesStore` (same file) |
+| Interface | What it is | Android implementation | Web implementation (`shared/src/wasmJsMain`) |
+|---|---|---|---|
+| `FileStore` | App-private files by relative path (`board.json`, `sounds/<name>`) | `FileSystemStore(filesDir)` (`shared/src/androidMain`) | `OpfsFileStore`, the browser's origin-private file system |
+| `ZipCodec` | Reads/writes zip archives (backups, built-in boards) | `JavaZipCodec`, on `java.util.zip` (`shared/src/androidMain`) | `FflateZipCodec`, on the `fflate` npm package |
+| `PickedFile` / `SaveTarget` | A file the user picked to open / somewhere they picked to save | `UriPickedFile` / `UriSaveTarget`, on content URIs (`shared/src/androidMain/.../data/AndroidStorage.kt`) | `BrowserPickedFile` / `DownloadSaveTarget`: a file chooser, and a download |
+| `BundledBoards` | The built-in board zips packaged with the build | `AssetBundledBoards`, on APK assets (same file) | `WebBundledBoards`, fetched from next to the page |
+| `KeyValueStore` | Small device-local settings (`DevicePreferences`) | `SharedPreferencesStore` (same file) | `LocalStorageKeyValueStore` |
+
+Web storage is private to the site and survives reloads, but the browser may clear
+it under storage pressure unless it grants persistent storage (`WebMain` asks); a
+backup is the safe copy. Bytes cross between Kotlin/Wasm and JavaScript one at a
+time (`JsBytes.kt`), which is fine at this app's file sizes. Which built-in boards
+a build packages decides which the ViewModel offers, and a fresh install opens the
+first packaged of Jeremy's and the TTS board, so the web starts on the TTS board.
 
 The UI's own platform needs are the same idea, as `expect`/`actual` functions in
 `shared/.../ui/Platform.kt`: the file pickers and microphone permission, keeping
 the screen on, the back gesture, whether the window is in landscape, dynamic
 color, and the condensed label font. On Android each is the code that used to be
-inline in the screen (`Platform.android.kt`); the web's (`Platform.wasmJs.kt`)
-are placeholders until the web app lands. The app version shown in the menu is
+inline in the screen (`Platform.android.kt`); on the web (`Platform.wasmJs.kt`)
+the pickers are a file chooser, saving is a download, keep-screen-on is a Wake
+Lock, and there's no back gesture or dynamic color to follow. The app version shown in the menu is
 `APP_VERSION_NAME`, generated into `shared` from `gradle.properties`, which the
 Android build also reads for `versionName`/`versionCode`.
 
@@ -744,7 +753,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | Landscape column/row-height math, label size search, `formatDecimal` | `shared/src/commonTest/.../ui/GridLayoutTest.kt`, `LabelTextTest.kt`, `FormatDecimalTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | `Board` page management (`withPageAdded`/`withPageRemoved`/`withPageRenamed`/`withCurrentPage`/`withHomePage`), `updatingTile`/`findTile`, `soundFileNames`, `Tile.isPlayable`, and `hasAnySound` | `shared/src/commonTest/.../model/BoardTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | `BoardRepository`'s own logic — save/load, missing-sound sanitizing, backup round-trip, the zip path guard, bundled boards — plus `SavedBoardRepository` basics, against in-memory storage | `shared/src/commonTest/.../data/BoardRepositoryCommonTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
-| The `FileStore` contract every implementation must meet; `JavaZipCodec` reading every zip in `presets/` | `shared/src/commonTest/.../data/FileStoreContractTest.kt` (in-memory store), `shared/src/androidHostTest/.../data/AndroidStorageTest.kt` (`FileSystemStore`, `JavaZipCodec`) | JVM and WebAssembly / JVM |
+| The `FileStore` contract every implementation must meet (in-memory, `FileSystemStore`, and `OpfsFileStore` in Chrome); the golden backup zip (`GoldenBackup.kt`, made outside the app) that both `JavaZipCodec` and `FflateZipCodec` must read identically, so backups move between Android and the web; `JavaZipCodec` reading every zip in `presets/`; `LocalStorageKeyValueStore` | `shared/src/commonTest/.../data/FileStoreContractTest.kt`, `GoldenBackup.kt`, `shared/src/androidHostTest/.../data/AndroidStorageTest.kt`, `shared/src/wasmJsTest/.../data/WebStorageTest.kt` | JVM, and WebAssembly in headless Chrome |
 | `BoardRepository` wired to real files, zips and assets, incl. the legacy-schema and `homePageIndex` migrations, additive-field defaults in `load()`, and every shipped built-in board | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
 | `SavedBoardRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/SavedBoardRepositoryTest.kt` | Robolectric |
 | `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, and saveBoardAs/openBoard | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |

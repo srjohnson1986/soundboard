@@ -36,4 +36,5 @@ interface BoardSettingsActions {
     fun setShowModeTapToClose(value: Boolean)
     fun setShowModeMuteSounds(value: Boolean)
     fun setShowModeFlipped(value: Boolean)
+    fun setRecordingTrimEndMillis(value: Int)
 }

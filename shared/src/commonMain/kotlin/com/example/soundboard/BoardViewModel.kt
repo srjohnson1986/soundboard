@@ -62,6 +62,10 @@ class BoardViewModel(
     private val _showMode = MutableStateFlow(devicePrefs.showMode)
     val showMode: StateFlow<ShowModeSettings> = _showMode.asStateFlow()
 
+    /** Device-local, not part of [Board] — see [DevicePreferences.recordingTrimEndMillis]. */
+    private val _recordingTrimEndMillis = MutableStateFlow(devicePrefs.recordingTrimEndMillis)
+    val recordingTrimEndMillis: StateFlow<Int> = _recordingTrimEndMillis.asStateFlow()
+
     /** The words Show mode has on screen right now; null when the text screen is closed. */
     private val _shownText = MutableStateFlow<String?>(null)
     val shownText: StateFlow<String?> = _shownText.asStateFlow()
@@ -314,7 +318,8 @@ class BoardViewModel(
     /** Stops the recorder and returns the clip's file name, or null on failure. */
     private suspend fun finishRecording(): String? {
         if (!_isRecording.value) return null
-        val ok = withContext(ioDispatcher) { recorder.stop() }
+        val trim = _recordingTrimEndMillis.value
+        val ok = withContext(ioDispatcher) { recorder.stop(trimEndMillis = trim) }
         _isRecording.value = false
         val path = pendingRecordingPath
         pendingRecordingPath = null
@@ -358,6 +363,12 @@ class BoardViewModel(
     override fun setShowModeMuteSounds(value: Boolean) = updateShowMode { it.copy(muteSounds = value) }
 
     override fun setShowModeFlipped(value: Boolean) = updateShowMode { it.copy(flipped = value) }
+
+    /** How much of the end of each new recording to leave off; see [DevicePreferences.recordingTrimEndMillis]. */
+    override fun setRecordingTrimEndMillis(value: Int) {
+        devicePrefs.recordingTrimEndMillis = value
+        _recordingTrimEndMillis.value = devicePrefs.recordingTrimEndMillis
+    }
 
     private fun updateShowMode(transform: (ShowModeSettings) -> ShowModeSettings) {
         val updated = transform(_showMode.value)

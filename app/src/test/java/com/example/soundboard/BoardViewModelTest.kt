@@ -1676,4 +1676,19 @@ class BoardViewModelTest {
 
         assertEquals("tts-care-board.zip", vm.board.value.builtInSource)
     }
+
+    @Test
+    fun `stopping a recording trims it by the device's trim setting`() {
+        // #204: the tap on Stop is otherwise the last thing on the clip.
+        repo.saveBlocking(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        record(vm)
+        assertEquals(250, recorder.lastTrimEndMillis)
+
+        vm.setRecordingTrimEndMillis(0)
+        record(vm)
+        assertEquals(0, recorder.lastTrimEndMillis)
+        assertEquals(0, vm.recordingTrimEndMillis.value)
+    }
 }

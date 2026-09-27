@@ -16,7 +16,12 @@ class FakeRecorder : Recorder {
         return true
     }
 
-    override suspend fun stop(): Boolean {
+    /** The trim the last [stop] was asked for. */
+    var lastTrimEndMillis: Int? = null
+        private set
+
+    override suspend fun stop(trimEndMillis: Int): Boolean {
+        lastTrimEndMillis = trimEndMillis
         startedPath = null
         return stopSucceeds
     }

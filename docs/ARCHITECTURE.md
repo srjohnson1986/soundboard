@@ -384,9 +384,20 @@ imported board, so stale keys from the previous state can't linger.
 
 `Recorder.start()`/`stop()` suspend, since a browser only grants the microphone
 asynchronously, and each recorder names the file extension it records
-(`Recorder.fileExtension`), which `newRecordingPath()` uses: `.m4a` on Android;
-on the web `WebRecorder` records WebM/Opus (Chrome, Firefox) or MP4/AAC (Safari),
-all of which Android's player handles.
+(`Recorder.fileExtension`), which `newRecordingPath()` uses: `.m4a` on Android,
+`.wav` on the web. Browsers record in different formats (WebM in Chrome and
+Firefox, MP4 in Safari), so `WebRecorder` decodes the recording on Stop and
+saves it as mono 24 kHz 16-bit WAV, which every browser and Android play, at
+about 48 KB a second.
+
+**Trimming the end** (#204). `Recorder.stop(trimEndMillis)` leaves off the end of
+the recording, where the tap on Stop is, by `DevicePreferences.recordingTrimEndMillis`
+(default 250 ms, set in Settings → Recording; per device, since how loud that tap
+is depends on the device). `AudioRecorder` copies the encoded AAC frames up to
+that point into a new file with `MediaExtractor`/`MediaMuxer`, so nothing is
+re-encoded; `WebRecorder` cuts it while converting to WAV. Both keep a recording
+whole if trimming would leave less than 0.3 s, and `AudioRecorder` keeps it whole
+if trimming fails for any reason.
 
 `AudioRecorder` wraps `MediaRecorder`, encoding to AAC in an MPEG-4 (`.m4a`)
 container — `SoundPlayer` branches on file size, not extension, so a
@@ -578,7 +589,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   selection — live in the tab row and `PageOptionsDialog` instead; see below.
 - **Settings is a list of groups, each its own dialog.** `SettingsDialog` shows
   one row per `SettingsGroup` (Home page, Look, Tile labels, Grid layout,
-  Tapping & speech, Screen, Show mode) with a summary of its current values; picking one
+  Tapping & speech, Screen, Show mode, Recording) with a summary of its current values; picking one
   opens `SettingsGroupDialog` via `BoardDialog.SettingsGroupDetail(group)`,
   whose Back (and the system back gesture) reopens the list and whose Done
   closes Settings (#169). This keeps any one screen short instead of one long

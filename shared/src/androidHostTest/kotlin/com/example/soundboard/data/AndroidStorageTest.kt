@@ -48,6 +48,9 @@ class JavaZipCodecTest {
     }
 
     @Test
+    fun `reads the golden backup`() = GoldenBackup.assertReadBy(codec)
+
+    @Test
     fun `something that isn't a zip can't be read`() {
         assertFailsWith<IllegalStateException> { codec.read("not a zip".encodeToByteArray()) }
     }

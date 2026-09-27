@@ -324,6 +324,22 @@ it opens that version's release notes on GitHub. The newest version can
 always be downloaded from
 https://github.com/srjohnson1986/soundboard/releases/latest/download/soundboard.apk
 
+## The web version
+
+The web version works like the app, with a few differences:
+
+- **It starts with the TTS Care Board**, whose tiles speak with the browser's own
+  text-to-speech voice. It's the only built-in board on the web, since it has no
+  recorded voices in it. Voices differ from browser to browser.
+- **Everything stays in that browser**, in storage private to the site. Clearing
+  the browser's site data erases it, and a browser can clear it on its own when
+  it's short of space, so **Export backup** anything you want to keep. The backup
+  is a download; **Import backup** reads one back, in the web version or the app.
+- **Recording isn't available yet.** A tile can still play a sound file you pick,
+  or speak.
+- **Keep screen awake** works where the browser supports it, and only while the
+  page is showing.
+
 ## Long clips
 
 There's no length limit on a tile's sound. Short clips are kept ready in

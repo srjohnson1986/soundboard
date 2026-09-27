@@ -77,6 +77,17 @@ jobs:
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
 
+      # The web version's production bundle: static files that run in any current browser.
+      - name: Build web app
+        run: ./gradlew :web:wasmJsBrowserDistribution --stacktrace
+
+      - name: Upload web app
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-app
+          path: web/build/dist/wasmJs/productionExecutable
+          if-no-files-found: error
+
       - name: Upload lint report
         if: always()
         uses: actions/upload-artifact@v7

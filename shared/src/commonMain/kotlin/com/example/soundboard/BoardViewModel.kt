@@ -86,7 +86,9 @@ class BoardViewModel(
     init {
         viewModelScope.launch {
             withContext(ioDispatcher) {
-                if (!boardRepo.hasSavedBoard()) boardRepo.importFromAsset(FALLBACK_BOARD_ASSET)
+                if (!boardRepo.hasSavedBoard()) {
+                    FALLBACK_BOARD_ASSETS.firstOrNull(boardRepo::hasAsset)?.let { boardRepo.importFromAsset(it) }
+                }
             }
             val loaded = withContext(ioDispatcher) { boardRepo.load() }
             // Only overrides where the pager starts, not what's saved to disk — a plain
@@ -548,15 +550,17 @@ class BoardViewModel(
         return RecentBoardItem(ref, label, usedAt)
     }
 
-    /** Built-in boards bundled with this build — Jeremy's, Sarah's, and the TTS-only board ship in every build; Steve's only where its asset is actually packaged (debug builds). */
-    fun builtInBoards(): List<BoardRef.BuiltIn> = buildList {
-        add(BoardRef.BuiltIn(JEREMY_BOARD_ASSET, "Jeremy Draft Care Board"))
-        add(BoardRef.BuiltIn(SARAH_BOARD_ASSET, "Sarah (ElevenLabs) Care Board"))
-        add(BoardRef.BuiltIn(TTS_BOARD_ASSET, "TTS Care Board"))
-        if (boardRepo.hasAsset(STEVE_BOARD_ASSET)) {
-            add(BoardRef.BuiltIn(STEVE_BOARD_ASSET, "Steve Draft Care Board"))
-        }
-    }
+    /**
+     * Built-in boards packaged with this build. The Android app ships Jeremy's, Sarah's and the
+     * TTS-only board in every build, and Steve's only in debug builds; the web version ships just
+     * the TTS-only board, which has no recorded voices in it.
+     */
+    fun builtInBoards(): List<BoardRef.BuiltIn> = listOf(
+        BoardRef.BuiltIn(JEREMY_BOARD_ASSET, "Jeremy Draft Care Board"),
+        BoardRef.BuiltIn(SARAH_BOARD_ASSET, "Sarah (ElevenLabs) Care Board"),
+        BoardRef.BuiltIn(TTS_BOARD_ASSET, "TTS Care Board"),
+        BoardRef.BuiltIn(STEVE_BOARD_ASSET, "Steve Draft Care Board")
+    ).filter { boardRepo.hasAsset(it.assetName) }
 
     private suspend fun replaceBoardAfterImport(imported: Boolean, successMessage: String, failureMessage: String) {
         if (imported) {
@@ -627,8 +631,6 @@ class BoardViewModel(
         /** Bundled in every build (src/main/assets/); see [BoardRepository.importFromAsset]. */
         private const val JEREMY_BOARD_ASSET = "jeremy-care-board.zip"
 
-        /** Shipped as the default/fallback board for now. */
-        private const val FALLBACK_BOARD_ASSET = JEREMY_BOARD_ASSET
 
         /** Same layout as Jeremy's board, but every tile speaks instead of playing audio — bundled in every build. */
         private const val TTS_BOARD_ASSET = "tts-care-board.zip"
@@ -638,6 +640,9 @@ class BoardViewModel(
 
         /** Debug-only (src/debug/assets/) — only actually available where that asset is packaged. */
         private const val STEVE_BOARD_ASSET = "steve-care-board.zip"
+
+        /** What a fresh install opens: the first of these this build packages (Jeremy's on Android, the TTS board on the web). */
+        private val FALLBACK_BOARD_ASSETS = listOf(JEREMY_BOARD_ASSET, TTS_BOARD_ASSET)
     }
 }
 

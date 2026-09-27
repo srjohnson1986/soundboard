@@ -95,7 +95,7 @@ class WebRecorder(private val files: FileStore) : Recorder {
         active = null
         activePath = null
         val bytes = runCatching {
-            finishRecording(recording, trimEndMillis / 1000.0).await<JsAny>().uint8ArrayToByteArray()
+            trimmedWav(finishRecording(recording).await(), trimEndMillis / 1000.0)
         }.getOrNull()
         if (bytes == null || bytes.isEmpty()) return false
         files.write(path, bytes)
@@ -108,6 +108,14 @@ class WebRecorder(private val files: FileStore) : Recorder {
         activePath = null
     }
 }
+
+/**
+ * [audio] (a Web Audio AudioBuffer) as a WAV file: mono, 24 kHz, 16-bit, without its last
+ * [trimSeconds] unless that would leave less than 0.3 s. Separate from recording so a test
+ * can trim a known buffer.
+ */
+internal suspend fun trimmedWav(audio: JsAny, trimSeconds: Double): ByteArray =
+    encodeWav(audio, trimSeconds).await<JsAny>().uint8ArrayToByteArray()
 
 // One AudioContext for the page. Browsers start it suspended until the user interacts, so
 // playing resumes it; a tile tap is that interaction.
@@ -170,12 +178,8 @@ private fun startRecording(mimeType: String): Promise<JsAny?> = js(
     })()"""
 )
 
-/**
- * Stops the recording and resolves to it as a WAV file (mono, 24 kHz, 16-bit), without its
- * last [trimSeconds] unless that would leave less than 0.3 s. OfflineAudioContext does the
- * mixing down, resampling and cutting.
- */
-private fun finishRecording(recording: JsAny, trimSeconds: Double): Promise<JsAny> = js(
+/** Stops the recording and resolves to it decoded, as an AudioBuffer. */
+private fun finishRecording(recording: JsAny): Promise<JsAny> = js(
     """new Promise((resolve, reject) => {
         const recorder = recording.recorder;
         recorder.onstop = async () => {
@@ -183,26 +187,7 @@ private fun finishRecording(recording: JsAny, trimSeconds: Double): Promise<JsAn
                 recording.stream.getTracks().forEach(track => track.stop());
                 const blob = new Blob(recording.chunks, { type: recorder.mimeType });
                 const context = window.soundboardAudio || (window.soundboardAudio = new AudioContext());
-                const decoded = await context.decodeAudioData(await blob.arrayBuffer());
-                const keepSeconds = decoded.duration - trimSeconds >= 0.3 ? decoded.duration - trimSeconds : decoded.duration;
-                const rate = 24000;
-                const offline = new OfflineAudioContext(1, Math.max(1, Math.round(keepSeconds * rate)), rate);
-                const source = offline.createBufferSource();
-                source.buffer = decoded;
-                source.connect(offline.destination);
-                source.start();
-                const samples = (await offline.startRendering()).getChannelData(0);
-                const wav = new DataView(new ArrayBuffer(44 + samples.length * 2));
-                const text = (offset, value) => { for (let i = 0; i < value.length; i++) wav.setUint8(offset + i, value.charCodeAt(i)); };
-                text(0, 'RIFF'); wav.setUint32(4, 36 + samples.length * 2, true); text(8, 'WAVE');
-                text(12, 'fmt '); wav.setUint32(16, 16, true); wav.setUint16(20, 1, true); wav.setUint16(22, 1, true);
-                wav.setUint32(24, rate, true); wav.setUint32(28, rate * 2, true); wav.setUint16(32, 2, true); wav.setUint16(34, 16, true);
-                text(36, 'data'); wav.setUint32(40, samples.length * 2, true);
-                for (let i = 0; i < samples.length; i++) {
-                    const sample = Math.max(-1, Math.min(1, samples[i]));
-                    wav.setInt16(44 + i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
-                }
-                resolve(new Uint8Array(wav.buffer));
+                resolve(await context.decodeAudioData(await blob.arrayBuffer()));
             } catch (e) {
                 reject(e);
             }
@@ -210,6 +195,31 @@ private fun finishRecording(recording: JsAny, trimSeconds: Double): Promise<JsAn
         recorder.onerror = event => reject(event.error);
         recorder.stop();
     })"""
+)
+
+/** See [trimmedWav]; resolves to the WAV file's bytes. OfflineAudioContext does the mixing down, resampling and cutting. */
+private fun encodeWav(decoded: JsAny, trimSeconds: Double): Promise<JsAny> = js(
+    """(async () => {
+        const keepSeconds = decoded.duration - trimSeconds >= 0.3 ? decoded.duration - trimSeconds : decoded.duration;
+        const rate = 24000;
+        const offline = new OfflineAudioContext(1, Math.max(1, Math.round(keepSeconds * rate)), rate);
+        const source = offline.createBufferSource();
+        source.buffer = decoded;
+        source.connect(offline.destination);
+        source.start();
+        const samples = (await offline.startRendering()).getChannelData(0);
+        const wav = new DataView(new ArrayBuffer(44 + samples.length * 2));
+        const text = (offset, value) => { for (let i = 0; i < value.length; i++) wav.setUint8(offset + i, value.charCodeAt(i)); };
+        text(0, 'RIFF'); wav.setUint32(4, 36 + samples.length * 2, true); text(8, 'WAVE');
+        text(12, 'fmt '); wav.setUint32(16, 16, true); wav.setUint16(20, 1, true); wav.setUint16(22, 1, true);
+        wav.setUint32(24, rate, true); wav.setUint32(28, rate * 2, true); wav.setUint16(32, 2, true); wav.setUint16(34, 16, true);
+        text(36, 'data'); wav.setUint32(40, samples.length * 2, true);
+        for (let i = 0; i < samples.length; i++) {
+            const sample = Math.max(-1, Math.min(1, samples[i]));
+            wav.setInt16(44 + i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+        }
+        return new Uint8Array(wav.buffer);
+    })()"""
 )
 
 private fun abandonRecording(recording: JsAny): Unit = js(

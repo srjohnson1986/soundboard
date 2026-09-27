@@ -1,20 +1,14 @@
 package com.example.soundboard
 
-import android.app.Application
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.example.soundboard.audio.AudioRecorder
 import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.Recorder
-import com.example.soundboard.audio.SoundPlayer
 import com.example.soundboard.audio.Speaker
-import com.example.soundboard.audio.TtsSpeaker
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.PickedFile
 import com.example.soundboard.data.SaveTarget
-import com.example.soundboard.data.appFileStore
 import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.RecentBoardEntry
 import com.example.soundboard.data.RecentBoardKind
@@ -30,7 +24,6 @@ import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.time.Clock
 
 class BoardViewModel(
     private val boardRepo: BoardRepository,
@@ -48,7 +42,9 @@ class BoardViewModel(
     private val speaker: Speaker,
     private val devicePrefs: DevicePreferences,
     private val recentBoardsRepo: RecentBoardsRepository,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = defaultIoDispatcher,
+    /** Milliseconds since the epoch, for when a board was last used; a parameter so tests can pin it. */
+    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() }
 ) : ViewModel(), BoardSettingsActions {
 
     private val _board = MutableStateFlow(Board())
@@ -505,7 +501,7 @@ class BoardViewModel(
             val id = withContext(ioDispatcher) { savedBoardRepo.save(renamed) }
             commit(renamed)
             refreshSavedBoards()
-            recordRecentlyUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = id, label = renamed.name, usedAt = System.currentTimeMillis()))
+            recordRecentlyUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = id, label = renamed.name, usedAt = now()))
             _message.value = "Saved board \"${renamed.name}\""
         }
     }
@@ -523,13 +519,13 @@ class BoardViewModel(
                     player.clear()
                     commit(loaded)
                     withContext(ioDispatcher) { loadSounds(loaded) }
-                    recordRecentlyUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = ref.id, label = loaded.name, usedAt = System.currentTimeMillis()))
+                    recordRecentlyUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = ref.id, label = loaded.name, usedAt = now()))
                     _message.value = "Loaded \"${loaded.name}\""
                 }
                 is BoardRef.BuiltIn -> {
                     val ok = withContext(ioDispatcher) { boardRepo.importFromAsset(ref.assetName) }
                     if (ok) {
-                        recordRecentlyUsed(RecentBoardEntry(kind = RecentBoardKind.BUILT_IN, assetName = ref.assetName, label = ref.label, usedAt = System.currentTimeMillis()))
+                        recordRecentlyUsed(RecentBoardEntry(kind = RecentBoardKind.BUILT_IN, assetName = ref.assetName, label = ref.label, usedAt = now()))
                     }
                     replaceBoardAfterImport(ok, "Loaded \"${ref.label}\"", "Couldn't open board")
                 }
@@ -625,21 +621,6 @@ class BoardViewModel(
         player.release()
         speaker.shutdown()
         super.onCleared()
-    }
-
-    class Factory(private val app: Application) : ViewModelProvider.Factory {
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            @Suppress("UNCHECKED_CAST")
-            return BoardViewModel(
-                BoardRepository(app),
-                SoundPlayer(appFileStore(app)),
-                AudioRecorder(app, appFileStore(app)),
-                SavedBoardRepository(app),
-                TtsSpeaker(app),
-                DevicePreferences(app),
-                RecentBoardsRepository(app)
-            ) as T
-        }
     }
 
     companion object {

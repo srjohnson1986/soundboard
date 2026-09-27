@@ -17,7 +17,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             // Hoisted here (rather than defaulted inside BoardScreen) so the board's
             // themeMode can reach SoundboardTheme, which wraps BoardScreen from outside.
-            val vm: BoardViewModel = viewModel(factory = BoardViewModel.Factory(application))
+            val vm: BoardViewModel = viewModel(factory = BoardViewModelFactory(application))
             val board by vm.board.collectAsStateWithLifecycle()
             SoundboardTheme(themeMode = board.themeMode) {
                 BoardScreen(vm = vm)

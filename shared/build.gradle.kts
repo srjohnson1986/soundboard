@@ -30,6 +30,10 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+            api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+            // JetBrains' multiplatform build of androidx.lifecycle; on Android it resolves to
+            // Google's own artifact, so BoardViewModel is an ordinary androidx ViewModel there.
+            api("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel:2.11.0")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

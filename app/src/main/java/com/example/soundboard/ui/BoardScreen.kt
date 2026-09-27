@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.soundboard.BoardViewModel
+import com.example.soundboard.BoardViewModelFactory
 import com.example.soundboard.BoardRef
 import com.example.soundboard.data.UriPickedFile
 import com.example.soundboard.data.UriSaveTarget
@@ -83,7 +84,7 @@ internal sealed interface BoardDialog {
 @Composable
 fun BoardScreen(
     vm: BoardViewModel = viewModel(
-        factory = BoardViewModel.Factory(LocalContext.current.applicationContext as android.app.Application)
+        factory = BoardViewModelFactory(LocalContext.current.applicationContext as android.app.Application)
     )
 ) {
     val board by vm.board.collectAsStateWithLifecycle()

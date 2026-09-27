@@ -1,0 +1,60 @@
+name: Publish web app
+
+# Builds the web version and publishes it to GitHub Pages, at
+# https://srjohnson1986.github.io/soundboard/. It runs when a release tag is pushed, so
+# the site always matches the newest release's APK (see docs/RELEASING.md), and can be
+# run by hand ("Run workflow") to republish.
+#
+# Needs Pages turned on once: repo Settings -> Pages -> Source: "GitHub Actions".
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One publish at a time, and never cancel one halfway through.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build web app
+        run: ./gradlew :web:wasmJsBrowserDistribution --stacktrace
+
+      - name: Upload for Pages
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: web/build/dist/wasmJs/productionExecutable
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

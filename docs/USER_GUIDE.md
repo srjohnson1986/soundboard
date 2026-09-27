@@ -83,8 +83,9 @@ In the editor:
 - **Record:** records from the microphone instead of picking a file:
   - The first time, the app asks for microphone permission.
   - While recording, the button reads **Stop (Ns)** and counts up.
-  - Tapping **Stop** puts the new recording on the tile right away. Use
-    **Play clip** to check it, and **Record** again to redo it.
+  - Tapping **Stop** puts the new recording in the editor. Use **Play clip**
+    to check it, and **Record** again to redo it; it goes on the tile when
+    you tap **Save**.
   - Closing the editor while still recording throws that recording away.
 - **Volume:** how loud this tile plays.
 - **Color:** eight swatches. The first means "no color of its own".
@@ -93,9 +94,10 @@ In the editor:
 - **Clear tile:** removes the sound, name and speech, turning it back into a
   blank **+** tile. Only shown on a tile that has a sound or speaks.
 
-**Save** keeps the **Name** and **What to say** text; **Cancel** throws those
-two away. Everything else (sound, recording, volume, color, speech switch,
-overrides) takes effect the moment you change it.
+Nothing you change in the editor reaches the tile until you tap **Save**,
+which keeps all of it. **Cancel** throws all of it away, including a new
+recording or sound file, and the tile keeps the sound it had. **Clear tile**
+is the exception: it clears the tile straight away.
 
 ## Speaking
 

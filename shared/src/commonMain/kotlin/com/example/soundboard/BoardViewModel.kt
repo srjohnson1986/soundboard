@@ -144,10 +144,6 @@ class BoardViewModel(
     /** Sets the longer text spoken instead of the label; a blank value clears it back to null (falls back to the label). */
     fun setTtsScript(tileId: String, script: String) = updateTile(tileId) { it.copy(ttsScript = script.ifBlank { null }) }
 
-    fun setVolume(tileId: String, volume: Float) = updateTile(tileId) { it.copy(volume = volume.coerceIn(0f, 1f)) }
-
-    fun setColor(tileId: String, colorArgb: Int?) = updateTile(tileId) { it.copy(colorArgb = colorArgb) }
-
     /** Per-tile opacity override; null inherits the page's, then the board's. */
     fun setOpacity(tileId: String, opacity: Float?) = updateTile(tileId) { it.copy(opacity = opacity?.coerceIn(0f, 1f)) }
 
@@ -156,12 +152,75 @@ class BoardViewModel(
 
     fun setSpeakWhenNoSound(tileId: String, value: Boolean) = updateTile(tileId) { it.copy(speakWhenNoSound = value) }
 
-    fun assignSound(tileId: String, file: PickedFile) {
+    // The tile editor works on a draft of the tile: nothing reaches the board until Save
+    // ([saveTile]), and Cancel ([discardTileEdits]) throws the draft away (#207). A sound
+    // picked or recorded while editing is a real file from the start, so the editor can
+    // play it; until the edit ends it's "pending": kept safe from pruning, and deleted
+    // again if the edit is cancelled.
+
+    /** Sound files added during the current tile edit, not yet saved onto any tile. */
+    private val pendingSounds = mutableSetOf<String>()
+
+    /** Bumped whenever a tile edit ends, so a pick or recording that finishes after it knows it's too late. */
+    private var editSession = 0
+
+    /** The edit the active recording was started in; its clip belongs to that edit or to none. */
+    private var recordingSession = 0
+
+    /**
+     * Copies a picked sound into app storage and loads it for the editor to play, then hands
+     * its file name to [onImported] for the draft. Nothing changes on the board until [saveTile].
+     */
+    fun importSound(file: PickedFile, onImported: (fileName: String) -> Unit) {
+        val session = editSession
         viewModelScope.launch {
             val name = withContext(ioDispatcher) { boardRepo.importSound(file) } ?: return@launch
-            withContext(ioDispatcher) { player.load(name, boardRepo.soundPath(name)) }
-            updateTile(tileId) { it.copy(fileName = name) }
+            addPendingSound(name, session, onImported)
         }
+    }
+
+    /**
+     * Saves the tile editor's draft onto tile [tileId]: every field at once, as one board edit.
+     * Pending sounds the draft didn't keep are unloaded here and pruned with the commit.
+     */
+    fun saveTile(tileId: String, edited: Tile) {
+        updateTile(tileId) { current ->
+            edited.copy(
+                id = current.id,
+                label = edited.label.trim(),
+                ttsScript = edited.ttsScript?.trim()?.ifBlank { null },
+                volume = edited.volume.coerceIn(0f, 1f),
+                opacity = edited.opacity?.coerceIn(0f, 1f)
+            )
+        }
+        endTileEdit(keep = setOfNotNull(edited.fileName))
+    }
+
+    /** Throws the tile editor's draft away: stops any recording and deletes the sounds added while editing. */
+    fun discardTileEdits() {
+        cancelRecording()
+        endTileEdit(keep = emptySet())
+    }
+
+    private fun endTileEdit(keep: Set<String>) {
+        editSession++
+        val discarded = pendingSounds - keep
+        pendingSounds.clear()
+        discarded.forEach { player.unload(it) }
+        // Anything the board doesn't reference is deleted here; a saved sound is on the board by now.
+        val unused = discarded - _board.value.soundFileNames
+        if (unused.isNotEmpty()) viewModelScope.launch(ioDispatcher) { boardRepo.deleteFiles(unused) }
+    }
+
+    /** Records [name] as pending for edit [session], or deletes it if that edit has already ended. */
+    private suspend fun addPendingSound(name: String, session: Int, onAdded: (String) -> Unit) {
+        if (session != editSession) {
+            withContext(ioDispatcher) { boardRepo.deleteFiles(listOf(name)) }
+            return
+        }
+        pendingSounds += name
+        withContext(ioDispatcher) { player.load(name, boardRepo.soundPath(name)) }
+        onAdded(name)
     }
 
     fun clearTile(tileId: String) = updateTile(tileId) { it.copy(label = "", fileName = null, speakWhenNoSound = false) }
@@ -172,6 +231,7 @@ class BoardViewModel(
     /** Starts recording into a fresh file; call [stopRecording] or [cancelRecording] to end it. */
     fun startRecording() {
         if (_isRecording.value) return
+        recordingSession = editSession
         viewModelScope.launch {
             val path = boardRepo.newRecordingPath(recorder.fileExtension)
             val started = withContext(ioDispatcher) { recorder.start(path) }
@@ -184,11 +244,15 @@ class BoardViewModel(
         }
     }
 
-    /** Stops the active recording and points [tileId] at the result. */
-    fun stopRecording(tileId: String) {
+    /**
+     * Stops the active recording and hands its file name to [onRecorded] for the tile editor's
+     * draft; like [importSound], it only reaches a tile on [saveTile].
+     */
+    fun stopRecording(onRecorded: (fileName: String) -> Unit) {
+        val session = recordingSession
         viewModelScope.launch {
             val name = finishRecording() ?: return@launch
-            updateTile(tileId) { it.copy(fileName = name) }
+            addPendingSound(name, session, onRecorded)
         }
     }
 
@@ -204,7 +268,7 @@ class BoardViewModel(
         }
     }
 
-    /** Stops the recorder, loads the clip into the player, and returns its file name — or null on failure. */
+    /** Stops the recorder and returns the clip's file name, or null on failure. */
     private suspend fun finishRecording(): String? {
         if (!_isRecording.value) return null
         val ok = withContext(ioDispatcher) { recorder.stop() }
@@ -216,9 +280,7 @@ class BoardViewModel(
             _message.value = "Recording failed"
             return null
         }
-        val name = path.substringAfterLast('/')
-        withContext(ioDispatcher) { player.load(name, path) }
-        return name
+        return path.substringAfterLast('/')
     }
 
     /** Whether the home page's first row shows fixed above every other page. */
@@ -596,6 +658,8 @@ class BoardViewModel(
 
         removedSounds.forEach { player.unload(it) }
 
+        // Taken now, on the main thread that changes them, not on the I/O thread below.
+        val inProgress = pendingSounds.toSet() + listOfNotNull(pendingRecordingPath?.substringAfterLast('/'))
         viewModelScope.launch(ioDispatcher) {
             // Back-to-back commits (e.g. Grid size's Apply) each launch a save on a pool
             // thread; without the lock they can finish out of order and leave an older
@@ -607,8 +671,9 @@ class BoardViewModel(
                 boardRepo.save(latest)
                 // A saved board references sound files by name without copying them (see
                 // SavedBoardRepository) — protect those from pruning too, or clearing/replacing a
-                // live tile could delete audio a saved board still points at.
-                boardRepo.pruneUnused(latest.soundFileNames + savedBoardRepo.allReferencedFileNames())
+                // live tile could delete audio a saved board still points at. Likewise a sound
+                // added in the tile editor but not saved yet, and a recording in progress.
+                boardRepo.pruneUnused(latest.soundFileNames + savedBoardRepo.allReferencedFileNames() + inProgress)
             }
         }
     }

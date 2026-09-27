@@ -81,6 +81,7 @@ fun BoardScreen(vm: BoardViewModel) {
     val recentBoards by vm.recentBoards.collectAsStateWithLifecycle()
     val performanceModeEnabled by vm.performanceModeEnabled.collectAsStateWithLifecycle()
     val showMode by vm.showMode.collectAsStateWithLifecycle()
+    val recordingTrimEndMillis by vm.recordingTrimEndMillis.collectAsStateWithLifecycle()
     val shownText by vm.shownText.collectAsStateWithLifecycle()
     var openDialog by remember { mutableStateOf<BoardDialog?>(null) }
     var editMode by remember { mutableStateOf(false) }
@@ -383,6 +384,7 @@ fun BoardScreen(vm: BoardViewModel) {
             board = board,
             performanceModeEnabled = performanceModeEnabled,
             showMode = showMode,
+            recordingTrimEndMillis = recordingTrimEndMillis,
             onOpenGroup = { showDialog(BoardDialog.SettingsGroupDetail(it)) },
             onDismiss = ::closeDialog
         )
@@ -392,6 +394,7 @@ fun BoardScreen(vm: BoardViewModel) {
             board = board,
             performanceModeEnabled = performanceModeEnabled,
             showMode = showMode,
+            recordingTrimEndMillis = recordingTrimEndMillis,
             actions = vm,
             onPickBackgroundImage = pickBackgroundImage,
             onBack = { showDialog(BoardDialog.Settings) },

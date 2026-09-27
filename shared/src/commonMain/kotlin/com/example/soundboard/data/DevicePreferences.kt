@@ -18,6 +18,15 @@ class DevicePreferences(private val prefs: KeyValueStore) {
         set(value) = prefs.putBoolean(KEY_PERFORMANCE_MODE_ENABLED, value)
 
     /**
+     * How much of the end of each new recording to leave off, in milliseconds: the tap on Stop
+     * is otherwise the last thing on it (#204). Per device, since how loud that tap is depends
+     * on the device. 0 keeps every recording whole.
+     */
+    var recordingTrimEndMillis: Int
+        get() = prefs.getInt(KEY_RECORDING_TRIM_END_MILLIS, DEFAULT_RECORDING_TRIM_END_MILLIS).coerceAtLeast(0)
+        set(value) = prefs.putInt(KEY_RECORDING_TRIM_END_MILLIS, value.coerceAtLeast(0))
+
+    /**
      * Show mode and its options. A stored combination with no way to close the text (no timer
      * and no tap to close) reads back with tap to close on, so it can never strand anyone.
      */
@@ -44,6 +53,13 @@ class DevicePreferences(private val prefs: KeyValueStore) {
     companion object {
         /** The SharedPreferences file these live in on Android. */
         const val PREFS_NAME = "device_preferences"
+
+        const val DEFAULT_RECORDING_TRIM_END_MILLIS = 250
+
+        /** Choices Settings offers for [recordingTrimEndMillis]; 0 means "Off". */
+        val RECORDING_TRIM_OPTIONS_MILLIS = listOf(0, 100, 250, 500)
+
+        private const val KEY_RECORDING_TRIM_END_MILLIS = "recording_trim_end_millis"
 
         private const val KEY_PERFORMANCE_MODE_ENABLED = "performance_mode_enabled"
         private const val KEY_SHOW_MODE_ENABLED = "show_mode_enabled"

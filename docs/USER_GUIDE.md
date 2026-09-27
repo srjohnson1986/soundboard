@@ -240,9 +240,12 @@ to return to the list or **Done** to close Settings.
     (and tile see-through and borders) to help older devices stay smooth
 - **Show mode:** on or off, how the text closes, whether sounds play, and
   whether the text is upside down (see "Show mode").
+- **Recording:** how much to trim off the end of each new recording, so the
+  tap on **Stop** isn't the last thing it plays: Off, 0.1, 0.25 (the default)
+  or 0.5 seconds. A very short recording is kept whole.
 
-Everything except Performance mode and Show mode is saved with the board, so
-switching boards switches these too. Those two belong to the device.
+Everything except Performance mode, Show mode and Recording is saved with the
+board, so switching boards switches these too. Those three belong to the device.
 
 ## Label text
 
@@ -341,9 +344,9 @@ app, with a few differences:
   it's short of space, so **Export backup** anything you want to keep. The backup
   is a download; **Import backup** reads one back, in the web version or the app.
 - **Recording asks for the microphone** the first time, in the browser's own
-  prompt; if you say no, recording doesn't start. Recordings made in Chrome or
-  Firefox are WebM files and in Safari M4A; the app plays both, so they come
-  through a backup to the phone and back.
+  prompt; if you say no, recording doesn't start. Recordings are saved as WAV
+  files, which the app plays too, so they come through a backup to the phone
+  and back.
 - **Keep screen awake** works where the browser supports it, and only while the
   page is showing.
 - **It can be installed**, to open from the home screen or app list in its own

@@ -57,4 +57,13 @@ class DevicePreferencesTest {
 
         assertTrue(DevicePreferences(context).showMode.tapToClose)
     }
+
+    @Test
+    fun `recording trim defaults to a quarter second and persists across a fresh instance`() {
+        assertEquals(250, DevicePreferences(context).recordingTrimEndMillis)
+
+        DevicePreferences(context).recordingTrimEndMillis = 500
+
+        assertEquals(500, DevicePreferences(context).recordingTrimEndMillis)
+    }
 }

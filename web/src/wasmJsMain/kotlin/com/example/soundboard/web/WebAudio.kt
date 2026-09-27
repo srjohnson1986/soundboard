@@ -67,15 +67,16 @@ class WebSpeaker : Speaker {
 
 /**
  * [Recorder] on the browser's MediaRecorder. Starting asks for the microphone (the browser
- * prompts the first time; saying no means recording doesn't start). Chrome and Firefox record
- * Opus in WebM and Safari AAC in MP4; the Android app plays both, so recordings made here
- * survive a backup to the phone.
+ * prompts the first time; saying no means recording doesn't start). Browsers record in
+ * different formats (WebM in Chrome and Firefox, MP4 in Safari), so stopping decodes the
+ * recording, trims its end (#204), and saves it as a WAV file: mono, 24 kHz, 16-bit, which
+ * every browser and the Android app play.
  */
 class WebRecorder(private val files: FileStore) : Recorder {
 
     private val mimeType: String = supportedRecordingType()
 
-    override val fileExtension: String = if (mimeType.startsWith("audio/mp4")) "m4a" else "webm"
+    override val fileExtension: String = "wav"
 
     private var active: JsAny? = null
     private var activePath: String? = null
@@ -88,12 +89,14 @@ class WebRecorder(private val files: FileStore) : Recorder {
         return true
     }
 
-    override suspend fun stop(): Boolean {
+    override suspend fun stop(trimEndMillis: Int): Boolean {
         val recording = active ?: return false
         val path = activePath ?: return false
         active = null
         activePath = null
-        val bytes = runCatching { finishRecording(recording).await<JsAny>().uint8ArrayToByteArray() }.getOrNull()
+        val bytes = runCatching {
+            finishRecording(recording, trimEndMillis / 1000.0).await<JsAny>().uint8ArrayToByteArray()
+        }.getOrNull()
         if (bytes == null || bytes.isEmpty()) return false
         files.write(path, bytes)
         return true
@@ -167,14 +170,42 @@ private fun startRecording(mimeType: String): Promise<JsAny?> = js(
     })()"""
 )
 
-/** Stops the recording and resolves to everything it captured. */
-private fun finishRecording(recording: JsAny): Promise<JsAny> = js(
+/**
+ * Stops the recording and resolves to it as a WAV file (mono, 24 kHz, 16-bit), without its
+ * last [trimSeconds] unless that would leave less than 0.3 s. OfflineAudioContext does the
+ * mixing down, resampling and cutting.
+ */
+private fun finishRecording(recording: JsAny, trimSeconds: Double): Promise<JsAny> = js(
     """new Promise((resolve, reject) => {
         const recorder = recording.recorder;
         recorder.onstop = async () => {
-            recording.stream.getTracks().forEach(track => track.stop());
-            const blob = new Blob(recording.chunks, { type: recorder.mimeType });
-            resolve(new Uint8Array(await blob.arrayBuffer()));
+            try {
+                recording.stream.getTracks().forEach(track => track.stop());
+                const blob = new Blob(recording.chunks, { type: recorder.mimeType });
+                const context = window.soundboardAudio || (window.soundboardAudio = new AudioContext());
+                const decoded = await context.decodeAudioData(await blob.arrayBuffer());
+                const keepSeconds = decoded.duration - trimSeconds >= 0.3 ? decoded.duration - trimSeconds : decoded.duration;
+                const rate = 24000;
+                const offline = new OfflineAudioContext(1, Math.max(1, Math.round(keepSeconds * rate)), rate);
+                const source = offline.createBufferSource();
+                source.buffer = decoded;
+                source.connect(offline.destination);
+                source.start();
+                const samples = (await offline.startRendering()).getChannelData(0);
+                const wav = new DataView(new ArrayBuffer(44 + samples.length * 2));
+                const text = (offset, value) => { for (let i = 0; i < value.length; i++) wav.setUint8(offset + i, value.charCodeAt(i)); };
+                text(0, 'RIFF'); wav.setUint32(4, 36 + samples.length * 2, true); text(8, 'WAVE');
+                text(12, 'fmt '); wav.setUint32(16, 16, true); wav.setUint16(20, 1, true); wav.setUint16(22, 1, true);
+                wav.setUint32(24, rate, true); wav.setUint32(28, rate * 2, true); wav.setUint16(32, 2, true); wav.setUint16(34, 16, true);
+                text(36, 'data'); wav.setUint32(40, samples.length * 2, true);
+                for (let i = 0; i < samples.length; i++) {
+                    const sample = Math.max(-1, Math.min(1, samples[i]));
+                    wav.setInt16(44 + i * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+                }
+                resolve(new Uint8Array(wav.buffer));
+            } catch (e) {
+                reject(e);
+            }
         };
         recorder.onerror = event => reject(event.error);
         recorder.stop();

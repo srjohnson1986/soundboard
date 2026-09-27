@@ -11,8 +11,11 @@ interface Recorder {
      */
     suspend fun start(path: String): Boolean
 
-    /** Stops the current recording and saves it; returns false if nothing usable was captured. */
-    suspend fun stop(): Boolean
+    /**
+     * Stops the current recording and saves it, leaving off its last [trimEndMillis] (the tap on
+     * Stop, #204) unless that would leave too little; returns false if nothing usable was captured.
+     */
+    suspend fun stop(trimEndMillis: Int = 0): Boolean
 
     /** Abandons the current recording without keeping whatever it captured. */
     fun cancel()

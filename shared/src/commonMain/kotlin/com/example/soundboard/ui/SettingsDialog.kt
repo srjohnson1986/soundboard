@@ -4,6 +4,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.TextFields
@@ -43,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.soundboard.BoardSettingsActions
+import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelFont
 import com.example.soundboard.model.LabelStyle
@@ -187,7 +189,8 @@ internal enum class SettingsGroup(val title: String, val icon: ImageVector) {
     GRID_LAYOUT("Grid layout", Icons.Filled.GridView),
     TAPPING_AND_SPEECH("Tapping & speech", Icons.Filled.TouchApp),
     SCREEN("Screen", Icons.Filled.Smartphone),
-    SHOW_MODE("Show mode", Icons.Filled.Visibility)
+    SHOW_MODE("Show mode", Icons.Filled.Visibility),
+    RECORDING("Recording", Icons.Filled.Mic)
 }
 
 /** A one-line summary of [group]'s current values, shown under its name in the Settings list. */
@@ -195,7 +198,8 @@ private fun settingsSummary(
     group: SettingsGroup,
     board: Board,
     performanceModeEnabled: Boolean,
-    showMode: ShowModeSettings
+    showMode: ShowModeSettings,
+    recordingTrimEndMillis: Int
 ): String = when (group) {
     SettingsGroup.HOME_PAGE ->
         if (board.homePageIndex == null) {
@@ -225,6 +229,8 @@ private fun settingsSummary(
         "Long-press: ${longPressDurationLabel(board.longPressDurationMillis).lowercase()} · haptics ${onOff(board.hapticFeedbackEnabled)}"
     SettingsGroup.SCREEN ->
         "${if (board.keepScreenAwake) "Stays awake" else "Can sleep"} · performance mode ${onOff(performanceModeEnabled)}"
+    SettingsGroup.RECORDING ->
+        if (recordingTrimEndMillis == 0) "Recordings kept whole" else "Leaves off the last ${recordingTrimLabel(recordingTrimEndMillis)}"
     SettingsGroup.SHOW_MODE ->
         if (!showMode.enabled) {
             "Off"
@@ -262,6 +268,7 @@ internal fun SettingsDialog(
     board: Board,
     performanceModeEnabled: Boolean,
     showMode: ShowModeSettings,
+    recordingTrimEndMillis: Int,
     onOpenGroup: (SettingsGroup) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -275,7 +282,7 @@ internal fun SettingsDialog(
                         text = {
                             Column(modifier = Modifier.padding(vertical = 4.dp)) {
                                 Text(group.title)
-                                HelperText(settingsSummary(group, board, performanceModeEnabled, showMode))
+                                HelperText(settingsSummary(group, board, performanceModeEnabled, showMode, recordingTrimEndMillis))
                             }
                         },
                         leadingIcon = { Icon(group.icon, contentDescription = null) },
@@ -298,6 +305,7 @@ internal fun SettingsGroupDialog(
     board: Board,
     performanceModeEnabled: Boolean,
     showMode: ShowModeSettings,
+    recordingTrimEndMillis: Int,
     actions: BoardSettingsActions,
     onPickBackgroundImage: () -> Unit,
     onBack: () -> Unit,
@@ -319,6 +327,7 @@ internal fun SettingsGroupDialog(
                     SettingsGroup.TAPPING_AND_SPEECH -> TappingAndSpeechSettings(board, actions)
                     SettingsGroup.SCREEN -> ScreenSettings(board, performanceModeEnabled, actions)
                     SettingsGroup.SHOW_MODE -> ShowModeSettingsControls(showMode, actions)
+                    SettingsGroup.RECORDING -> RecordingSettings(recordingTrimEndMillis, actions)
                 }
             }
         },
@@ -486,6 +495,24 @@ private fun ScreenSettings(board: Board, performanceModeEnabled: Boolean, action
 }
 
 private fun showModeTimerLabel(seconds: Int) = if (seconds == 0) "Off" else "$seconds seconds"
+
+private fun recordingTrimLabel(millis: Int) = if (millis == 0) "Off" else "${formatDecimal(millis / 1000.0, if (millis % 100 == 0) 1 else 2)} s"
+
+@Composable
+private fun RecordingSettings(trimEndMillis: Int, actions: BoardSettingsActions) {
+    OptionDropdown(
+        label = "Trim the end of new recordings",
+        selected = trimEndMillis,
+        options = DevicePreferences.RECORDING_TRIM_OPTIONS_MILLIS,
+        optionLabel = ::recordingTrimLabel,
+        onSelect = actions::setRecordingTrimEndMillis
+    )
+    HelperText(
+        "Leaves off the end of each recording as you stop it, so the tap on Stop isn't " +
+            "the last thing it plays. A very short recording is kept whole. Applies to this " +
+            "device only."
+    )
+}
 
 @Composable
 private fun ShowModeSettingsControls(showMode: ShowModeSettings, actions: BoardSettingsActions) {

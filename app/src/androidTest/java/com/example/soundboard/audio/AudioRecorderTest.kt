@@ -1,5 +1,7 @@
 package com.example.soundboard.audio
 
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -7,6 +9,7 @@ import com.example.soundboard.data.FileSystemStore
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -63,6 +66,23 @@ class AudioRecorderTest {
         val file = File(root, "sounds/trimmed.m4a")
         val kept = TestAudioFiles.playbackDurationMs(file)
         assertTrue("kept $kept ms", kept in 300..(1_000 + TestAudioFiles.aacFrameMs(file) + 50))
+    }
+
+    @Test
+    fun recordsAt44kHzMonoRatherThanMediaRecordersPhoneQualityDefault() {
+        assertTrue(record("sounds/quality.m4a", millis = 1_000, trimEndMillis = 0))
+
+        // Without explicit settings MediaRecorder records 8 kHz at 12.2 kbps (#229).
+        val extractor = MediaExtractor()
+        try {
+            extractor.setDataSource(File(root, "sounds/quality.m4a").path)
+            val format = extractor.getTrackFormat(0)
+            assertEquals(MediaFormat.MIMETYPE_AUDIO_AAC, format.getString(MediaFormat.KEY_MIME))
+            assertEquals(RECORDING_SAMPLE_RATE, format.getInteger(MediaFormat.KEY_SAMPLE_RATE))
+            assertEquals(RECORDING_CHANNELS, format.getInteger(MediaFormat.KEY_CHANNEL_COUNT))
+        } finally {
+            extractor.release()
+        }
     }
 
     @Test

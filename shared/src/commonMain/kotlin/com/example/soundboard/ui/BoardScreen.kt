@@ -231,6 +231,7 @@ fun BoardScreen(vm: BoardViewModel) {
                 BoardTopBar(
                     board = board,
                     recentBoards = recentBoards,
+                    builtInBoards = remember { vm.builtInBoards() },
                     editMode = editMode,
                     onEditModeChange = { editMode = it },
                     showModeEnabled = showMode.enabled,

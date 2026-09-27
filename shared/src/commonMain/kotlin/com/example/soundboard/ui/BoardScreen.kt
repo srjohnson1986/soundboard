@@ -232,6 +232,7 @@ fun BoardScreen(vm: BoardViewModel) {
                 BoardTopBar(
                     board = board,
                     recentBoards = recentBoards,
+                    builtInBoards = remember { vm.builtInBoards() },
                     editMode = editMode,
                     onEditModeChange = { editMode = it },
                     showModeEnabled = showMode.enabled,
@@ -367,6 +368,7 @@ fun BoardScreen(vm: BoardViewModel) {
                 onPlay = vm::play,
                 onStartRecording = vm::startRecording,
                 onStopRecording = vm::stopRecording,
+                onRestoreOriginal = vm::restoreOriginalSound,
                 onSave = { edited ->
                     vm.saveTile(editing.id, edited)
                     closeDialog()

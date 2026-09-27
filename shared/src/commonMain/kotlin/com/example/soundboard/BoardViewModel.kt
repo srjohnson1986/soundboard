@@ -200,6 +200,49 @@ class BoardViewModel(
         endTileEdit(keep = setOfNotNull(edited.fileName))
     }
 
+    /**
+     * Looks up the tile named [label] on the built-in board this board came from (see
+     * [originalSourceFor]) and hands [onResult] its original sound, for the tile editor's draft
+     * (#208): its clip, copied into app storage as a pending sound, and its volume and speech
+     * settings. Like any other change in the editor, it only reaches the tile on [saveTile].
+     */
+    fun restoreOriginalSound(label: String, onResult: (OriginalSound) -> Unit) {
+        val session = editSession
+        val source = originalSourceFor(_board.value)
+        if (source == null || label.isBlank()) {
+            onResult(OriginalSound.NotFound(source?.label))
+            return
+        }
+        viewModelScope.launch {
+            val original = withContext(ioDispatcher) { boardRepo.originalTile(source.assetName, label) }
+            val sound = original?.sound
+            when {
+                original == null -> onResult(OriginalSound.NotFound(source.label))
+                sound == null -> onResult(OriginalSound.Restored(original.tile, source.label))
+                else -> {
+                    val extension = original.tile.fileName.orEmpty().substringAfterLast('.', "")
+                    val name = withContext(ioDispatcher) { boardRepo.importSoundBytes(sound, extension) }
+                    if (name == null) {
+                        onResult(OriginalSound.NotFound(source.label))
+                    } else {
+                        addPendingSound(name, session) { onResult(OriginalSound.Restored(original.tile.copy(fileName = it), source.label)) }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * The built-in board [board] came from: the one it was opened from, else (for a board from
+     * before that was recorded) the built-in board with its name, else the one a fresh install opens.
+     */
+    private fun originalSourceFor(board: Board): BoardRef.BuiltIn? {
+        val builtIns = builtInBoards()
+        return builtIns.firstOrNull { it.assetName == board.builtInSource }
+            ?: builtIns.firstOrNull { it.label == board.name }
+            ?: FALLBACK_BOARD_ASSETS.firstNotNullOfOrNull { asset -> builtIns.firstOrNull { it.assetName == asset } }
+    }
+
     /** Throws the tile editor's draft away: stops any recording and deletes the sounds added while editing. */
     fun discardTileEdits() {
         cancelRecording()
@@ -726,6 +769,15 @@ class BoardViewModel(
 sealed interface BoardRef {
     data class Saved(val id: String) : BoardRef
     data class BuiltIn(val assetName: String, val label: String) : BoardRef
+}
+
+/** What [BoardViewModel.restoreOriginalSound] found. */
+sealed interface OriginalSound {
+    /** The tile as built-in board [boardLabel] has it; its `fileName`, if any, is a pending sound in app storage. */
+    class Restored(val tile: Tile, val boardLabel: String) : OriginalSound
+
+    /** No tile by that name plays anything on built-in board [boardLabel] (null: no built-in board to look in). */
+    class NotFound(val boardLabel: String?) : OriginalSound
 }
 
 /** One entry in the title bar's quick-switch dropdown — see [BoardViewModel.recentBoards]. */

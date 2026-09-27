@@ -448,6 +448,18 @@ the session it started in, so one that finishes after its edit has ended is
 deleted rather than handed to a dialog that's gone. **Clear tile** stays an
 immediate action on the saved tile.
 
+**Restore original sound** (#208) puts a tile's sound back as the built-in
+board it came from has it, matched by label (ignoring case and surrounding
+spaces). `BoardRepository.importFromAsset` records the source on the board as
+`Board.builtInSource`, which travels into saved boards and backups; for a board
+from before that, `BoardViewModel.originalSourceFor` falls back to the built-in
+board with the same name, then to the fallback board. `BoardRepository.originalTile`
+reads the tile and its clip out of the built-in zip, and
+`BoardViewModel.restoreOriginalSound` copies the clip in as a pending sound and
+hands the tile's sound settings (clip, volume, speech) to the draft, so Save and
+Cancel treat it like any other edit. With no match, the editor says which board
+it looked in.
+
 ## Dependency injection
 
 `BoardViewModel` takes its collaborators as constructor parameters instead of
@@ -570,7 +582,8 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   since a switch doesn't fit that composable's trailing-content slot cleanly; **Settings**, which opens
   `SettingsDialog` (below), including the **Sticky home row** switch, rather
   than exposing its contents as more menu rows; **Boards**
-  (**Rename board**, **Recent boards**, **Save board as...**/**Open board...**); **Backup** (**Export backup**/
+  (**Rename board**; **Switch board**, a submenu of recent boards followed by
+  the built-in ones not already among them (#197); **Save board as...**/**Open board...**); **Backup** (**Export backup**/
   **Import backup**); and the app-version link at the bottom. Page-level
   actions — add, rename, delete, grid size, page color, and home-page
   selection — live in the tab row and `PageOptionsDialog` instead; see below.

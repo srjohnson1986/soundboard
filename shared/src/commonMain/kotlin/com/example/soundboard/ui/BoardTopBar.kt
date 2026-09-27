@@ -87,6 +87,7 @@ private const val RELEASE_URL = "$RELEASES_BASE_URL/tag/$APP_VERSION"
 internal fun BoardTopBar(
     board: Board,
     recentBoards: List<RecentBoardItem>,
+    builtInBoards: List<BoardRef.BuiltIn>,
     editMode: Boolean,
     onEditModeChange: (Boolean) -> Unit,
     showModeEnabled: Boolean,
@@ -102,6 +103,7 @@ internal fun BoardTopBar(
         HamburgerMenu(
             board = board,
             recentBoards = recentBoards,
+            builtInBoards = builtInBoards,
             editMode = editMode,
             onEditModeChange = onEditModeChange,
             showModeEnabled = showModeEnabled,
@@ -155,6 +157,7 @@ internal fun BoardTopBar(
 private fun HamburgerMenu(
     board: Board,
     recentBoards: List<RecentBoardItem>,
+    builtInBoards: List<BoardRef.BuiltIn>,
     editMode: Boolean,
     onEditModeChange: (Boolean) -> Unit,
     showModeEnabled: Boolean,
@@ -169,7 +172,7 @@ private fun HamburgerMenu(
     var showMenu by remember { mutableStateOf(false) }
     var showRecentBoardsMenu by remember { mutableStateOf(false) }
 
-    /** Closes the menu, then runs [action] — every entry except Recent boards and the mode switches. */
+    /** Closes the menu, then runs [action] — every entry except Switch board and the mode switches. */
     fun menuAction(action: () -> Unit): () -> Unit = {
         showMenu = false
         action()
@@ -194,8 +197,10 @@ private fun HamburgerMenu(
                 onClick = menuAction { onOpenDialog(BoardDialog.RenameBoard) }
             )
             Box {
+                // Recent boards, then the built-in ones not already among them, so the built-in
+                // boards are one tap away even on a fresh install with nothing recent (#197).
                 DropdownMenuItem(
-                    text = { Text("Recent boards") },
+                    text = { Text("Switch board") },
                     leadingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
                     onClick = {
                         onShowRecentBoards()
@@ -207,13 +212,10 @@ private fun HamburgerMenu(
                     onDismissRequest = { showRecentBoardsMenu = false },
                     modifier = Modifier.widthIn(min = 240.dp)
                 ) {
-                    if (recentBoards.isEmpty()) {
-                        DropdownMenuItem(
-                            text = { Text("No recent boards yet") },
-                            enabled = false,
-                            onClick = {}
-                        )
-                    } else {
+                    val recentRefs = recentBoards.map { it.ref }.toSet()
+                    val otherBuiltIns = builtInBoards.filterNot { it in recentRefs }
+                    if (recentBoards.isNotEmpty()) {
+                        MenuSectionHeader("Recent")
                         recentBoards.forEach { item ->
                             DropdownMenuItem(
                                 text = {
@@ -233,6 +235,27 @@ private fun HamburgerMenu(
                                 }
                             )
                         }
+                    }
+                    if (otherBuiltIns.isNotEmpty()) {
+                        if (recentBoards.isNotEmpty()) HorizontalDivider()
+                        MenuSectionHeader("Built-in")
+                        otherBuiltIns.forEach { ref ->
+                            DropdownMenuItem(
+                                text = { Text(ref.label) },
+                                onClick = {
+                                    showRecentBoardsMenu = false
+                                    showMenu = false
+                                    onOpenBoard(ref, ref.label)
+                                }
+                            )
+                        }
+                    }
+                    if (recentBoards.isEmpty() && otherBuiltIns.isEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("No recent boards yet") },
+                            enabled = false,
+                            onClick = {}
+                        )
                     }
                     HorizontalDivider()
                     DropdownMenuItem(

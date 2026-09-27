@@ -547,7 +547,8 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   since a switch doesn't fit that composable's trailing-content slot cleanly; **Settings**, which opens
   `SettingsDialog` (below), including the **Sticky home row** switch, rather
   than exposing its contents as more menu rows; **Boards**
-  (**Rename board**, **Recent boards**, **Save board as...**/**Open board...**); **Backup** (**Export backup**/
+  (**Rename board**; **Switch board**, a submenu of recent boards followed by
+  the built-in ones not already among them (#197); **Save board as...**/**Open board...**); **Backup** (**Export backup**/
   **Import backup**); and the app-version link at the bottom. Page-level
   actions — add, rename, delete, grid size, page color, and home-page
   selection — live in the tab row and `PageOptionsDialog` instead; see below.

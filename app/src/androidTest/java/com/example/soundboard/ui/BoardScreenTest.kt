@@ -103,6 +103,18 @@ class BoardScreenTest {
     }
 
     @Test
+    fun switchBoardListsTheBuiltInBoards() {
+        // #197: the built-in boards are in the first dropdown, not only behind "See all boards...".
+        launchWith(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))))
+
+        composeRule.onNodeWithContentDescription("Menu").performClick()
+        composeRule.onNodeWithText("Switch board").performClick()
+
+        composeRule.onNodeWithText("TTS Care Board").assertIsDisplayed()
+        composeRule.onNodeWithText("See all boards...").assertIsDisplayed()
+    }
+
+    @Test
     fun editModeTogglePutsFilledTileTapsIntoEditDialog() {
         // Edit mode is toggled from the menu rather than always-on per tile (a
         // permanent pencil crowded small tiles); once on, a pencil reappears on

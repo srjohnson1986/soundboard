@@ -13,7 +13,7 @@ The **☰** menu, top to bottom:
 
 - **Boards:**
   - **Rename board**
-  - **Recent boards**
+  - **Switch board**
   - **Save board as...**
   - **Open board...**
   - (see "Saving and opening boards")
@@ -274,8 +274,9 @@ later, or start a new board from a good one.
   whole board, including every page, tile and setting. The board you're
   using takes that name too.
 - **Open board...** lists the boards built into the app ("Built-in") and the
-  ones you've saved, newest first. **Recent boards** lists the last five you
-  opened or saved. Picking one replaces the board on screen; if the current
+  ones you've saved, newest first. **Switch board** is the quicker way: it
+  lists the last five boards you opened or saved, then the built-in boards
+  that aren't already among them. Picking one replaces the board on screen; if the current
   board has any sounds on it, you're asked to confirm first. Export a backup first
   if you want to keep it.
 

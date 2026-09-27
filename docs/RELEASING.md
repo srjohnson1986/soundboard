@@ -72,7 +72,10 @@ never `assembleRelease`, so it doesn't need this file at all).
    deploys it to https://srjohnson1986.github.io/soundboard/, so the site and the
    APK are always the same version. Check the workflow went green, then open the
    site and check the menu shows the new version. (**Run workflow** on it
-   republishes without a new tag.)
+   republishes without a new tag.) The `github-pages` environment only accepts
+   deploys from `master` and `v*` tags (Settings → Environments →
+   github-pages); a deploy "rejected by environment protection rules" means the
+   tag doesn't match those.
 4. Build the signed APK and give it its release name:
    ```bash
    ./gradlew assembleRelease

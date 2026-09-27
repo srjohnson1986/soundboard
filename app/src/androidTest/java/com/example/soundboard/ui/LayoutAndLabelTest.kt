@@ -20,8 +20,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontListFontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -35,7 +33,6 @@ import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.RecentBoardsRepository
 import com.example.soundboard.model.Board
-import com.example.soundboard.model.LabelFont
 import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.Page
@@ -352,17 +349,6 @@ class LayoutAndLabelTest {
     // --- Label text (#142) ---
 
     @Test
-    fun labelsOnAPageShareOneSizeThatGrowsOnBigTiles() {
-        rotate(landscape = false)
-        val tiles = listOf("Yes", "Going to be sick", "No").mapIndexed { i, label -> Tile(id = "t$i", label = label, fileName = "t$i.mp3") }
-        launchWith(Board(pages = listOf(Page(rows = 3, columns = 1, tiles = tiles))))
-
-        val sizes = listOf("Yes", "Going to be sick", "No").map { labelTextStyle(it).fontSize.value }
-        assertEquals(1, sizes.distinct().size)
-        assertTrue("expected growth past the 14sp minimum, got ${sizes.first()}", sizes.first() > 14f)
-    }
-
-    @Test
     fun aFourColumnPageWithALongLabelStaysAtTheMinimumSizeWithoutSplittingAWord() {
         rotate(landscape = false)
         val labels = listOf("Hey", "Something's wrong", "Call the doctor", "911")
@@ -383,25 +369,6 @@ class LayoutAndLabelTest {
             val end = layout.getLineEnd(line)
             end in 1 until text.length && !text[end - 1].isWhitespace() && !text[end].isWhitespace() && text[end - 1] != '-'
         }
-    }
-
-    @Test
-    fun fontBoldAndAllCapsApplyToTileLabels() {
-        rotate(landscape = false)
-        launchWith(
-            Board(
-                pages = listOf(Page(rows = 1, columns = 2, tiles = listOf(Tile(id = "w", label = "Water", fileName = "w.mp3"), Tile(id = "b")))),
-                labelStyle = LabelStyle(font = LabelFont.ATKINSON_HYPERLEGIBLE, bold = true, allCaps = true)
-            )
-        )
-
-        val style = labelTextStyle("WATER")
-        assertEquals(FontWeight.Bold, style.fontWeight)
-        // The bundled Atkinson Hyperlegible family: the only label font with exactly a
-        // regular and a bold face (Lexend and the condensed font also have a medium one).
-        val fonts = (style.fontFamily as FontListFontFamily).fonts
-        assertEquals(listOf(FontWeight.Normal, FontWeight.Bold), fonts.map { it.weight })
-        assertEquals(0, displayedCount("Water"))
     }
 
     @Test

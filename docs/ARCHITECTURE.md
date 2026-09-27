@@ -822,8 +822,21 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, and saveBoardAs/openBoard | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
 | `BoardViewModel` smoke test — fallback board, tap to speak, an edit persisting, recent boards — on in-memory storage, proving it runs on the web too | `shared/src/commonTest/.../BoardViewModelCommonTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | The web app's recording and playback: `WebRecorder` records from headless Chrome's fake microphone into OPFS, `WebAudioPlayer` decodes the result, a cancelled recording saves nothing | `web/src/wasmJsTest/.../web/WebAudioTest.kt` (fake mic: `web/karma.config.d/fake-media.js`) | WebAssembly in headless Chrome |
-| `BoardScreen`, incl. the sticky home row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
-| Landscape grid, row height cap, drag steps, label size/font/caps, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
+| `BoardScreen`'s flows: a tap playing or editing, the tile editor's Save/Cancel and Restore original sound, edit mode, Switch board, Save board as, Settings groups (Recording included), Show mode, the page tab row and page options, the sticky home row, idle-timeout auto-return; tile label sizes (no word split, #209), bold/caps, and the landscape grid in a landscape window | `shared/src/commonTest/.../ui/BoardScreenUiTest.kt`, `LabelAndLayoutUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
+| What needs a device: drag-to-reorder, long-press previews, swiping between pages, scrolling under the sticky row | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
+| Landscape grid, row height cap, drag steps, label size/font, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
+
+**The shared UI tests** (#219) run the same `commonTest` code on both platforms with
+Compose Multiplatform's `runComposeUiTest`: on the Android host JVM under Robolectric
+(with its native graphics, so text is measured for real) and compiled to WebAssembly in
+headless Chrome. `UiTest` (an `expect` class: Robolectric's runner on Android, nothing on
+the web) and `runUiTest` give both the same 320×640dp window; wider windows send
+Robolectric into an endless relayout of a dialog holding a text field, so this is the
+size both can do. `BoardUiTest` builds the real `BoardViewModel` on in-memory storage
+(`TestBoardApp`) and runs its coroutines on an unconfined test dispatcher, because in the
+browser a test can't wait for real ones. Closing a menu differs by platform, so it's
+`closeMenu`: Back on Android; on the web a click outside, then a spare click, since the
+browser loses the click after one that closes a menu.
 
 `./gradlew test :shared:allTests` runs everything except the two `androidTest/`
 classes (`test` alone skips `shared`, which has no task by that name);

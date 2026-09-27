@@ -8,6 +8,12 @@ class InMemoryFileStore : FileStore {
 
     override suspend fun exists(path: String): Boolean = path in files
 
+    /** [write], for setting up a test outside a coroutine. */
+    fun put(path: String, bytes: ByteArray) {
+        files[path] = bytes.copyOf()
+        modified[path] = ++clock
+    }
+
     override suspend fun read(path: String): ByteArray? = files[path]?.copyOf()
 
     override suspend fun write(path: String, bytes: ByteArray) {
@@ -72,4 +78,17 @@ class CapturingSaveTarget : SaveTarget {
 class FakeBundledBoards(private val boards: Map<String, ByteArray> = emptyMap()) : BundledBoards {
     override fun has(name: String): Boolean = name in boards
     override suspend fun read(name: String): ByteArray = boards[name] ?: error("$name isn't bundled")
+}
+
+/** A [KeyValueStore] held in memory. */
+class MapKeyValueStore : KeyValueStore {
+    private val values = mutableMapOf<String, Any>()
+    override fun getBoolean(key: String, default: Boolean): Boolean = values[key] as? Boolean ?: default
+    override fun getInt(key: String, default: Int): Int = values[key] as? Int ?: default
+    override fun putBoolean(key: String, value: Boolean) {
+        values[key] = value
+    }
+    override fun putInt(key: String, value: Int) {
+        values[key] = value
+    }
 }

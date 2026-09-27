@@ -41,7 +41,11 @@ kotlin {
         namespace = "com.example.soundboard.shared"
         compileSdk = 37
         minSdk = 24
-        withHostTest {}
+        // Host tests run on the JVM, the shared UI tests under Robolectric (#219), which needs
+        // the Android resources (the bundled fonts among them).
+        withHostTest {
+            isIncludeAndroidResources = true
+        }
         // Compose Resources (the bundled fonts) ship as Android resources on this target.
         androidResources {
             enable = true
@@ -64,6 +68,11 @@ kotlin {
             }
         }
         binaries.executable()
+    }
+
+    compilerOptions {
+        // UiTest, the shared UI tests' base class, is an expect class (#219).
+        freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
     sourceSets {
@@ -101,6 +110,17 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+            // runComposeUiTest, for the UI tests in commonTest (#219).
+            implementation("org.jetbrains.compose.ui:ui-test:1.12.1")
+        }
+        getByName("androidHostTest").dependencies {
+            implementation("org.robolectric:robolectric:4.17")
+            implementation("androidx.test:core:1.7.0")
+            implementation("junit:junit:4.13.2")
+            // Back, to close a menu (closeMenu).
+            implementation("androidx.test.espresso:espresso-core:3.7.0")
+            // Declares the empty activity runComposeUiTest starts on Android.
+            implementation("androidx.compose.ui:ui-test-manifest:1.12.1")
         }
     }
 }

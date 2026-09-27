@@ -1,15 +1,15 @@
 package com.example.soundboard
 
-import com.example.soundboard.audio.Player
-import com.example.soundboard.audio.Recorder
-import com.example.soundboard.audio.Speaker
+import com.example.soundboard.audio.FakePlayer
+import com.example.soundboard.audio.FakeRecorder
+import com.example.soundboard.audio.FakeSpeaker
 import com.example.soundboard.data.BoardJson
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.FakeBundledBoards
 import com.example.soundboard.data.FakeZipCodec
 import com.example.soundboard.data.InMemoryFileStore
-import com.example.soundboard.data.KeyValueStore
+import com.example.soundboard.data.MapKeyValueStore
 import com.example.soundboard.data.RecentBoardsRepository
 import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.ZipEntryData
@@ -37,8 +37,8 @@ class BoardViewModelCommonTest {
     private val dispatcher = UnconfinedTestDispatcher()
     private val files = InMemoryFileStore()
     private val zip = FakeZipCodec()
-    private val speaker = RecordingSpeaker()
-    private val player = RecordingPlayer()
+    private val speaker = FakeSpeaker()
+    private val player = FakePlayer()
 
     @BeforeTest
     fun setMain() = Dispatchers.setMain(dispatcher)
@@ -52,7 +52,7 @@ class BoardViewModelCommonTest {
     private fun newViewModel(bundled: Map<String, ByteArray> = emptyMap()) = BoardViewModel(
         boardRepo = BoardRepository(files, zip, FakeBundledBoards(bundled)),
         player = player,
-        recorder = NoRecorder(),
+        recorder = FakeRecorder(),
         savedBoardRepo = SavedBoardRepository(files),
         speaker = speaker,
         devicePrefs = DevicePreferences(MapKeyValueStore()),
@@ -92,41 +92,5 @@ class BoardViewModelCommonTest {
         vm.refreshRecentBoards()
 
         assertEquals(listOf("Mine" to 42L), vm.recentBoards.value.map { it.label to it.usedAt })
-    }
-}
-
-private class RecordingSpeaker : Speaker {
-    val spoken = mutableListOf<String>()
-    override fun speak(text: String) {
-        spoken += text
-    }
-    override fun stop() {}
-    override fun shutdown() {}
-}
-
-private class RecordingPlayer : Player {
-    override fun load(key: String, path: String) {}
-    override fun play(key: String, volume: Float) {}
-    override fun unload(key: String) {}
-    override fun clear() {}
-    override fun release() {}
-}
-
-private class NoRecorder : Recorder {
-    override val fileExtension: String = "m4a"
-    override suspend fun start(path: String): Boolean = false
-    override suspend fun stop(trimEndMillis: Int): Boolean = false
-    override fun cancel() {}
-}
-
-private class MapKeyValueStore : KeyValueStore {
-    private val values = mutableMapOf<String, Any>()
-    override fun getBoolean(key: String, default: Boolean): Boolean = values[key] as? Boolean ?: default
-    override fun getInt(key: String, default: Int): Int = values[key] as? Int ?: default
-    override fun putBoolean(key: String, value: Boolean) {
-        values[key] = value
-    }
-    override fun putInt(key: String, value: Int) {
-        values[key] = value
     }
 }

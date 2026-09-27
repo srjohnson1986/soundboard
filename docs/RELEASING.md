@@ -57,10 +57,11 @@ never `assembleRelease`, so it doesn't need this file at all).
      and that the bundled copies still match (see its "Keeping the bundled
      copies in sync" section, which has a one-line hash check).
    - **`docs/ARCHITECTURE.md`**: anything the release restructured.
-2. Bump `versionName` (and `versionCode`) in `app/build.gradle.kts`, through
-   the usual issue/branch/PR flow. The in-app version label (`APP_VERSION` in
-   `ui/BoardTopBar.kt`) and its release-notes link read `versionName` via
-   `BuildConfig`, so there's nothing else to keep in sync.
+2. Bump `appVersionName` (and `appVersionCode`) in `gradle.properties`,
+   through the usual issue/branch/PR flow. The Android build reads them for
+   `versionName`/`versionCode`, and the in-app version label (`APP_VERSION` in
+   `shared/.../ui/BoardTopBar.kt`) and its release-notes link read the same
+   value, so there's nothing else to keep in sync.
 3. Once that's merged, tag the merge commit and push the tag:
    ```bash
    git tag -a vX.Y.Z <commit> -m "vX.Y.Z"

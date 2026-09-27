@@ -118,7 +118,7 @@ internal fun BorderControls(border: TileBorder, onChange: (TileBorder) -> Unit) 
     )
     Text("Color (first = Recommended)", style = MaterialTheme.typography.bodySmall)
     ColorPicker(selectedArgb = border.colorArgb, onSelect = { onChange(border.copy(colorArgb = it)) })
-    Text("Width: ${"%.1f".format(border.widthDp)}dp", style = MaterialTheme.typography.bodySmall)
+    Text("Width: ${formatDecimal(border.widthDp.toDouble(), 1)}dp", style = MaterialTheme.typography.bodySmall)
     Slider(
         value = border.widthDp,
         onValueChange = { onChange(border.copy(widthDp = it)) },
@@ -312,4 +312,19 @@ internal fun <T : Any> OverrideSection(
         )
         value?.let { controls(it) }
     }
+}
+
+/**
+ * [value] rounded to [decimals] places, e.g. `formatDecimal(2.06, 1) == "2.1"`: the common
+ * code's stand-in for the JVM's `"%.1f".format(...)`, always with a "." separator.
+ */
+internal fun formatDecimal(value: Double, decimals: Int): String {
+    var scale = 1L
+    repeat(decimals) { scale *= 10 }
+    // Halves round up, as the JVM's formatting does; kotlin.math.round() would round them to even.
+    val scaled = kotlin.math.floor(kotlin.math.abs(value) * scale + 0.5).toLong()
+    val sign = if (value < 0 && scaled != 0L) "-" else ""
+    val whole = scaled / scale
+    if (decimals == 0) return "$sign$whole"
+    return "$sign$whole." + (scaled % scale).toString().padStart(decimals, '0')
 }

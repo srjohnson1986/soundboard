@@ -23,8 +23,9 @@ android {
         applicationId = "com.example.soundboard"
         minSdk = 24
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.3.1"
+        // Set in gradle.properties, which the shared UI's version link reads too.
+        versionCode = providers.gradleProperty("appVersionCode").get().toInt()
+        versionName = providers.gradleProperty("appVersionName").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

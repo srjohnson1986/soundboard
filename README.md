@@ -72,9 +72,10 @@ with Robolectric.
 ./gradlew :shared:allTests
 ```
 
-That runs the board model's tests from the `shared` module, which holds code
-the Android app and the upcoming web version share. They run twice: on the JVM
-and compiled to WebAssembly.
+That runs the tests in the `shared` module, which holds everything the Android
+app and the upcoming web version share: the model, storage, view model and UI.
+They run twice: on the JVM, and compiled to WebAssembly in headless Chrome
+(which needs Chrome installed).
 
 ```bash
 ./gradlew connectedDebugAndroidTest

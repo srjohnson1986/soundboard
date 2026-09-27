@@ -342,6 +342,10 @@ app, with a few differences:
   through a backup to the phone and back.
 - **Keep screen awake** works where the browser supports it, and only while the
   page is showing.
+- **It can be installed**, to open from the home screen or app list in its own
+  window: use the browser's **Install** button (Chrome, Edge) or **Share → Add to
+  Home Screen** (Safari on iPhone and iPad). After the first visit it also works
+  without a connection; it picks up a new version the next time it's online.
 
 ## Long clips
 

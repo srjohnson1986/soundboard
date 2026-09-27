@@ -57,6 +57,12 @@ static files (`web/build/dist/wasmJs/productionExecutable`), which run from any
 folder, since every path in them is relative. CI builds them on every pull request
 (the `web-app` artifact), and `.github/workflows/web.yml` publishes them to GitHub
 Pages when a release tag is pushed, so the site always matches the newest APK.
+`manifest.webmanifest` and `icons/` (drawn from the Android launcher icon) make it
+installable, and `sw.js`, a service worker, makes it work offline: network first,
+so a new release shows up on the next online visit, with a cached copy of each
+response to fall back on. The page hands the worker the files it loaded before the
+worker started, and the worker fetches the fonts and built-in board up front, so
+one visit is enough. It isn't registered on the local dev server (port 8080).
 
 ## Layers
 

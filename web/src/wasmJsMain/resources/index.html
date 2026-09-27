@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="A communication board: tap a tile to hear its words spoken aloud.">
     <title>Soundboard</title>
+    <meta name="theme-color" content="#5e35b1">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <style>
         html, body { margin: 0; height: 100%; overflow: hidden; background: #1c1b1f; }
         #loading {
@@ -26,6 +30,18 @@
                     'Soundboard needs a newer browser: a current Chrome, Edge or Firefox, or Safari 18.2 or later.';
             }
         });
+    </script>
+    <script>
+        // Offline support and "install" (sw.js). Not on the local dev server, whose builds
+        // change constantly.
+        if ('serviceWorker' in navigator && location.port !== '8080') {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(() => {});
+                navigator.serviceWorker.ready.then(registration => registration.active.postMessage({
+                    keep: [location.href].concat(performance.getEntriesByType('resource').map(entry => entry.name))
+                }));
+            });
+        }
     </script>
     <script type="application/javascript" src="soundboard.js"></script>
 </head>

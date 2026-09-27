@@ -1,6 +1,5 @@
 package com.example.soundboard.ui
 
-import android.content.res.Configuration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,7 +47,6 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -240,7 +238,7 @@ internal fun PageGrid(
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
 
-    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isLandscape = isLandscape()
     val usePageGrid = isLandscape && landscapeLayout == LandscapeLayout.PAGE_GRID
     val spacingPx = with(density) { TILE_SPACING.toPx() }
     val columns = when {

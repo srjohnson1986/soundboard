@@ -7,8 +7,8 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 
 | Module | What's in it |
 |---|---|
-| `shared/` | Code that doesn't depend on Android, built for both Android and WebAssembly (Kotlin Multiplatform): the board model (`model/`), the repositories (`data/`), `BoardViewModel` and `BoardSettingsActions`, and the `Player`/`Recorder`/`Speaker` interfaces (`audio/`). The UI moves here next, as the web version comes together (#193, #195). |
-| `app/` | The Android app: everything else below, which uses `shared` like any other library. |
+| `shared/` | Code that doesn't depend on Android, built for both Android and WebAssembly (Kotlin Multiplatform): the board model (`model/`), the repositories (`data/`), `BoardViewModel` and `BoardSettingsActions`, the `Player`/`Recorder`/`Speaker` interfaces (`audio/`), and the whole Compose UI (`ui/`), with its fonts as Compose Resources (`composeResources/font/`). |
+| `app/` | The Android app: `MainActivity`, `BoardViewModelFactory`, the audio and speech implementations (`SoundPlayer`, `AudioRecorder`, `TtsSpeaker`), the manifest, launcher icons and built-in board assets. It uses `shared` like any other library. |
 
 `shared`'s common code has no Android or Compose dependencies. Keep it that way:
 anything that needs a platform goes behind one of the small interfaces in
@@ -18,11 +18,20 @@ anything that needs a platform goes behind one of the small interfaces in
 |---|---|---|
 | `FileStore` | App-private files by relative path (`board.json`, `sounds/<name>`) | `FileSystemStore(filesDir)` (`shared/src/androidMain`) |
 | `ZipCodec` | Reads/writes zip archives (backups, built-in boards) | `JavaZipCodec`, on `java.util.zip` (`shared/src/androidMain`) |
-| `PickedFile` / `SaveTarget` | A file the user picked to open / somewhere they picked to save | `UriPickedFile` / `UriSaveTarget`, on content URIs (`app/.../data/AndroidStorage.kt`) |
+| `PickedFile` / `SaveTarget` | A file the user picked to open / somewhere they picked to save | `UriPickedFile` / `UriSaveTarget`, on content URIs (`shared/src/androidMain/.../data/AndroidStorage.kt`) |
 | `BundledBoards` | The built-in board zips packaged with the build | `AssetBundledBoards`, on APK assets (same file) |
 | `KeyValueStore` | Small device-local settings (`DevicePreferences`) | `SharedPreferencesStore` (same file) |
 
-`AndroidStorage.kt` also has factory functions named after the repositories
+The UI's own platform needs are the same idea, as `expect`/`actual` functions in
+`shared/.../ui/Platform.kt`: the file pickers and microphone permission, keeping
+the screen on, the back gesture, whether the window is in landscape, dynamic
+color, and the condensed label font. On Android each is the code that used to be
+inline in the screen (`Platform.android.kt`); the web's (`Platform.wasmJs.kt`)
+are placeholders until the web app lands. The app version shown in the menu is
+`APP_VERSION_NAME`, generated into `shared` from `gradle.properties`, which the
+Android build also reads for `versionName`/`versionCode`.
+
+`shared/.../data/AndroidStorage.kt` (`shared/src/androidMain`) also has factory functions named after the repositories
 (`BoardRepository(context)` and so on) that wire them to those implementations,
 which is what the app and the Android tests call. `FileStore` is suspending
 because the web's storage is asynchronous. A new platform capability follows the
@@ -48,11 +57,11 @@ to compile); read it into a local `val` first.
 | `shared/.../BoardViewModel.kt` | Holds the `Board` as a `StateFlow`, wires the other layers together, single write path. Takes `BoardRepository`/`Player`/`Recorder`/`SavedBoardRepository`/dispatcher as constructor params (see below) rather than constructing them. An ordinary androidx `ViewModel` on Android, via JetBrains' multiplatform build of `lifecycle-viewmodel`. |
 | `BoardViewModelFactory.kt` | Android only: builds `BoardViewModel` with the real storage, `SoundPlayer`, `AudioRecorder` and `TtsSpeaker`. |
 | `shared/.../BoardSettingsActions.kt` | Interface listing every change the Settings dialog can make; `BoardViewModel` implements it, so the dialog takes one object instead of a callback per setting. |
-| `ui/BoardScreen.kt` | The screen: its state (edit mode, the one open `BoardDialog`, the idle timer), the pager, the sticky home row, and the dialog host. |
-| `ui/BoardTopBar.kt` | Title, page tabs (with the long-press gesture) and the hamburger menu. |
-| `ui/PageGrid.kt` | `PageGrid`, `PinnedRow` and `TileCard`: grid layout, drag-to-reorder, tile colors. |
-| `ui/EditTileDialog.kt`, `ui/SettingsDialog.kt`, `ui/PageDialogs.kt`, `ui/BoardManagementDialogs.kt`, `ui/SpeakDialog.kt` | The dialogs, grouped by what they edit. |
-| `ui/Controls.kt` | Shared building blocks: `SwitchRow`, `HelperText`, `ColorPicker`, `SegmentedChoice`, `OverrideSection`, `OptionDropdown`, `Stepper`, opacity/border controls. |
+| `shared/.../ui/BoardScreen.kt` | The screen: its state (edit mode, the one open `BoardDialog`, the idle timer), the pager, the sticky home row, and the dialog host. |
+| `shared/.../ui/BoardTopBar.kt` | Title, page tabs (with the long-press gesture) and the hamburger menu. |
+| `shared/.../ui/PageGrid.kt` | `PageGrid`, `PinnedRow` and `TileCard`: grid layout, drag-to-reorder, tile colors. |
+| `shared/.../ui/EditTileDialog.kt`, `SettingsDialog.kt`, `PageDialogs.kt`, `BoardManagementDialogs.kt`, `SpeakDialog.kt` | The dialogs, grouped by what they edit. |
+| `shared/.../ui/Controls.kt` | Shared building blocks: `SwitchRow`, `HelperText`, `ColorPicker`, `SegmentedChoice`, `OverrideSection`, `OptionDropdown`, `Stepper`, opacity/border controls. |
 | `MainActivity.kt` | Just sets content to `SoundboardTheme { BoardScreen() }`. |
 
 Data flows one way: UI calls a `BoardViewModel` function → it updates
@@ -360,11 +369,11 @@ path as an imported one, no conversion needed.
 The flow, split between `EditTileDialog` (permission + button state) and
 `BoardViewModel` (the actual recording):
 
-1. Tapping **Record** checks `RECORD_AUDIO` via `ContextCompat.checkSelfPermission`
-   first; if it's not granted, a `rememberLauncherForActivityResult(RequestPermission())`
-   asks for it and only starts recording once granted, showing an inline
-   error otherwise. This lives in the UI layer because permission requests
-   need an `Activity` context a `ViewModel` shouldn't hold.
+1. Tapping **Record** calls `rememberMicrophoneAccess()`'s function
+   (`ui/Platform.kt`). On Android that checks `RECORD_AUDIO` first and, if it's
+   not granted, asks for it; recording only starts once it's granted, with an
+   inline error otherwise. This lives in the UI layer because permission
+   requests need an `Activity` a `ViewModel` shouldn't hold.
 2. `vm.startRecording()` calls `repo.newRecordingPath()` for a fresh
    UUID-named `.m4a` path in `sounds/` — the same directory `importSound()`
    writes into — then `recorder.start(path)`, which resolves it to a real file
@@ -545,10 +554,10 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   `AlertDialog` only when `board.hasAnySound`, otherwise `vm.openBoard()`
   runs immediately.
 - **The last menu item is the app version, `APP_VERSION`** — built from
-  `BuildConfig.VERSION_NAME`, so bumping `versionName` in
-  `app/build.gradle.kts` is the only change a release needs (see
-  `docs/RELEASING.md` for the full cut-a-release checklist). Tapping it fires
-  an `ACTION_VIEW` intent at `RELEASE_URL`, opening a page in the browser;
+  `APP_VERSION_NAME`, which is generated from `appVersionName` in
+  `gradle.properties`, so bumping that is the only change a release needs (see
+  `docs/RELEASING.md` for the full cut-a-release checklist). Tapping it opens
+  `RELEASE_URL` in the browser through Compose's `LocalUriHandler`;
   `RELEASE_URL` is `"$RELEASES_BASE_URL/tag/$APP_VERSION"`, landing on that
   specific version's own release notes rather than the bare `/releases`
   list. All three constants live at the top of `BoardTopBar.kt`.
@@ -731,15 +740,15 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 
 | Layer | File(s) | Runs on |
 |---|---|---|
-| `Page.withGridSize()`/`.withTileMoved()`/`.normalized()`, tile opacity/border fallback, and the landscape grid defaults | `shared/src/commonTest/.../model/PageTest.kt` | JVM and WebAssembly (`kotlin.test`) |
-| Landscape column/row-height math, label size search | `test/.../ui/GridLayoutTest.kt`, `test/.../ui/LabelTextTest.kt` | plain JVM (JUnit) |
-| `Board` page management (`withPageAdded`/`withPageRemoved`/`withPageRenamed`/`withCurrentPage`/`withHomePage`), `updatingTile`/`findTile`, `soundFileNames`, `Tile.isPlayable`, and `hasAnySound` | `shared/src/commonTest/.../model/BoardTest.kt` | JVM and WebAssembly (`kotlin.test`) |
-| `BoardRepository`'s own logic — save/load, missing-sound sanitizing, backup round-trip, the zip path guard, bundled boards — plus `SavedBoardRepository` basics, against in-memory storage | `shared/src/commonTest/.../data/BoardRepositoryCommonTest.kt` | JVM and WebAssembly (`kotlin.test`) |
+| `Page.withGridSize()`/`.withTileMoved()`/`.normalized()`, tile opacity/border fallback, and the landscape grid defaults | `shared/src/commonTest/.../model/PageTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
+| Landscape column/row-height math, label size search, `formatDecimal` | `shared/src/commonTest/.../ui/GridLayoutTest.kt`, `LabelTextTest.kt`, `FormatDecimalTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
+| `Board` page management (`withPageAdded`/`withPageRemoved`/`withPageRenamed`/`withCurrentPage`/`withHomePage`), `updatingTile`/`findTile`, `soundFileNames`, `Tile.isPlayable`, and `hasAnySound` | `shared/src/commonTest/.../model/BoardTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
+| `BoardRepository`'s own logic — save/load, missing-sound sanitizing, backup round-trip, the zip path guard, bundled boards — plus `SavedBoardRepository` basics, against in-memory storage | `shared/src/commonTest/.../data/BoardRepositoryCommonTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | The `FileStore` contract every implementation must meet; `JavaZipCodec` reading every zip in `presets/` | `shared/src/commonTest/.../data/FileStoreContractTest.kt` (in-memory store), `shared/src/androidHostTest/.../data/AndroidStorageTest.kt` (`FileSystemStore`, `JavaZipCodec`) | JVM and WebAssembly / JVM |
 | `BoardRepository` wired to real files, zips and assets, incl. the legacy-schema and `homePageIndex` migrations, additive-field defaults in `load()`, and every shipped built-in board | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
 | `SavedBoardRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/SavedBoardRepositoryTest.kt` | Robolectric |
 | `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, and saveBoardAs/openBoard | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
-| `BoardViewModel` smoke test — fallback board, tap to speak, an edit persisting, recent boards — on in-memory storage, proving it runs on the web too | `shared/src/commonTest/.../BoardViewModelCommonTest.kt` | JVM and WebAssembly (`kotlin.test`) |
+| `BoardViewModel` smoke test — fallback board, tap to speak, an edit persisting, recent boards — on in-memory storage, proving it runs on the web too | `shared/src/commonTest/.../BoardViewModelCommonTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | `BoardScreen`, incl. the sticky home row, swipe navigation, and idle-timeout auto-return | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 | Landscape grid, row height cap, drag steps, label size/font/caps, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
 

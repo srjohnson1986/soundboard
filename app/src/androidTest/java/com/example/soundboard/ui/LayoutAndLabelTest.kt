@@ -20,6 +20,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontListFontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -382,7 +383,10 @@ class LayoutAndLabelTest {
 
         val style = labelTextStyle("WATER")
         assertEquals(FontWeight.Bold, style.fontWeight)
-        assertEquals(LabelFont.ATKINSON_HYPERLEGIBLE.fontFamily(), style.fontFamily)
+        // The bundled Atkinson Hyperlegible family: the only label font with exactly a
+        // regular and a bold face (Lexend and the condensed font also have a medium one).
+        val fonts = (style.fontFamily as FontListFontFamily).fonts
+        assertEquals(listOf(FontWeight.Normal, FontWeight.Bold), fonts.map { it.weight })
         assertEquals(0, displayedCount("Water"))
     }
 

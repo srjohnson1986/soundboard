@@ -1,9 +1,6 @@
 package com.example.soundboard.ui
 
-import android.graphics.BitmapFactory
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
+import kotlin.time.Clock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -17,7 +14,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,18 +26,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.soundboard.BoardViewModel
-import com.example.soundboard.BoardViewModelFactory
 import com.example.soundboard.BoardRef
-import com.example.soundboard.data.UriPickedFile
-import com.example.soundboard.data.UriSaveTarget
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.TileBorder
@@ -49,6 +38,7 @@ import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.decodeToImageBitmap
 import kotlinx.coroutines.flow.collect
 
 /**
@@ -82,11 +72,7 @@ internal sealed interface BoardDialog {
 }
 
 @Composable
-fun BoardScreen(
-    vm: BoardViewModel = viewModel(
-        factory = BoardViewModelFactory(LocalContext.current.applicationContext as android.app.Application)
-    )
-) {
+fun BoardScreen(vm: BoardViewModel) {
     val board by vm.board.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
@@ -101,11 +87,10 @@ fun BoardScreen(
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
     var isDragActive by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
-    val context = LocalContext.current
 
     /** Restarts the auto-return idle timer (see the LaunchedEffect keyed on [lastInteractionAt]). */
     fun recordInteraction() {
-        lastInteractionAt = System.currentTimeMillis()
+        lastInteractionAt = Clock.System.now().toEpochMilliseconds()
     }
 
     /** Opens [dialog], first refreshing whatever list it shows from disk. */
@@ -195,11 +180,7 @@ fun BoardScreen(
     // Prevents auto-lock while the board is on screen — meant for boards mounted or left
     // open as a standing communication aid. Cleared onDispose so leaving BoardScreen (or
     // toggling the setting off) doesn't leave the window flag stuck on.
-    val view = LocalView.current
-    DisposableEffect(board.keepScreenAwake) {
-        view.keepScreenOn = board.keepScreenAwake
-        onDispose { view.keepScreenOn = false }
-    }
+    KeepScreenOn(board.keepScreenAwake)
 
     val pagerState = rememberPagerState(initialPage = board.currentPageIndex) { board.pages.size }
     // Guards the loop between the two effects below: true only while WE are
@@ -232,21 +213,10 @@ fun BoardScreen(
         }
     }
 
-    val exportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri -> uri?.let { vm.exportBoard(UriSaveTarget(context, it)) } }
-
-    val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri -> uri?.let { vm.importBoard(UriPickedFile(context, it)) } }
-
-    val strayExportLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/zip")
-    ) { uri -> uri?.let { vm.exportAndDeleteStrayClips(UriSaveTarget(context, it)) } }
-
-    val backgroundImagePicker = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia()
-    ) { uri -> uri?.let { vm.setBackgroundImage(UriPickedFile(context, it)) } }
+    val exportBackup = rememberSaveFileLauncher("application/zip", vm::exportBoard)
+    val importBackup = rememberOpenFileLauncher(listOf("application/zip"), vm::importBoard)
+    val exportStrayClips = rememberSaveFileLauncher("application/zip", vm::exportAndDeleteStrayClips)
+    val pickBackgroundImage = rememberPickImageLauncher(vm::setBackgroundImage)
 
     // Performance mode drops translucency and borders board-wide, whatever the settings say.
     val globalTileOpacity = if (performanceModeEnabled) 1f else board.tileOpacity
@@ -275,8 +245,8 @@ fun BoardScreen(
                         vm.refreshSavedBoards()
                     },
                     onOpenBoard = ::requestOpenBoard,
-                    onExportBackup = { exportLauncher.launch("soundboard-backup.zip") },
-                    onImportBackup = { importLauncher.launch(arrayOf("application/zip")) }
+                    onExportBackup = { exportBackup("soundboard-backup.zip") },
+                    onImportBackup = importBackup
                 )
             }
         ) { insets ->
@@ -393,7 +363,7 @@ fun BoardScreen(
                 speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                 onLabelChange = { vm.setLabel(editing.id, it) },
                 onTtsScriptChange = { vm.setTtsScript(editing.id, it) },
-                onSoundPicked = { vm.assignSound(editing.id, UriPickedFile(context, it)) },
+                onSoundPicked = { vm.assignSound(editing.id, it) },
                 onClear = { vm.clearTile(editing.id) },
                 onRemoveSound = { vm.removeSound(editing.id) },
                 onVolumeChange = { vm.setVolume(editing.id, it) },
@@ -427,9 +397,7 @@ fun BoardScreen(
             performanceModeEnabled = performanceModeEnabled,
             showMode = showMode,
             actions = vm,
-            onPickBackgroundImage = {
-                backgroundImagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-            },
+            onPickBackgroundImage = pickBackgroundImage,
             onBack = { showDialog(BoardDialog.Settings) },
             onDismiss = ::closeDialog
         )
@@ -474,7 +442,7 @@ fun BoardScreen(
 
         BoardDialog.StrayCleanup -> StrayCleanupDialog(
             clips = strayClips,
-            onExportAndDelete = { strayExportLauncher.launch("unused-clips.zip") },
+            onExportAndDelete = { exportStrayClips("unused-clips.zip") },
             onDelete = vm::deleteStrayClips,
             onDismiss = ::closeDialog
         )
@@ -596,7 +564,7 @@ private fun BoardBackground(board: Board, readImage: suspend (String) -> ByteArr
         value = backgroundImageFileName?.let { name ->
             withContext(Dispatchers.Default) {
                 runCatching {
-                    readImage(name)?.let { BitmapFactory.decodeByteArray(it, 0, it.size)?.asImageBitmap() }
+                    readImage(name)?.decodeToImageBitmap()
                 }.getOrNull()
             }
         }

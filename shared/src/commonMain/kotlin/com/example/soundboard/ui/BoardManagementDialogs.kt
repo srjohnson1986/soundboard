@@ -1,5 +1,6 @@
 package com.example.soundboard.ui
 
+import kotlin.time.Clock
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,7 +63,7 @@ private fun BoardRow(name: String, subtitle: String, onClick: () -> Unit) {
 
 /** Coarse "how long ago" for a saved board's timestamp — good enough for a picker list, no date library needed. */
 internal fun relativeSavedAt(savedAt: Long): String {
-    val elapsedMs = (System.currentTimeMillis() - savedAt).coerceAtLeast(0)
+    val elapsedMs = (Clock.System.now().toEpochMilliseconds() - savedAt).coerceAtLeast(0)
     val minutes = elapsedMs.milliseconds.inWholeMinutes
     val hours = minutes / 60
     val days = hours / 24
@@ -76,8 +77,8 @@ internal fun relativeSavedAt(savedAt: Long): String {
 
 /** Formats a byte count as a short human-readable size, e.g. "340 KB" or "2.1 MB". */
 private fun formatFileSize(bytes: Long): String = when {
-    bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
-    bytes >= 1_000 -> "%.0f KB".format(bytes / 1_000.0)
+    bytes >= 1_000_000 -> "${formatDecimal(bytes / 1_000_000.0, 1)} MB"
+    bytes >= 1_000 -> "${formatDecimal(bytes / 1_000.0, 0)} KB"
     else -> "$bytes B"
 }
 

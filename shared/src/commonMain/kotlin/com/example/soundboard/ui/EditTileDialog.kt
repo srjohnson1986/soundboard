@@ -1,7 +1,5 @@
 package com.example.soundboard.ui
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -33,7 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalContext
+import com.example.soundboard.data.PickedFile
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
 import kotlinx.coroutines.delay
@@ -48,7 +46,7 @@ internal fun EditTileDialog(
     speakUnrecordedTilesEnabled: Boolean,
     onLabelChange: (String) -> Unit,
     onTtsScriptChange: (String) -> Unit,
-    onSoundPicked: (android.net.Uri) -> Unit,
+    onSoundPicked: (PickedFile) -> Unit,
     onClear: () -> Unit,
     onRemoveSound: () -> Unit,
     onVolumeChange: (Float) -> Unit,
@@ -66,15 +64,10 @@ internal fun EditTileDialog(
     var volume by remember(tile.id) { mutableStateOf(tile.volume) }
     var micPermissionDenied by remember(tile.id) { mutableStateOf(false) }
     var recordingSeconds by remember(tile.id) { mutableIntStateOf(0) }
-    val context = LocalContext.current
 
-    val picker = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri -> uri?.let(onSoundPicked) }
+    val pickSound = rememberOpenFileLauncher(listOf("audio/*"), onSoundPicked)
 
-    val micPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
+    val requestMicrophone = rememberMicrophoneAccess { granted ->
         micPermissionDenied = !granted
         if (granted) onStartRecording()
     }
@@ -111,7 +104,7 @@ internal fun EditTileDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         OutlinedButton(
-                            onClick = { picker.launch(arrayOf("audio/*")) },
+                            onClick = pickSound,
                             enabled = !isRecording,
                             modifier = Modifier.weight(1f)
                         ) {
@@ -127,7 +120,7 @@ internal fun EditTileDialog(
                     }
                 } else {
                     OutlinedButton(
-                        onClick = { picker.launch(arrayOf("audio/*")) },
+                        onClick = pickSound,
                         enabled = !isRecording,
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -174,15 +167,7 @@ internal fun EditTileDialog(
                                 onStopRecording()
                             } else {
                                 micPermissionDenied = false
-                                val granted = androidx.core.content.ContextCompat.checkSelfPermission(
-                                    context,
-                                    android.Manifest.permission.RECORD_AUDIO
-                                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                                if (granted) {
-                                    onStartRecording()
-                                } else {
-                                    micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-                                }
+                                requestMicrophone()
                             }
                         },
                         modifier = Modifier.weight(1f)

@@ -1,6 +1,5 @@
 package com.example.soundboard.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,7 +34,7 @@ import com.example.soundboard.model.ShowModeSettings
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 
-internal const val SHOW_TEXT_OVERLAY_TAG = "show_text_overlay"
+const val SHOW_TEXT_OVERLAY_TAG = "show_text_overlay"
 
 /**
  * Show mode's text screen: [text] as large as it fits without splitting a word, white on

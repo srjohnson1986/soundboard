@@ -1,6 +1,6 @@
 package com.example.soundboard.ui
 
-import android.content.res.Configuration
+import com.example.soundboard.APP_VERSION_NAME
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -55,25 +55,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.soundboard.BuildConfig
 import com.example.soundboard.BoardRef
 import com.example.soundboard.RecentBoardItem
 import com.example.soundboard.model.Board
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Shown at the bottom of the menu; comes from `versionName` in app/build.gradle.kts, so there's one place to bump per release. */
-private const val APP_VERSION = "v${BuildConfig.VERSION_NAME}"
+private const val APP_VERSION = "v$APP_VERSION_NAME"
 
 private const val RELEASES_BASE_URL = "https://github.com/srjohnson1986/soundboard/releases"
 
@@ -120,7 +118,7 @@ internal fun BoardTopBar(
     // hamburger menu share one row instead of stacking title-bar-then-tab-row —
     // the tabs already scroll horizontally (PrimaryScrollableTabRow) when they
     // don't fit, so there's no loss of access, just less height spent on chrome.
-    if (LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+    if (isLandscape()) {
         CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
             Row(
                 modifier = Modifier
@@ -167,7 +165,7 @@ private fun HamburgerMenu(
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit
 ) {
-    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     var showMenu by remember { mutableStateOf(false) }
     var showRecentBoardsMenu by remember { mutableStateOf(false) }
 
@@ -318,11 +316,7 @@ private fun HamburgerMenu(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 },
-                onClick = menuAction {
-                    context.startActivity(
-                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(RELEASE_URL))
-                    )
-                }
+                onClick = menuAction { uriHandler.openUri(RELEASE_URL) }
             )
         }
     }

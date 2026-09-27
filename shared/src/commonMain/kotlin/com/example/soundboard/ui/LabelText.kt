@@ -5,8 +5,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.DeviceFontFamilyName
-import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
@@ -15,8 +13,12 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import com.example.soundboard.R
 import com.example.soundboard.model.LabelFont
+import com.example.soundboard.resources.Res
+import com.example.soundboard.resources.atkinson_hyperlegible_bold
+import com.example.soundboard.resources.atkinson_hyperlegible_regular
+import com.example.soundboard.resources.lexend
+import org.jetbrains.compose.resources.Font
 import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.Tile
 
@@ -33,31 +35,30 @@ internal fun tileDisplayText(tile: Tile, allCaps: Boolean): String {
     return if (allCaps) text.uppercase() else text
 }
 
-private val CondensedFamily = FontFamily(
-    Font(DeviceFontFamilyName("sans-serif-condensed"), FontWeight.Normal),
-    Font(DeviceFontFamilyName("sans-serif-condensed"), FontWeight.Medium),
-    Font(DeviceFontFamilyName("sans-serif-condensed"), FontWeight.Bold)
-)
-
-private val AtkinsonHyperlegibleFamily = FontFamily(
-    Font(R.font.atkinson_hyperlegible_regular, FontWeight.Normal),
-    Font(R.font.atkinson_hyperlegible_bold, FontWeight.Bold)
+// The bundled fonts come from Compose Resources, whose Font() is @Composable (on the web
+// it loads the file asynchronously), so these families are built in composition.
+@Composable
+private fun atkinsonHyperlegibleFamily() = FontFamily(
+    Font(Res.font.atkinson_hyperlegible_regular, FontWeight.Normal),
+    Font(Res.font.atkinson_hyperlegible_bold, FontWeight.Bold)
 )
 
 // One variable font file, pinned to each weight the labels use.
 @OptIn(ExperimentalTextApi::class)
-private val LexendFamily = FontFamily(
+@Composable
+private fun lexendFamily() = FontFamily(
     listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.Bold).map { weight ->
-        Font(R.font.lexend, weight, variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)))
+        Font(Res.font.lexend, weight, variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)))
     }
 )
 
+@Composable
 internal fun LabelFont.fontFamily(): FontFamily = when (this) {
     LabelFont.DEFAULT -> FontFamily.Default
-    LabelFont.CONDENSED -> CondensedFamily
+    LabelFont.CONDENSED -> condensedFontFamily
     LabelFont.SERIF -> FontFamily.Serif
-    LabelFont.ATKINSON_HYPERLEGIBLE -> AtkinsonHyperlegibleFamily
-    LabelFont.LEXEND -> LexendFamily
+    LabelFont.ATKINSON_HYPERLEGIBLE -> atkinsonHyperlegibleFamily()
+    LabelFont.LEXEND -> lexendFamily()
 }
 
 internal fun LabelFont.displayName(): String = when (this) {
@@ -75,9 +76,10 @@ internal fun LabelFont.displayName(): String = when (this) {
 @Composable
 internal fun baseLabelTextStyle(labelStyle: LabelStyle): TextStyle {
     val labelLarge = MaterialTheme.typography.labelLarge
-    return remember(labelLarge, labelStyle.font, labelStyle.bold) {
+    val fontFamily = labelStyle.font.fontFamily()
+    return remember(labelLarge, fontFamily, labelStyle.bold) {
         labelLarge.copy(
-            fontFamily = labelStyle.font.fontFamily(),
+            fontFamily = fontFamily,
             fontWeight = if (labelStyle.bold) FontWeight.Bold else labelLarge.fontWeight,
             // labelLarge's own 20sp-on-14sp spacing, as a ratio so it scales with the size.
             lineHeight = (20f / 14f).em
@@ -101,7 +103,7 @@ internal fun rememberGridLabelStyle(
     val base = baseLabelTextStyle(labelStyle)
     val measurer = rememberTextMeasurer()
     // Order doesn't change what fits, so a drag-reorder doesn't redo the measuring.
-    val distinct = remember(texts) { texts.toSortedSet().toList() }
+    val distinct = remember(texts) { texts.distinct().sorted() }
     return remember(distinct, boxWidthPx, boxHeightPx, base, labelStyle.minSizeSp, labelStyle.maxSizeSp) {
         val min = labelStyle.minSizeSp.toInt()
         val size = if (boxWidthPx <= 0 || boxHeightPx <= 0) {

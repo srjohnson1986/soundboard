@@ -52,10 +52,11 @@ browser or file manager the first time.
 - **[Built-in boards](presets/README.md):** the boards that ship inside the
   app, and how they're made.
 
-The [wiki](https://github.com/srjohnson1986/soundboard/wiki) mirrors the user
-guide, architecture, releasing and iOS docs for anyone browsing there. `docs/` is
-the source of truth: update the relevant doc in the same change as the
-feature, and `scripts/sync-wiki.sh` copies it to the wiki at release time.
+The [wiki](https://github.com/srjohnson1986/soundboard/wiki) mirrors this README
+(as its Home page) and the user guide, architecture, releasing and iOS docs for anyone
+browsing there. They're the source of truth: update the relevant doc in the same change
+as the feature, and the **Sync wiki** workflow copies it to the wiki when the change
+merges (`scripts/sync-wiki.sh`). Nothing on the wiki is edited by hand.
 
 ## Web version
 

@@ -151,13 +151,14 @@ keeps the APK as a workflow artifact.
    ```
    (Or `gh release upload vX.Y.Z soundboard.apk --clobber` if the release
    already exists. `soundboard.apk` at the repo root is gitignored.)
-6. Sync the wiki, which mirrors `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`,
-   `docs/IOS.md` and this file for people who browse the wiki instead of the repo:
+6. Check the wiki is current. The **Sync wiki** workflow (`.github/workflows/wiki.yml`)
+   mirrors `README.md` (as its Home page), `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`,
+   `docs/IOS.md` and this file to the wiki on every merge that changes them (#272), so
+   there's normally nothing to do: check its latest run went green. To sync by hand:
    ```bash
    scripts/sync-wiki.sh
    ```
-   It copies those files to the wiki's User-Guide, Architecture, Releasing
-   and iOS pages, pointing their `../` repo links at GitHub, and only pushes if
-   something changed (`--dry-run` shows the diff without pushing). Edit the
-   docs here, never the wiki pages directly; the next sync overwrites them.
-   The wiki's Home page is the one page kept by hand.
+   It points links to mirrored files at their wiki pages and other repo links at
+   GitHub, and only pushes if something changed (`--dry-run` shows the diff without
+   pushing). Edit the docs here, never the wiki: every page is overwritten by the
+   next sync, Home included.

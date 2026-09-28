@@ -1,7 +1,6 @@
 package com.example.soundboard.ui
 
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -18,7 +17,7 @@ import com.example.soundboard.model.Tile
 internal fun SpeakDialog(onSpeak: (String) -> Unit, onDismiss: () -> Unit) {
     var text by remember { mutableStateOf("") }
 
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Speak") },
         text = {

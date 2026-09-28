@@ -16,6 +16,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
@@ -282,6 +283,20 @@ class BoardScreenUiTest : BoardUiTest() {
 
         waitForIdle()
         assertEquals(3, app.vm.board.value.pages.single().columns)
+    }
+
+    // #233: in a landscape phone window a dialog has little height, and its lower controls are
+    // only reachable if its content scrolls. performScrollTo fails without a scrolling parent.
+    @Test
+    fun inLandscapePageOptionsScrollsToItsLastAction() = runUiTest(landscape = true) {
+        launchBoard(twoPages())
+
+        // The menu is taller than a landscape window too; it scrolls on its own (a Material
+        // dropdown), so its lower items are reached the same way.
+        onNodeWithContentDescription("Menu").performClick()
+        onNodeWithText("Page options", substring = true).performScrollTo().performClick()
+
+        onNodeWithText("Delete page").performScrollTo().assertIsDisplayed()
     }
 
     @Test

@@ -27,6 +27,7 @@ import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
@@ -80,6 +81,17 @@ class BoardViewModel(
 
     init {
         speaker.configure(_speech.value)
+    }
+
+    /**
+     * Whether to remind about a backup (#249): the board has had changes that aren't in one
+     * for [BACKUP_REMINDER_AFTER], and "Later" isn't holding the reminder off.
+     */
+    private val _backupReminderDue = MutableStateFlow(false)
+    val backupReminderDue: StateFlow<Boolean> = _backupReminderDue.asStateFlow()
+
+    init {
+        refreshBackupReminder()
     }
 
     /** Whether speech works on this device; null while it's starting. See [Speaker.available]. */
@@ -142,6 +154,8 @@ class BoardViewModel(
      * editor's own Play button calls [play] directly, so it never opens the text screen.
      */
     fun activate(tile: Tile) {
+        // A board left open for days gets its reminder without waiting for an edit.
+        refreshBackupReminder()
         if (!tile.isPlayable(_board.value.speakUnrecordedTilesEnabled)) return
         val showMode = _showMode.value
         val text = tile.speechText.trim()
@@ -585,6 +599,7 @@ class BoardViewModel(
         viewModelScope.launch {
             val ok = withContext(ioDispatcher) { boardRepo.exportTo(target) }
             _message.value = if (ok) "Exported backup" else "Export failed"
+            if (ok) markBackedUp()
         }
     }
 
@@ -721,6 +736,8 @@ class BoardViewModel(
             val loaded = withContext(ioDispatcher) { boardRepo.load() }
             _board.value = loaded
             withContext(ioDispatcher) { loadSounds(loaded) }
+            // Nothing on a board just opened or restored needs backing up yet.
+            markBackedUp()
             _message.value = successMessage
         } else {
             _message.value = failureMessage
@@ -746,6 +763,8 @@ class BoardViewModel(
         val next = board.normalized()
         val removedSounds = _board.value.soundFileNames - next.soundFileNames
         _board.value = next
+        if (devicePrefs.unbackedChangesSince == null) devicePrefs.unbackedChangesSince = now()
+        refreshBackupReminder()
 
         removedSounds.forEach { player.unload(it) }
 
@@ -771,6 +790,27 @@ class BoardViewModel(
 
     private val saveMutex = Mutex()
 
+    /** "Later" on the backup reminder: puts it away for [BACKUP_REMINDER_SNOOZE]. */
+    fun snoozeBackupReminder() {
+        devicePrefs.backupReminderSnoozedUntil = now() + BACKUP_REMINDER_SNOOZE.inWholeMilliseconds
+        refreshBackupReminder()
+    }
+
+    private fun markBackedUp() {
+        devicePrefs.unbackedChangesSince = null
+        devicePrefs.backupReminderSnoozedUntil = null
+        refreshBackupReminder()
+    }
+
+    private fun refreshBackupReminder() {
+        val since = devicePrefs.unbackedChangesSince
+        val snoozedUntil = devicePrefs.backupReminderSnoozedUntil
+        val time = now()
+        _backupReminderDue.value = since != null &&
+            time - since >= BACKUP_REMINDER_AFTER.inWholeMilliseconds &&
+            (snoozedUntil == null || time >= snoozedUntil)
+    }
+
     override fun onCleared() {
         recorder.cancel()
         // viewModelScope is already cancelled here, so the abandoned file is deleted on a
@@ -785,6 +825,12 @@ class BoardViewModel(
     }
 
     companion object {
+        /** How long changes can go without a backup before the board reminds about one (#249). */
+        val BACKUP_REMINDER_AFTER = 7.days
+
+        /** How long "Later" puts the reminder away for. */
+        val BACKUP_REMINDER_SNOOZE = 7.days
+
         /** What Settings' Preview button says in the chosen voice. */
         const val SPEECH_PREVIEW = "Hello. This is how the board sounds."
 

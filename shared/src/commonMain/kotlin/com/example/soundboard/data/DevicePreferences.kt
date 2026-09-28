@@ -64,6 +64,19 @@ class DevicePreferences(private val prefs: KeyValueStore) {
             prefs.putInt(KEY_SPEECH_PITCH_PERCENT, value.pitchPercent.coerceIn(SpeechSettings.PERCENT_RANGE))
         }
 
+    /**
+     * When the board first changed after its last backup, in epoch milliseconds; null while
+     * everything on it is in a backup (#249). Per device, like the recordings it protects.
+     */
+    var unbackedChangesSince: Long?
+        get() = prefs.getString(KEY_UNBACKED_CHANGES_SINCE)?.toLongOrNull()
+        set(value) = prefs.putString(KEY_UNBACKED_CHANGES_SINCE, value?.toString())
+
+    /** Until when "Later" on the backup reminder keeps it away, in epoch milliseconds. */
+    var backupReminderSnoozedUntil: Long?
+        get() = prefs.getString(KEY_BACKUP_REMINDER_SNOOZED_UNTIL)?.toLongOrNull()
+        set(value) = prefs.putString(KEY_BACKUP_REMINDER_SNOOZED_UNTIL, value?.toString())
+
     companion object {
         /** The SharedPreferences file these live in on Android. */
         const val PREFS_NAME = "device_preferences"
@@ -82,6 +95,8 @@ class DevicePreferences(private val prefs: KeyValueStore) {
         private const val KEY_SHOW_MODE_MUTE_SOUNDS = "show_mode_mute_sounds"
         private const val KEY_SHOW_MODE_FLIPPED = "show_mode_flipped"
         private const val KEY_SPEECH_VOICE_ID = "speech_voice_id"
+        private const val KEY_UNBACKED_CHANGES_SINCE = "unbacked_changes_since"
+        private const val KEY_BACKUP_REMINDER_SNOOZED_UNTIL = "backup_reminder_snoozed_until"
         private const val KEY_SPEECH_RATE_PERCENT = "speech_rate_percent"
         private const val KEY_SPEECH_PITCH_PERCENT = "speech_pitch_percent"
     }

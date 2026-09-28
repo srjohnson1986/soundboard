@@ -20,8 +20,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Soundboard">
 
+        <!-- Rotating, resizing (split screen, foldables) and a hardware keyboard don't recreate
+             the activity: Compose re-lays out the same screen, so an open menu or dialog, and
+             whatever's typed in it, stays as it was. Every layout reads orientation and size
+             from Compose (LocalConfiguration, LocalWindowInfo), not from resources. -->
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:exported="true"
             android:theme="@style/Theme.Soundboard">
             <intent-filter>

@@ -288,6 +288,17 @@ class BoardScreenUiTest : BoardUiTest() {
     // #233: in a landscape phone window a dialog has little height, and its lower controls are
     // only reachable if its content scrolls. performScrollTo fails without a scrolling parent.
     @Test
+    fun inLandscapeTheTileEditorScrollsToItsLastControl() = runUiTest(landscape = true) {
+        launchBoard(oneTile(Tile(id = "a")))
+
+        // Landscape shows several blank tiles for a one-tile page; any of them opens the editor.
+        onAllNodesWithText("+").onFirst().performClick()
+
+        onNodeWithText("Override border").performScrollTo().assertIsDisplayed()
+        onNodeWithText("Save").assertIsDisplayed()
+    }
+
+    @Test
     fun inLandscapePageOptionsScrollsToItsLastAction() = runUiTest(landscape = true) {
         launchBoard(twoPages())
 

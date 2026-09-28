@@ -583,7 +583,12 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   Material's `AlertDialog` with its text wrapped in a vertical scroll, between a
   fixed title and fixed buttons, because a phone in landscape leaves a dialog
   little height and one that can't scroll cuts off its lower controls. Use it for
-  any new dialog rather than `AlertDialog`; don't add a scroll inside it too. The
+  any new dialog rather than `AlertDialog`; don't add a scroll inside it too. It
+  takes the platform's default dialog width from `LocalDialogUsesPlatformWidth`,
+  which is always true in the app. The Android host tests turn it off in a
+  landscape window only: Robolectric sizes a platform-width dialog there so that a
+  text field in it never finishes measuring, stuck in its native line breaker
+  (robolectric/robolectric#8460, #234). The
   dropdown menus (☰, Switch board) are Material's `DropdownMenu`, which scrolls
   on its own.
 - **Only one dialog is ever open, so it's one piece of state.** Every dialog is

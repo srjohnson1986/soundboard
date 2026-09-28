@@ -1,6 +1,5 @@
 package com.example.soundboard.ui
 
-import kotlin.time.Clock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -23,23 +22,25 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.soundboard.BoardViewModel
 import com.example.soundboard.BoardRef
+import com.example.soundboard.BoardViewModel
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.TileBorder
+import org.jetbrains.compose.resources.decodeToImageBitmap
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
-import org.jetbrains.compose.resources.decodeToImageBitmap
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.withContext
 
 /**
  * The one dialog [BoardScreen] has open, if any. Every dialog is modal, so at most one is
@@ -178,11 +179,12 @@ fun BoardScreen(vm: BoardViewModel) {
     // SettingsDialog; 0 disables it). Restarts on every interaction
     // (lastInteractionAt changing cancels the previous delay). Held off while Show mode's
     // text is up, so closing it always lands back on the page it was opened from.
+    val idleMinute = LocalIdleMinute.current
     LaunchedEffect(lastInteractionAt, board.homePageIndex, board.idleTimeoutMinutes, shownText != null) {
         if (shownText != null) return@LaunchedEffect
         val home = board.homePageIndex ?: return@LaunchedEffect
         if (board.idleTimeoutMinutes <= 0) return@LaunchedEffect
-        delay(board.idleTimeoutMinutes.minutes)
+        delay(idleMinute * board.idleTimeoutMinutes)
         if (home != board.currentPageIndex) {
             vm.switchPage(home)
         }
@@ -648,3 +650,10 @@ private fun BoardBackground(board: Board, readImage: suspend (String) -> ByteArr
 
 /** What a backup is called when the save picker opens. */
 private const val BACKUP_FILE_NAME = "soundboard-backup.zip"
+
+/**
+ * How long one minute of the board's idle timeout lasts: a minute, in the app. The UI tests
+ * shorten it (#279): Compose's test clock steps a wait one frame at a time, which in the
+ * browser holds its only thread for as long as a real minute's frames take.
+ */
+internal val LocalIdleMinute = staticCompositionLocalOf { 1.minutes }

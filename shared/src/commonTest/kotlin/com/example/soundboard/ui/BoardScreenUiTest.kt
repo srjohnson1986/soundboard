@@ -25,6 +25,7 @@ import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
 import kotlin.math.abs
 import kotlin.test.Test
+import kotlin.time.Duration.Companion.seconds
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -351,14 +352,19 @@ class BoardScreenUiTest : BoardUiTest() {
 
     @Test
     fun afterTheIdleTimeoutTheBoardGoesBackToTheHomePage() = runUiTest {
-        val app = launchBoard(twoPages(firstIsHome = true))
+        // A timeout minute lasts a second here: the test clock steps through a wait frame by
+        // frame, and six real minutes of it held the browser's thread long enough to lose it (#279).
+        val app = launchBoard(twoPages(firstIsHome = true), idleMinute = 1.seconds)
+        val timeout = app.vm.board.value.idleTimeoutMinutes * 1_000L
 
         onNodeWithText("Second").performClick()
         waitForIdle()
         assertEquals(1, app.vm.board.value.currentPageIndex)
 
-        advanceClock(6 * 60 * 1000L)
+        advanceClock(timeout - 500)
+        assertEquals(1, app.vm.board.value.currentPageIndex)
 
+        advanceClock(1_000)
         assertEquals(0, app.vm.board.value.currentPageIndex)
     }
 

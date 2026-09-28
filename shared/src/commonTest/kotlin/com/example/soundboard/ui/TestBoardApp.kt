@@ -34,6 +34,7 @@ import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -102,7 +103,8 @@ abstract class BoardUiTest : UiTest() {
     fun ComposeUiTest.launchBoard(
         board: Board,
         builtIns: Map<String, BuiltInBoard> = emptyMap(),
-        relockAfterIdle: Duration = EditingLock.RELOCK_AFTER_IDLE
+        relockAfterIdle: Duration = EditingLock.RELOCK_AFTER_IDLE,
+        idleMinute: Duration = 1.minutes
     ): TestBoardApp {
         val app = TestBoardApp(board, builtIns, dispatcher)
         check(app.vm.board.value.pages.first().id == board.pages.first().id) { "the board didn't load" }
@@ -111,7 +113,8 @@ abstract class BoardUiTest : UiTest() {
             val shown by app.vm.board.collectAsState()
             CompositionLocalProvider(
                 LocalDialogUsesPlatformWidth provides platformWidthDialogs,
-                LocalRelockAfterIdle provides relockAfterIdle
+                LocalRelockAfterIdle provides relockAfterIdle,
+                LocalIdleMinute provides idleMinute
             ) {
                 SoundboardTheme(themeMode = shown.themeMode) { BoardScreen(vm = app.vm) }
             }

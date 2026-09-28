@@ -24,7 +24,7 @@ class DevicePreferencesTest {
     }
 
     @Test
-    fun `showMode defaults to off with a 10 second timer, tap to close, sounds on, and not flipped`() {
+    fun `showMode defaults to off with a 10 second timer and tap to close and sounds on and not flipped`() {
         assertEquals(
             ShowModeSettings(enabled = false, timerSeconds = 10, tapToClose = true, muteSounds = false, flipped = false),
             prefs().showMode
@@ -57,7 +57,7 @@ class DevicePreferencesTest {
     }
 
     @Test
-    fun `speech defaults to the device's voice at normal speed and pitch, and persists`() {
+    fun `speech defaults to the device's voice at normal speed and pitch and persists`() {
         assertEquals(SpeechSettings(), prefs().speech)
 
         prefs().speech = SpeechSettings(voiceId = "en-us-x-iob-local", ratePercent = 75, pitchPercent = 125)
@@ -66,7 +66,7 @@ class DevicePreferencesTest {
     }
 
     @Test
-    fun `going back to the default voice forgets the chosen one, and odd speeds are kept in range`() {
+    fun `going back to the default voice forgets the chosen one and odd speeds are kept in range`() {
         prefs().speech = SpeechSettings(voiceId = "some-voice")
         prefs().speech = SpeechSettings(voiceId = null, ratePercent = 5, pitchPercent = 9_000)
 

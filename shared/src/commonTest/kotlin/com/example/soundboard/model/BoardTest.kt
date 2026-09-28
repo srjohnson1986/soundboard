@@ -33,7 +33,7 @@ class BoardTest {
     }
 
     @Test
-    fun `withPageAdded uses the board's configured default grid size, tiles included`() {
+    fun `withPageAdded uses the board's configured default grid size tiles included`() {
         // 6x6 = 36 tiles, deliberately more than Page's own 16-tile default — a naive
         // Page(rows=6, columns=6) with no explicit tiles would under-fill the grid.
         val board = Board(
@@ -227,7 +227,7 @@ class BoardTest {
     }
 
     @Test
-    fun `tile and page opacity overrides default to null (inherit)`() {
+    fun `tile and page opacity overrides default to null meaning inherit`() {
         assertEquals(null, Tile().opacity)
         assertEquals(null, Page().opacity)
     }
@@ -239,7 +239,7 @@ class BoardTest {
     }
 
     @Test
-    fun `tile and page border overrides default to null (inherit)`() {
+    fun `tile and page border overrides default to null meaning inherit`() {
         assertEquals(null, Tile().border)
         assertEquals(null, Page().border)
     }
@@ -379,7 +379,7 @@ class BoardTest {
     }
 
     @Test
-    fun `opacityFor and borderFor prefer the tile, then the page, then the board`() {
+    fun `opacityFor and borderFor prefer the tile then the page then the board`() {
         val boardBorder = TileBorder()
         val pageBorder = TileBorder(enabled = true, widthDp = 2f)
         val tileBorder = TileBorder(enabled = true, widthDp = 4f)

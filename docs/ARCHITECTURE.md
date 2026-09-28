@@ -926,6 +926,10 @@ WebAssembly.
 - **`Dispatchers.Main`** is an `UnconfinedTestDispatcher` in view model tests, since
   `viewModelScope` has no `Main` dispatcher off a device: the shared tests set it in
   `@BeforeTest`, and the app's use `MainDispatcherRule` (`@get:Rule`).
+- **Test names can't use `,` `(` `)` `%` `.` `;` `:` `/` `[` `]` `<` `>`**, even in
+  backticks: the shared tests also compile for iOS (#265), and Kotlin/Native rejects
+  those characters in names. The JVM and the browser accept them, so only the iOS
+  workflow would notice.
 - **Robolectric needs a version that supports the project's `targetSdk`.**
   `testOptions.unitTests.isIncludeAndroidResources = true` is also required —
   without it, Robolectric silently fails to find app resources.

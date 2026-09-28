@@ -104,8 +104,14 @@ jobs:
       - name: Check it's signed with the release key
         run: |
           apksigner=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
-          digest=$("$apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk \
-            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          echo "Using $apksigner"
+          # Shown in the log so a mismatch can be diagnosed; certificates aren't secret.
+          "$apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk \
+            2>&1 | tee "$RUNNER_TEMP/apksigner.txt"
+          # Newer apksigner versions name the signer differently ("Signer #1", "Signer
+          # (minSdkVersion=...)"), so take the first SHA-256 certificate digest line.
+          digest=$(grep -i -m1 'certificate SHA-256 digest' "$RUNNER_TEMP/apksigner.txt" \
+            | awk '{print $NF}' | tr -d '\r' | tr 'A-F' 'a-f' || true)
           if [ "$digest" != "$RELEASE_CERT_SHA256" ]; then
             echo "::error::APK is signed with certificate '$digest', not the release key $RELEASE_CERT_SHA256."
             exit 1

@@ -14,6 +14,9 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -347,6 +350,18 @@ class LayoutAndLabelTest {
     }
 
     // --- Label text (#142) ---
+
+    @Test
+    fun theTileEditorScrollsInLandscape() {
+        // #233: on a phone in landscape the editor's lower controls were out of reach.
+        rotate(landscape = true)
+        launchWith(Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a"))))))
+
+        composeRule.onAllNodesWithText("+").onFirst().performClick()
+
+        composeRule.onNodeWithText("Override border").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Save").assertIsDisplayed()
+    }
 
     @Test
     fun aFourColumnPageWithALongLabelStaysAtTheMinimumSizeWithoutSplittingAWord() {

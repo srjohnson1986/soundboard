@@ -94,7 +94,7 @@ server stopped the page reloads and the tap still speaks. Run it locally after
 | `shared/.../ui/BoardTopBar.kt` | Title, page tabs (with the long-press gesture) and the hamburger menu. |
 | `shared/.../ui/PageGrid.kt` | `PageGrid`, `PinnedRow` and `TileCard`: grid layout, drag-to-reorder, tile colors. |
 | `shared/.../ui/EditTileDialog.kt`, `SettingsDialog.kt`, `PageDialogs.kt`, `BoardManagementDialogs.kt`, `SpeakDialog.kt` | The dialogs, grouped by what they edit. |
-| `shared/.../ui/Controls.kt` | Shared building blocks: `SwitchRow`, `HelperText`, `ColorPicker`, `SegmentedChoice`, `OverrideSection`, `OptionDropdown`, `Stepper`, opacity/border controls. |
+| `shared/.../ui/Controls.kt` | Shared building blocks: `AppDialog` (every dialog, see below), `SwitchRow`, `HelperText`, `ColorPicker`, `SegmentedChoice`, `OverrideSection`, `OptionDropdown`, `Stepper`, opacity/border controls. |
 | `MainActivity.kt` | Just sets content to `SoundboardTheme { BoardScreen() }`. |
 
 Data flows one way: UI calls a `BoardViewModel` function → it updates
@@ -579,6 +579,13 @@ repeated pieces (a label with a switch, helper text, a color swatch row, an
 "override the board's setting" switch) come from `ui/Controls.kt` rather than
 being rebuilt in each dialog. A few things worth knowing if you're touching it:
 
+- **Every dialog is an `AppDialog`, whose content always scrolls** (#233). It's
+  Material's `AlertDialog` with its text wrapped in a vertical scroll, between a
+  fixed title and fixed buttons, because a phone in landscape leaves a dialog
+  little height and one that can't scroll cuts off its lower controls. Use it for
+  any new dialog rather than `AlertDialog`; don't add a scroll inside it too. The
+  dropdown menus (☰, Switch board) are Material's `DropdownMenu`, which scrolls
+  on its own.
 - **Only one dialog is ever open, so it's one piece of state.** Every dialog is
   modal, so `BoardScreen` keeps a single `openDialog: BoardDialog?` instead of
   a show-flag or page index per dialog. The page-scoped variants carry the

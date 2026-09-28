@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,7 +25,7 @@ internal fun OpenBoardDialog(
     onSelect: (BoardRef, String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Open board") },
         text = {
@@ -94,7 +93,7 @@ internal fun StrayCleanupDialog(
     onDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Clean up unused clips") },
         text = {
@@ -135,7 +134,7 @@ internal fun StrayCleanupDialog(
 /** Confirms replacing a board that has sounds on it with the board named [label]. */
 @Composable
 internal fun ConfirmOpenBoardDialog(label: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Replace current board with \"$label\"?") },
         text = {

@@ -1,8 +1,6 @@
 package com.example.soundboard.ui
 
 import androidx.compose.foundation.border
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,7 +17,6 @@ import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -56,7 +53,7 @@ internal fun PageOptionsDialog(
     onDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = {
             if (isHome) {
@@ -185,12 +182,11 @@ internal fun GridSizeDialog(
     var customLandscapeColumns by remember { mutableIntStateOf(landscapeColumns ?: defaultLandscapeColumns) }
     val shrinking = portraitRows * portraitColumns < rows * columns
 
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Grid size") },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text("Portrait", style = MaterialTheme.typography.labelMedium)
@@ -277,12 +273,11 @@ internal fun PageAppearanceDialog(
     onBorderChange: (TileBorder?) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Page appearance") },
         text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Page color", style = MaterialTheme.typography.bodyMedium)
@@ -316,7 +311,7 @@ internal fun ConfirmDeletePageDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text("Delete \"$pageName\"?") },
         text = {

@@ -1,5 +1,6 @@
 package com.example.soundboard.ui
 
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -203,7 +204,7 @@ internal fun TextInputDialog(
 ) {
     var text by remember { mutableStateOf(initial) }
 
-    AlertDialog(
+    AppDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
@@ -327,4 +328,27 @@ internal fun formatDecimal(value: Double, decimals: Int): String {
     val whole = scaled / scale
     if (decimals == 0) return "$sign$whole"
     return "$sign$whole." + (scaled % scale).toString().padStart(decimals, '0')
+}
+
+/**
+ * Every dialog in the app: Material's AlertDialog with its [text] always able to scroll, between
+ * a fixed [title] and fixed buttons. A phone in landscape leaves a dialog little height, and one
+ * whose content can't scroll there cuts off its lower controls (#233). Using this for every
+ * dialog means a new one scrolls too, without anyone having to remember to add it.
+ */
+@Composable
+internal fun AppDialog(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    dismissButton: (@Composable () -> Unit)? = null,
+    title: (@Composable () -> Unit)? = null,
+    text: (@Composable () -> Unit)? = null
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        confirmButton = confirmButton,
+        dismissButton = dismissButton,
+        title = title,
+        text = text?.let { content -> { Box(Modifier.verticalScroll(rememberScrollState())) { content() } } }
+    )
 }

@@ -1,0 +1,37 @@
+name: Sync wiki
+
+# Mirrors README.md and docs/ to the GitHub wiki (scripts/sync-wiki.sh) on every merge
+# that changes them, so the wiki never lags the repo (#272). Nothing on the wiki is
+# edited by hand: the README is its Home page (#273). "Run workflow" syncs on demand.
+on:
+  push:
+    branches: [master]
+    paths: ['docs/**', 'README.md', 'scripts/sync-wiki.sh']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# One sync at a time, in order, so an older one never overwrites a newer.
+concurrency:
+  group: wiki
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The workflow's own token can push to this repo's wiki. If it ever can't, add a
+      # token that can as the WIKI_TOKEN repository secret, and it's used instead.
+      - name: Sync the docs to the wiki
+        env:
+          WIKI_TOKEN: ${{ secrets.WIKI_TOKEN || github.token }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          bash scripts/sync-wiki.sh

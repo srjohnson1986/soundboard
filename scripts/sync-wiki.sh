@@ -17,6 +17,7 @@ PAGES=(
   "docs/USER_GUIDE.md:User-Guide.md"
   "docs/ARCHITECTURE.md:Architecture.md"
   "docs/RELEASING.md:Releasing.md"
+  "docs/IOS.md:iOS.md"
 )
 
 dry_run=false
@@ -37,9 +38,11 @@ for pair in "${PAGES[@]}"; do
   {
     echo "> Mirrored from [\`$src\`]($BLOB_URL/$src) at \`$commit\`. Edit it there, not here."
     echo
-    # Links like ](../presets/README.md) are relative to docs/ in the repo;
-    # on the wiki they'd point nowhere, so send them to the file on GitHub.
-    sed -E "s#\]\(\.\./([^)]+)\)#](${BLOB_URL}/\1)#g" "$src"
+    # Links like ](../presets/README.md) are relative to docs/ in the repo, and
+    # ](ARCHITECTURE.md) to its neighbors; on the wiki they'd point nowhere, so
+    # send them to the file on GitHub.
+    sed -E -e "s#\]\(\.\./([^)]+)\)#](${BLOB_URL}/\1)#g" \
+      -e "s#\]\(([A-Z_]+\.md[^)]*)\)#](${BLOB_URL}/docs/\1)#g" "$src"
   } > "$dest"
 done
 

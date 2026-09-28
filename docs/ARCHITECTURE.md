@@ -37,7 +37,10 @@ the screen on, the back gesture, whether the window is in landscape, dynamic
 color, and the condensed label font. On Android each is the code that used to be
 inline in the screen (`Platform.android.kt`); on the web (`Platform.wasmJs.kt`)
 the pickers are a file chooser, saving is a download, keep-screen-on is a Wake
-Lock, and there's no back gesture or dynamic color to follow. The app version shown in the menu is
+Lock, and there's no back gesture or dynamic color to follow. On iOS
+(`Platform.ios.kt`) the Files picker opens files and asks where a saved one goes,
+and keep-screen-on is `UIApplication.idleTimerDisabled`. docs/IOS.md covers the iOS
+app. The app version shown in the menu is
 `APP_VERSION_NAME`, generated into `shared` from `gradle.properties`, which the
 Android build also reads for `versionName`/`versionCode`.
 
@@ -46,9 +49,12 @@ Android build also reads for `versionName`/`versionCode`.
 which is what the app and the Android tests call. `FileStore` is suspending
 because the web's storage is asynchronous. A new platform capability follows the
 same pattern: an interface in `shared`, and an implementation for each platform
-in the same change. Moved code keeps its package (`com.example.soundboard.model`,
-`...data`), so moving a file there changes no imports. Its tests run twice, on the JVM and compiled to WebAssembly
-(`./gradlew :shared:allTests`), which is what keeps it building for the web.
+(Android, the web and iOS) in the same change. Where a platform can't do it, give it
+an honest stand-in and say so, as `UnknownMediaVolume` does for the web; don't leave
+it out. Moved code keeps its package (`com.example.soundboard.model`,
+`...data`), so moving a file there changes no imports. Its tests run on the JVM, compiled to WebAssembly, and on the iPhone simulator
+(`./gradlew :shared:allTests`; the iOS part on a Mac, or in the iOS workflow), which
+is what keeps it building for all three.
 One side effect of the module boundary: Kotlin won't smart-cast a model
 property from `app/` (`if (tile.fileName != null) use(tile.fileName)` fails
 to compile); read it into a local `val` first.

@@ -51,7 +51,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `with nothing saved, load returns a default board`() = runTest {
+    fun `with nothing saved load returns a default board`() = runTest {
         assertFalse(repo.hasSavedBoard())
         assertEquals(Board().pages.size, repo.load().pages.size)
     }
@@ -81,7 +81,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a backup export then import restores the board, its sounds and its background`() = runTest {
+    fun `a backup export then import restores the board and its sounds and its background`() = runTest {
         files.write(repo.soundPath("a.m4a"), byteArrayOf(1, 2))
         val background = repo.importBackgroundImage(FakePickedFile(byteArrayOf(9), extension = "jpg"))!!
         val board = boardWith(Tile(id = "a", label = "Hey", fileName = "a.m4a")).copy(backgroundImageFileName = background)
@@ -126,7 +126,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a bundled board imports like a backup, and a missing one fails quietly`() = runTest {
+    fun `a bundled board imports like a backup and a missing one fails quietly`() = runTest {
         val bundledZip = zip.write(listOf(ZipEntryData("board.json", BoardJson.encodeToString(Board(name = "Built in")).encodeToByteArray())))
         val repo = BoardRepository(files, zip, FakeBundledBoards(mapOf("built-in.zip" to bundledZip)))
 
@@ -152,7 +152,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `originalTile finds a built-in tile by name, ignoring case and spaces, with its clip`() = runTest {
+    fun `originalTile finds a built-in tile by name ignoring case and spaces with its clip`() = runTest {
         val repo = BoardRepository(
             files, zip,
             FakeBundledBoards(mapOf("built-in.zip" to builtInZip(Tile(id = "w", label = "Water", fileName = "water.wav", volume = 0.5f), sounds = mapOf("water.wav" to byteArrayOf(4, 2)))))
@@ -166,7 +166,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `originalTile falls back to a tile's speech when its clip is missing, and to nothing when it has no speech`() = runTest {
+    fun `originalTile falls back to a tile's speech when its clip is missing and to nothing when it has no speech`() = runTest {
         val repo = BoardRepository(
             files, zip,
             FakeBundledBoards(
@@ -187,7 +187,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `originalTile gives a speaking tile's speech, and nothing for a tile that makes no sound`() = runTest {
+    fun `originalTile gives a speaking tile's speech and nothing for a tile that makes no sound`() = runTest {
         val repo = BoardRepository(
             files, zip,
             FakeBundledBoards(
@@ -220,7 +220,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `save then load round-trips a tile's ttsScript, and so does a backup`() = runTest {
+    fun `save then load round-trips a tile's ttsScript and so does a backup`() = runTest {
         repo.save(boardWith(Tile(id = "a", label = "Water", ttsScript = "I would like a glass of water please")))
 
         assertEquals("I would like a glass of water please", repo.load().findTile("a")?.ttsScript)
@@ -247,7 +247,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `save then load round-trips pages, the current page, sticky home row, home page, page color and tile shape`() = runTest {
+    fun `save then load round-trips pages and the current page and sticky home row and home page and page color and tile shape`() = runTest {
         files.put(repo.soundPath("hey.mp3"), byteArrayOf(1))
         val board = Board(
             pages = listOf(
@@ -327,7 +327,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a board from before sticky home row, home page and page color loads with their defaults`() = runTest {
+    fun `a board from before sticky home row and home page and page color loads with their defaults`() = runTest {
         writeBoardJson(
             """
             {
@@ -347,7 +347,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `a board from before pages existed still loads, ignoring fields it doesn't know`() = runTest {
+    fun `a board from before pages existed still loads ignoring fields it doesn't know`() = runTest {
         // Unknown fields on the board ("theme") and a tile ("isFavorite"), a tile without the
         // newer "colorArgb", and no "pages" at all: the flat shape used before pages.
         writeBoardJson(
@@ -375,7 +375,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `strayFiles lists exactly the sounds not kept, without deleting them`() = runTest {
+    fun `strayFiles lists exactly the sounds not kept without deleting them`() = runTest {
         files.put(repo.soundPath("keep.mp3"), byteArrayOf(1))
         files.put(repo.soundPath("stray.mp3"), byteArrayOf(1))
 
@@ -394,7 +394,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `exportFiles zips exactly the requested sounds, flat by name`() = runTest {
+    fun `exportFiles zips exactly the requested sounds flat by name`() = runTest {
         files.put(repo.soundPath("a.mp3"), "aaa".encodeToByteArray())
         files.put(repo.soundPath("b.mp3"), "bbb".encodeToByteArray())
         val target = CapturingSaveTarget()

@@ -47,7 +47,7 @@ class LabelTextTest {
     }
 
     @Test
-    fun `tile display text covers labeled, unnamed and blank tiles`() {
+    fun `tile display text covers labeled and unnamed and blank tiles`() {
         assertEquals("Water", tileDisplayText(Tile(label = "Water"), allCaps = false))
         assertEquals("WATER", tileDisplayText(Tile(label = "Water"), allCaps = true))
         assertEquals("Unnamed", tileDisplayText(Tile(fileName = "a.mp3"), allCaps = false))
@@ -64,7 +64,7 @@ class LabelTextTest {
     }
 
     @Test
-    fun `a word too wide for the grid size shrinks only its own label, as little as it can`() {
+    fun `a word too wide for the grid size shrinks only its own label as little as it can`() {
         // "Something's" is 11 characters: it needs 9 (11 x 9 = 99), below a floor of 10, so it
         // fits at no allowed size and keeps the grid's.
         assertEquals(emptyMap(), labelSizeExceptions(listOf("Something's wrong"), gridSp = 14, floorSp = 10, fits = ::fitsByLongestWord))

@@ -56,7 +56,7 @@ abstract class FileStoreContractTest {
     }
 
     @Test
-    fun `list returns only the files directly inside the directory, with their sizes`() = runTest {
+    fun `list returns only the files directly inside the directory with their sizes`() = runTest {
         val store = newStore()
         store.write("sounds/a.m4a", byteArrayOf(1, 2))
         store.write("sounds/b.wav", byteArrayOf(1, 2, 3))

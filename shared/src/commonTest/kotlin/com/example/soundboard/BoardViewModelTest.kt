@@ -93,7 +93,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `the speaker starts with this device's stored voice, speed and pitch`() = runTest(dispatcher) {
+    fun `the speaker starts with this device's stored voice and speed and pitch`() = runTest(dispatcher) {
         devicePrefs.speech = SpeechSettings(voiceId = "v2", ratePercent = 75)
 
         val vm = newViewModel()
@@ -103,7 +103,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `changing the voice, speed or pitch reaches the speaker and survives a fresh view model`() = runTest(dispatcher) {
+    fun `changing the voice or speed or pitch reaches the speaker and survives a fresh view model`() = runTest(dispatcher) {
         val vm = newViewModel()
 
         vm.setSpeechVoice("v2")
@@ -125,7 +125,7 @@ class BoardViewModelTest {
     // --- Caregiver lock (#251) ---
 
     @Test
-    fun `the lock is off by default, and turning it on locks at once and on every launch after`() = runTest(dispatcher) {
+    fun `the lock is off by default and turning it on locks at once and on every launch after`() = runTest(dispatcher) {
         val vm = newViewModel()
         assertFalse(vm.editingLocked.value)
 
@@ -150,7 +150,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `with the lock off, relocking does nothing`() = runTest(dispatcher) {
+    fun `with the lock off relocking does nothing`() = runTest(dispatcher) {
         val vm = newViewModel()
         vm.setEditingLockEnabled(true)
         vm.setEditingLockEnabled(false)
@@ -174,7 +174,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `changes that go a week without a backup bring the reminder, which lasts across launches`() = runTest(dispatcher) {
+    fun `changes that go a week without a backup bring the reminder and it lasts across launches`() = runTest(dispatcher) {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
@@ -244,7 +244,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `a tap checks the media volume again, in case a change went unreported`() = runTest(dispatcher) {
+    fun `a tap checks the media volume again in case a change went unreported`() = runTest(dispatcher) {
         val vm = newViewModel()
 
         vm.play(Tile(id = "a", fileName = "a.mp3"))
@@ -612,7 +612,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `a recording that finishes after its edit was cancelled is deleted, not handed back`() = runTest(dispatcher) {
+    fun `a recording that finishes after its edit was cancelled is deleted rather than handed back`() = runTest(dispatcher) {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
         vm.startRecording()
@@ -630,7 +630,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `saveTile saves every field at once, trimmed and clamped`() = runTest(dispatcher) {
+    fun `saveTile saves every field at once trimmed and clamped`() = runTest(dispatcher) {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
@@ -670,7 +670,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `recording start-stop hands back the recorded file, loaded, for the tile to save`() = runTest(dispatcher) {
+    fun `recording start-stop hands back the recorded file loaded for the tile to save`() = runTest(dispatcher) {
         repo.save(boardWith(Tile(id = "a")))
         val vm = newViewModel()
 
@@ -1105,7 +1105,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `activate in Show mode with nothing to show just plays, even when muted`() = runTest(dispatcher) {
+    fun `activate in Show mode with nothing to show just plays even when muted`() = runTest(dispatcher) {
         val vm = newViewModel()
         vm.setShowModeEnabled(true)
         vm.setShowModeMuteSounds(true)
@@ -1276,7 +1276,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `once a tile's sound is cleared, shrinking the grid can hide it again`() = runTest(dispatcher) {
+    fun `once a tile's sound is cleared shrinking the grid can hide it again`() = runTest(dispatcher) {
         repo.save(
             Board(pages = listOf(Page(rows = 2, columns = 2, tiles = listOf(Tile(id = "a"), Tile(id = "b"), Tile(id = "c"), Tile(id = "d", label = "Water", fileName = "d.mp3")))))
         )
@@ -1539,7 +1539,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `resize, setTileAspectRatio and setPageColor target the given page, not the current one`() = runTest(dispatcher) {
+    fun `resize and setTileAspectRatio and setPageColor target the given page rather than the current one`() = runTest(dispatcher) {
         // PageOptionsDialog opens for whichever page was long-pressed, which may not be
         // the page currently on screen — these must not silently fall back to currentPage.
         repo.save(Board(pages = listOf(Page(name = "A"), Page(rows = 1, columns = 2, name = "B")), currentPageIndex = 0))
@@ -1768,7 +1768,7 @@ class BoardViewModelTest {
     }
 
     @Test
-    fun `restoring a tile's original sound brings back its clip from the built-in board, pending until Save`() = runTest(dispatcher) {
+    fun `restoring a tile's original sound brings back its clip from the built-in board pending until Save`() = runTest(dispatcher) {
         // #208: the Jeremy board's "Water" tile plays water.wav.
         repo.save(boardWith(Tile(id = "w", label = "Water", fileName = "mine.m4a")).copy(builtInSource = "jeremy-care-board.zip"))
         files.put("sounds/mine.m4a", "mine".encodeToByteArray())

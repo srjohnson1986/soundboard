@@ -20,7 +20,7 @@ class SavedBoardRepositoryTest {
     )
 
     @Test
-    fun `save then load round-trips the board, ttsScript included`() = runTest {
+    fun `save then load round-trips the board with its ttsScript`() = runTest {
         val board = boardNamed(
             "My Layout",
             Tile(id = "a", label = "Hey", fileName = "a.mp3"),

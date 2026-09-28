@@ -198,17 +198,30 @@ jobs:
           path: build/reports/kover/htmlUnit
           if-no-files-found: ignore
 
-  # The required check. It passes when all three jobs passed, or when they were skipped because
-  # only docs changed; it runs even then (always()), so the check always reports (#183).
+  # The docs' links, anchors, and the paths and Gradle projects they name all exist
+  # (scripts/check-docs.py, #274). A few seconds, and it runs on every change, docs-only
+  # ones included: a renamed file or heading fails here instead of leaving a doc stale.
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check the docs
+        run: python3 scripts/check-docs.py
+
+  # The required check. It passes when the docs check passed and the three build jobs did
+  # too, or were skipped because only docs changed; it runs even then (always()), so the
+  # check always reports (#183).
   build-and-test:
-    needs: [changes, android, web, coverage]
+    needs: [changes, docs, android, web, coverage]
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: All three passed, or only docs changed
+      - name: The docs check passed, and all three build jobs did, or only docs changed
         run: |
-          echo "changes: ${{ needs.changes.result }}, code: ${{ needs.changes.outputs.code }}"
+          echo "changes: ${{ needs.changes.result }}, code: ${{ needs.changes.outputs.code }}, docs: ${{ needs.docs.result }}"
           echo "android: ${{ needs.android.result }}, web: ${{ needs.web.result }}, coverage: ${{ needs.coverage.result }}"
-          if [ "${{ needs.changes.result }}" != "success" ]; then exit 1; fi
+          if [ "${{ needs.changes.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.changes.outputs.code }}" != "true" ]; then exit 0; fi
           [ "${{ needs.android.result }}" = "success" ] && [ "${{ needs.web.result }}" = "success" ] && [ "${{ needs.coverage.result }}" = "success" ]

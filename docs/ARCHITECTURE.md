@@ -905,7 +905,9 @@ emulator. In CI, the **CI** workflow runs the former and gates merging, as three
 jobs side by side: `android` (lint, the app's unit tests, the debug APK),
 `web` (`:shared:allTests` on the JVM and in headless Chrome, `:web:allTests`,
 and on master the production web bundle and its smoke test) and `coverage` (below),
-with `build-and-test`, the required check, passing when all three do. The build cache is saved by runs on master and
+plus `docs` (`scripts/check-docs.py`: every relative link, heading anchor, repo path and
+Gradle project the Markdown names exists, #274), which runs on docs-only changes too.
+`build-and-test`, the required check, passes when all four do. The build cache is saved by runs on master and
 read by pull requests, so a PR only rebuilds and retests what it changed. The
 separate **UI tests** workflow (`.github/workflows/ui-tests.yml`) runs the
 latter on an API 35 emulator for every PR, after every merge to master (which

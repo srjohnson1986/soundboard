@@ -1,0 +1,59 @@
+name: Docs reminder
+
+# A nudge, not a gate (#275): when a pull request changes user-facing code (a
+# platform's UI, the shared UI, or its resources) but neither docs/USER_GUIDE.md nor
+# README.md, it comments once to say so. The comment goes away once either doc is
+# changed or the "no docs needed" label is added. This check never fails.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: docs-reminder-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  remind:
+    # A pull request from a fork gets a read-only token, which can't comment.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remind about the docs if user-facing code changed without them
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          files=$(gh pr view "$PR" --repo "$REPO" --json files -q '.files[].path')
+          labels=$(gh pr view "$PR" --repo "$REPO" --json labels -q '.labels[].name')
+          # What someone using the app sees: the UI (shared, or a platform's), its resources,
+          # and each app's own screens and shells. Tests don't count.
+          user_facing=$(echo "$files" | grep -E '^(shared/src/[A-Za-z]+Main/kotlin/.*/ui/|shared/src/commonMain/composeResources/|app/src/main/|web/src/wasmJsMain/|ios/src/iosMain/|ios/app/)' || true)
+          docs=$(echo "$files" | grep -E '^(README\.md|docs/USER_GUIDE\.md)$' || true)
+          marker='<!-- docs-reminder -->'
+          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate --jq ".[] | select(.body | contains(\"$marker\")) | .id" | head -1)
+
+          if [ -n "$user_facing" ] && [ -z "$docs" ] && ! grep -qx 'no docs needed' <<< "$labels"; then
+            if [ -n "$existing" ]; then
+              echo "Already reminded."
+              exit 0
+            fi
+            {
+              echo "$marker"
+              echo "**Docs reminder:** this changes code people see or use, but not \`docs/USER_GUIDE.md\` or \`README.md\`:"
+              echo
+              echo "$user_facing" | head -15 | sed 's/^/- `/; s/$/`/'
+              echo
+              echo "If something changed that a user would notice (a control, a setting, a message, a menu), update the user guide (and the README's feature list if it's a feature) in this pull request. If nothing did, add the **no docs needed** label and this comment goes away. (AGENTS.md, \"Workflow\")"
+            } > reminder.md
+            gh pr comment "$PR" --repo "$REPO" --body-file reminder.md
+          elif [ -n "$existing" ]; then
+            gh api -X DELETE "repos/$REPO/issues/comments/$existing"
+            echo "Docs changed or labeled: reminder removed."
+          else
+            echo "Nothing to remind about."
+          fi

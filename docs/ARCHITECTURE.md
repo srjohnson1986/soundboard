@@ -915,6 +915,11 @@ occasionally flake on timing-sensitive gestures. Its HTML report is uploaded as
 the `ui-test-report` artifact. `LayoutAndLabelTest` rotates the device itself
 (`UiAutomation.setRotation`) and restores portrait afterwards.
 
+**The Docs reminder** (#275, `.github/workflows/docs-reminder.yml`) comments on a pull
+request that changes user-facing code (a UI package, resources, an app's own screens or
+shell) without `docs/USER_GUIDE.md` or `README.md`, and removes the comment once they
+change or the **no docs needed** label is added. It never fails; it's a reminder.
+
 **Coverage** (#222) is measured with Kover over the JVM tests: the app's debug unit
 tests and `shared`'s Android host tests together, configured in the root
 `build.gradle.kts`. `./gradlew :koverHtmlReportUnit` writes the report for all the

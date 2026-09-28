@@ -46,7 +46,11 @@ before changing code, [docs/IOS.md](docs/IOS.md) for iOS, and
   emulator) and **iOS** (macOS runner) are advisory. For a pull request that's about
   iOS, wait for `ios-tests` too.
 - Update `docs/` in the same pull request: `USER_GUIDE.md` for anything a user sees,
-  `ARCHITECTURE.md` for structure and tests, and `IOS.md` for iOS.
+  `ARCHITECTURE.md` for structure and tests, and `IOS.md` for iOS. CI's `docs` check fails
+  on a broken link, anchor or path, and the **Docs reminder** comments on a pull request
+  that changes user-facing code without the user guide or README. Answer it with the docs,
+  or with the **no docs needed** label. The wiki follows `docs/` and the README
+  automatically.
 - Test on an emulator, never on the family's phone. Before a release, install it over
   the previous release rather than on a cleared install (RELEASING.md, step 2).
 

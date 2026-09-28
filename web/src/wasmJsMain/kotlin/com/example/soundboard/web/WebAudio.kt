@@ -9,6 +9,8 @@ import com.example.soundboard.data.uint8ArrayToByteArray
 import kotlin.js.Promise
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.await
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /**
@@ -60,6 +62,9 @@ class WebAudioPlayer(private val files: FileStore, private val scope: CoroutineS
 
 /** [Speaker] on the browser's speech synthesis, with whatever voice the browser defaults to. */
 class WebSpeaker : Speaker {
+    /** A browser without speech synthesis can't speak at all; otherwise it can (#248). */
+    override val available: StateFlow<Boolean?> = MutableStateFlow(speechSupported())
+
     override fun speak(text: String) = speakText(text)
     override fun stop() = stopSpeaking()
     override fun shutdown() = stopSpeaking()
@@ -150,6 +155,8 @@ private fun speakText(text: String): Unit = js(
 )
 
 private fun stopSpeaking(): Unit = js("{ speechSynthesis.cancel(); }")
+
+private fun speechSupported(): Boolean = js("typeof speechSynthesis !== 'undefined'")
 
 /** The first recording format the browser supports, or "" to let it choose. */
 private fun supportedRecordingType(): String = js(

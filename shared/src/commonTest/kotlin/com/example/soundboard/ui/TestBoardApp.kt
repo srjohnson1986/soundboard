@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import com.example.soundboard.BoardViewModel
+import com.example.soundboard.audio.FakeMediaVolume
 import com.example.soundboard.audio.FakePlayer
 import com.example.soundboard.audio.FakeRecorder
 import com.example.soundboard.audio.FakeSpeaker
@@ -50,6 +51,7 @@ class TestBoardApp(board: Board, builtIns: Map<String, BuiltInBoard> = emptyMap(
     val player = FakePlayer()
     val recorder = FakeRecorder()
     val speaker = FakeSpeaker()
+    val mediaVolume = FakeMediaVolume()
     val devicePrefs = DevicePreferences(MapKeyValueStore())
 
     init {
@@ -67,7 +69,8 @@ class TestBoardApp(board: Board, builtIns: Map<String, BuiltInBoard> = emptyMap(
         devicePrefs = devicePrefs,
         recentBoardsRepo = RecentBoardsRepository(files),
         ioDispatcher = dispatcher,
-        now = { 42L }
+        now = { 42L },
+        mediaVolume = mediaVolume
     )
 }
 

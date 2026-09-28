@@ -109,6 +109,21 @@ is the exception: it clears the tile straight away.
 tap **Speak** to hear it read aloud. It's for something no tile covers, and
 it doesn't change the board.
 
+## When the board can't be heard
+
+A red bar above the board says why taps are silent, for as long as they are:
+
+- **The media volume is off**: tiles play at the phone's media volume, so turn it
+  up with the volume buttons (in the app they always change the media volume).
+- **Speech isn't working on this device**: tiles without a recording can't speak.
+  Check the phone's text-to-speech settings (Settings → Accessibility →
+  Text-to-speech output), and that a voice for your language is downloaded if
+  the phone will be used without internet. The bar only shows when the board
+  has tiles that speak, and goes away once speech works again.
+
+The web version can't read the computer's volume, so it only shows the second
+one, when the browser can't speak at all.
+
 ## Show mode
 
 Show mode puts a tile's words on screen for someone to read, instead of (or as

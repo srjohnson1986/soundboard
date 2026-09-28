@@ -1,5 +1,6 @@
 package com.example.soundboard
 
+import com.example.soundboard.audio.FakeMediaVolume
 import com.example.soundboard.audio.FakePlayer
 import com.example.soundboard.audio.FakeRecorder
 import com.example.soundboard.audio.FakeSpeaker
@@ -61,6 +62,7 @@ class BoardViewModelTest {
     private val speaker = FakeSpeaker()
     private val devicePrefs = DevicePreferences(prefsStore)
     private val recentBoardsRepo = RecentBoardsRepository(files)
+    private val mediaVolume = FakeMediaVolume()
 
     @BeforeTest
     fun setMain() = Dispatchers.setMain(dispatcher)
@@ -69,7 +71,7 @@ class BoardViewModelTest {
     fun resetMain() = Dispatchers.resetMain()
 
     private fun newViewModel() =
-        BoardViewModel(repo, player, recorder, savedBoardRepo, speaker, devicePrefs, recentBoardsRepo, ioDispatcher = dispatcher)
+        BoardViewModel(repo, player, recorder, savedBoardRepo, speaker, devicePrefs, recentBoardsRepo, ioDispatcher = dispatcher, mediaVolume = mediaVolume)
 
     private fun boardWith(vararg tiles: Tile) = Board(
         pages = listOf(Page(rows = 1, columns = tiles.size, tiles = tiles.toList()))
@@ -83,6 +85,28 @@ class BoardViewModelTest {
         vm.play(tile)
 
         assertEquals(listOf("a.mp3" to 0.7f), player.played)
+    }
+
+    @Test
+    fun `a tap checks the media volume again, in case a change went unreported`() = runTest(dispatcher) {
+        val vm = newViewModel()
+
+        vm.play(Tile(id = "a", fileName = "a.mp3"))
+
+        assertEquals(1, mediaVolume.refreshes)
+    }
+
+    @Test
+    fun `speech availability and a muted media volume come through for the board to show`() = runTest(dispatcher) {
+        val vm = newViewModel()
+        assertEquals(true, vm.speechAvailable.value)
+        assertFalse(vm.mediaMuted.value)
+
+        speaker.available.value = false
+        mediaVolume.muted.value = true
+
+        assertEquals(false, vm.speechAvailable.value)
+        assertTrue(vm.mediaMuted.value)
     }
 
     @Test

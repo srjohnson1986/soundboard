@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -36,6 +37,8 @@ class TtsSpeakerTest {
         assumeTrue("the speech engine didn't start", waitFor(10_000) { speaker.isReady })
 
         assertTrue("never started speaking", waitFor(10_000) { speaker.isSpeaking })
+        // #248: a working engine reports itself available, so the board shows no warning.
+        assertEquals(true, speaker.available.value)
 
         speaker.stop()
         assertTrue("didn't stop", waitFor(2_000) { !speaker.isSpeaking })

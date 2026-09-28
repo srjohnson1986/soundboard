@@ -1,5 +1,7 @@
 package com.example.soundboard.audio
 
+import kotlinx.coroutines.flow.MutableStateFlow
+
 /** Records calls instead of touching real audio. Loads and plays are treated as instant. */
 class FakePlayer : Player {
     val loaded = mutableListOf<String>()
@@ -69,6 +71,7 @@ class FakeRecorder : Recorder {
 /** Records calls instead of touching a real TTS engine. */
 class FakeSpeaker : Speaker {
     val spoken = mutableListOf<String>()
+    override val available = MutableStateFlow<Boolean?>(true)
     var stopped = false
     var shutdown = false
 
@@ -82,5 +85,16 @@ class FakeSpeaker : Speaker {
 
     override fun shutdown() {
         shutdown = true
+    }
+}
+
+/** A media volume a test can turn off; counts the checks it's asked for. */
+class FakeMediaVolume : MediaVolume {
+    override val muted = MutableStateFlow(false)
+    var refreshes = 0
+        private set
+
+    override fun refresh() {
+        refreshes++
     }
 }

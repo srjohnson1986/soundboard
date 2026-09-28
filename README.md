@@ -9,12 +9,19 @@ have it speak its words aloud with the device's text-to-speech voice.
   its home page on its own, and keep the home page's first row pinned above
   every other page for things that must always be within reach.
 - **Speak...:** type any phrase no tile covers and have it read aloud.
+- **Voice:** choose the voice speaking tiles use, from those on the device that
+  work offline, and its speed and pitch.
 - **Show mode:** a tapped tile's words also fill the screen in large white text
   on black, for someone to read, with the option to mute the sound.
 - **Legible labels:** each page's labels size themselves to fit its tiles,
   with two easy-to-read fonts bundled.
 - **Saved boards and backups:** save a whole board to come back to later,
-  switch between boards, or export everything (sounds included) to a zip.
+  switch between boards, or export everything (sounds included) to a zip. The
+  board reminds you when its changes have gone a week without a backup.
+- **Caregiver lock:** hide everything that changes the board, so it can't be
+  changed by accident; hold Unlock for 3 seconds to get it back.
+- **Never silently silent:** if the media volume is off or the device's speech
+  isn't working, the board says so instead of just not making a sound.
 
 It's made to be sideloaded onto a particular device, not published on the Play
 Store. The only permission it asks for is the microphone, and only the first

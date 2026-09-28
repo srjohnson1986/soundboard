@@ -130,7 +130,9 @@ That measures the JVM tests' coverage (report in `build/reports/kover/htmlUnit`)
 fails if the core (`data`, `model`, `BoardViewModel`) drops below 90%.
 
 GitHub Actions runs lint, the unit tests, the browser tests, a debug build and a
-coverage check on every pull request, split into three jobs that run side by side.
+coverage check on every pull request, split into three jobs that run side by side,
+plus a check that every link, heading anchor, file path and Gradle project the docs
+name still exists (`scripts/check-docs.py`), which also runs on docs-only changes.
 Two advisory workflows run beside them: the UI tests on an Android emulator
 (emulators occasionally flake), and **iOS** on a macOS runner, which builds the
 shared code and the iOS app, runs the tests on the iPhone simulator, and launches the
@@ -150,7 +152,7 @@ has a checklist for it.
 A "Protect master" ruleset enforces that workflow:
 - `master` can't be deleted or force-pushed.
 - Changes reach it only through a pull request; no approval is needed.
-- The CI `build-and-test` check must pass before merging. It passes when all
-  of CI's jobs (`android`, `web` and `coverage`) passed, or when a pull request
-  only changes Markdown, which skips them.
+- The CI `build-and-test` check must pass before merging. It passes when the
+  `docs` check passed and so did all of CI's build jobs (`android`, `web` and
+  `coverage`), which a pull request that only changes Markdown skips.
 - Repository admins can bypass the rules in an emergency.

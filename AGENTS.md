@@ -58,6 +58,7 @@ before changing code, [docs/IOS.md](docs/IOS.md) for iOS, and
 ./gradlew connectedDebugAndroidTest           # emulator UI tests
 ./gradlew :web:wasmJsBrowserDevelopmentRun    # the web app at http://localhost:8080
 ./gradlew :koverHtmlReportUnit :verifyCoreCoverage
+python3 scripts/check-docs.py                # every link, anchor and path the docs name exists
 ./gradlew :shared:recordRoborazziAndroidHostTest   # re-record screenshots after a deliberate UI change
 ```
 

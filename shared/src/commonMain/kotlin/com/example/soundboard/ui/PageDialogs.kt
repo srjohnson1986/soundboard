@@ -281,7 +281,7 @@ internal fun PageAppearanceDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Page color", style = MaterialTheme.typography.bodyMedium)
-                ColorPicker(selectedArgb = page.color, onSelect = onColorChange)
+                ColorPicker(selectedArgb = page.color, onSelect = onColorChange, noneLabel = "Default color")
                 HelperText("Tints this page's tab and its filled tiles. A tile's own color always wins.")
                 SectionDivider()
                 OverrideSection(

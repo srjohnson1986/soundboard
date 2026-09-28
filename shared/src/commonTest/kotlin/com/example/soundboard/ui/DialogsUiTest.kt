@@ -1,5 +1,6 @@
 package com.example.soundboard.ui
 
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -8,7 +9,12 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyChild
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
@@ -18,6 +24,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
@@ -29,6 +36,7 @@ import com.example.soundboard.model.Page
 import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
+import com.example.soundboard.ui.theme.presetColors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -400,6 +408,70 @@ class DialogsUiTest : BoardUiTest() {
         assertNull(app.vm.board.value.pages[1].opacity)
     }
 
+    // --- Color swatches (#245): named and selectable, for screen readers and for these tests ---
+
+    @Test
+    fun aPageColorIsPickedByNameAndShowsAsSelected() = runUiTest {
+        val app = launchBoard(twoPages())
+
+        longPressPageTab("First")
+        onNodeWithText("Page appearance").performClick()
+        onNodeWithContentDescription("Default color").assertIsSelected()
+        pickSwatch("Blue")
+
+        waitUntil(timeoutMillis = 2_000) { app.vm.board.value.pages[0].color == BLUE }
+        onNodeWithContentDescription("Blue").assertIsSelected()
+        onNodeWithContentDescription("Default color").assertIsNotSelected()
+
+        pickSwatch("Default color")
+        waitUntil(timeoutMillis = 2_000) { app.vm.board.value.pages[0].color == null }
+    }
+
+    @Test
+    fun aTilesColorIsPickedByNameAndSavedWithTheTile() = runUiTest {
+        val app = launchBoard(oneTile())
+
+        onNodeWithText("+").performClick()
+        pickSwatch("Teal")
+        onNodeWithText("Save").performClick()
+
+        waitUntil(timeoutMillis = 2_000) { app.vm.board.value.findTile("a")?.colorArgb == TEAL }
+    }
+
+    @Test
+    fun theBackgroundColorIsPickedByNameAndClearTakesItOff() = runUiTest {
+        val app = launchBoard(oneTile())
+
+        openSettingsGroup("Look")
+        onNodeWithContentDescription("No background color").performScrollTo().assertIsSelected()
+        // Look has two pickers, the background's and then the border's.
+        pickSwatch("Green", picker = 0)
+        waitUntil(timeoutMillis = 2_000) { app.vm.board.value.backgroundColorArgb == GREEN }
+
+        onNodeWithText("Back").performClick()
+        onNodeWithText("System theme · background color").assertIsDisplayed()
+        onNodeWithText("Look").performClick()
+        onNodeWithText("Clear").performScrollTo().assertIsEnabled().performClick()
+
+        waitUntil(timeoutMillis = 2_000) { app.vm.board.value.backgroundColorArgb == null }
+        onNodeWithContentDescription("No background color").performScrollTo().assertIsSelected()
+    }
+
+    @Test
+    fun theBordersColorIsPickedByNameAndItsNoneIsRecommended() = runUiTest {
+        val app = launchBoard(oneTile())
+
+        openSettingsGroup("Look")
+        clickSwitchBeside("Show border")
+        onNodeWithContentDescription("Recommended").performScrollTo().assertIsSelected()
+        // Look has two pickers, the background's and then the border's.
+        onAllNodesWithContentDescription("Purple").assertCountEquals(2)
+        pickSwatch("Purple", picker = 1)
+
+        waitUntil(timeoutMillis = 2_000) { app.vm.board.value.tileBorder.colorArgb == PURPLE }
+        assertNull(app.vm.board.value.backgroundColorArgb)
+    }
+
     // --- Helpers ---
 
     /** Opens the ☰ menu and picks [label] from it. */
@@ -415,6 +487,19 @@ class DialogsUiTest : BoardUiTest() {
         waitForIdle()
     }
 
+    /**
+     * Picks the swatch named [name] from the [picker]th color picker on screen. The swatches
+     * are a sideways-scrolling row wider than a phone's dialog, so it scrolls that row to the
+     * swatch first; performScrollTo only scrolls the dialog.
+     */
+    private fun ComposeUiTest.pickSwatch(name: String, picker: Int = 0) {
+        val row = onAllNodes(hasScrollAction() and hasAnyChild(hasContentDescription(name)))[picker]
+        row.performScrollTo()
+        row.performScrollToNode(hasContentDescription(name))
+        onAllNodesWithContentDescription(name)[picker].performClick()
+        waitForIdle()
+    }
+
     /** Opens the dropdown labeled [label] and picks [option]. */
     private fun ComposeUiTest.pickOption(label: String, option: String) {
         onNodeWithText(label).performScrollTo().performClick()
@@ -422,3 +507,10 @@ class DialogsUiTest : BoardUiTest() {
         waitForIdle()
     }
 }
+
+private val BLUE = presetArgb("Blue")
+private val TEAL = presetArgb("Teal")
+private val GREEN = presetArgb("Green")
+private val PURPLE = presetArgb("Purple")
+
+private fun presetArgb(name: String): Int = presetColors.first { it.name == name }.color.toArgb()

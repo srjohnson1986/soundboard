@@ -374,6 +374,7 @@ private fun LookSettings(board: Board, actions: BoardSettingsActions, onPickBack
     ColorPicker(
         selectedArgb = board.backgroundColorArgb,
         onSelect = actions::setBackgroundColor,
+        noneLabel = "No background color",
         showSelection = !hasBackgroundImage
     )
     Row(

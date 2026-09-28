@@ -22,6 +22,12 @@ const val TEST_WINDOW_HEIGHT_DP = 640
 @OptIn(ExperimentalTestApi::class)
 expect fun runUiTest(landscape: Boolean = false, block: suspend ComposeUiTest.() -> Unit): TestResult
 
+/**
+ * Whether the board's dialogs keep the platform's default width in this test: yes, except in a
+ * landscape window on the Android host JVM (see [LocalDialogUsesPlatformWidth], #234).
+ */
+expect fun dialogsUsePlatformWidth(): Boolean
+
 /** Closes the open dropdown menu, the way a user would on the platform. */
 @OptIn(ExperimentalTestApi::class)
 expect fun ComposeUiTest.closeMenu()

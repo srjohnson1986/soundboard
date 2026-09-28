@@ -20,8 +20,20 @@ actual abstract class UiTest actual constructor()
 @OptIn(ExperimentalTestApi::class)
 actual fun runUiTest(landscape: Boolean, block: suspend ComposeUiTest.() -> Unit): TestResult {
     if (landscape) RuntimeEnvironment.setQualifiers("w640dp-h320dp-land")
-    runComposeUiTest(block = block)
+    inLandscapeWindow = landscape
+    try {
+        runComposeUiTest(block = block)
+    } finally {
+        inLandscapeWindow = false
+    }
 }
+
+private var inLandscapeWindow = false
+
+// In a landscape window, Robolectric gives a platform-width dialog a width at which a text field
+// in it never finishes measuring: its native line breaker doesn't return. Only then, dialogs
+// size themselves (Material's own 280-560dp) instead. robolectric/robolectric#8460, #234.
+actual fun dialogsUsePlatformWidth(): Boolean = !inLandscapeWindow
 
 // Back. A tap outside doesn't reach the menu's window here: the test taps the node's own window.
 @OptIn(ExperimentalTestApi::class)

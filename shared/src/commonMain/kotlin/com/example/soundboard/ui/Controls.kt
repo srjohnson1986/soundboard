@@ -1,5 +1,7 @@
 package com.example.soundboard.ui
 
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -349,6 +351,14 @@ internal fun AppDialog(
         confirmButton = confirmButton,
         dismissButton = dismissButton,
         title = title,
-        text = text?.let { content -> { Box(Modifier.verticalScroll(rememberScrollState())) { content() } } }
+        text = text?.let { content -> { Box(Modifier.verticalScroll(rememberScrollState())) { content() } } },
+        properties = DialogProperties(usePlatformDefaultWidth = LocalDialogUsesPlatformWidth.current)
     )
 }
+
+/**
+ * Whether dialogs take the platform's default width: always, in the app. Only the Android host
+ * tests turn it off, for landscape windows, where Robolectric sizes a platform-width dialog so
+ * that a text field in it never finishes measuring (robolectric/robolectric#8460, #234).
+ */
+internal val LocalDialogUsesPlatformWidth = staticCompositionLocalOf { true }

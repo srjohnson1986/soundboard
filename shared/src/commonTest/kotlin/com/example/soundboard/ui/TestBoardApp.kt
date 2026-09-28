@@ -1,5 +1,6 @@
 package com.example.soundboard.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.ComposeUiTest
@@ -88,9 +89,12 @@ abstract class BoardUiTest : UiTest() {
     fun ComposeUiTest.launchBoard(board: Board, builtIns: Map<String, BuiltInBoard> = emptyMap()): TestBoardApp {
         val app = TestBoardApp(board, builtIns, dispatcher)
         check(app.vm.board.value.pages.first().id == board.pages.first().id) { "the board didn't load" }
+        val platformWidthDialogs = dialogsUsePlatformWidth()
         setContent {
             val shown by app.vm.board.collectAsState()
-            SoundboardTheme(themeMode = shown.themeMode) { BoardScreen(vm = app.vm) }
+            CompositionLocalProvider(LocalDialogUsesPlatformWidth provides platformWidthDialogs) {
+                SoundboardTheme(themeMode = shown.themeMode) { BoardScreen(vm = app.vm) }
+            }
         }
         waitForIdle()
         return app

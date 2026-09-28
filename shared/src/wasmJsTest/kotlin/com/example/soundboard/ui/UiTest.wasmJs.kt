@@ -32,3 +32,5 @@ actual fun ComposeUiTest.closeMenu() {
     onNodeWithText("Soundboard").performClick()
     waitForIdle()
 }
+
+actual fun dialogsUsePlatformWidth(): Boolean = true

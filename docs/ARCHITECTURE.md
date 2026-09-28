@@ -887,6 +887,16 @@ browser a test can't wait for real ones. Closing a menu differs by platform, so 
 `closeMenu`: Back on Android; on the web a click outside, then a spare click, since the
 browser loses the click after one that closes a menu.
 
+Where the tests draw with Skia (the browser, and iOS) `runUiTest` also turns animation
+time off (`NoMotion`, so animations finish in their first frame) and gives each test 20
+seconds (`SKIA_TEST_TIMEOUT`). Their `waitForIdle()` steps the test clock a frame at a
+time on the page's only thread, until nothing wants another frame. A text field's
+animations sometimes re-armed one another for good, so the wait never ended, the page
+stopped answering and Karma lost headless Chrome (#279). The timeout turns any such wait
+that is left into a failure of that one test. Code that must not follow the system's
+animation scale, like the hold to unlock (`HoldToUnlockItem`, timed in frames), can't use
+an animation for its timing.
+
 **Screenshot tests** (#221) compare what Robolectric draws with the reference images in
 `shared/screenshots`, as part of every host test run (`roborazzi.test.verify=true` in
 `gradle.properties`; the images are an input of the test task, so changing one reruns it).

@@ -1,8 +1,5 @@
 package com.example.soundboard.ui
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -15,10 +12,14 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -62,16 +63,20 @@ internal val LocalRelockAfterIdle = staticCompositionLocalOf { EditingLock.RELOC
  * The locked menu's Unlock: holding it fills a ring over [EditingLock.HOLD_TO_UNLOCK], and
  * letting go early starts over, so a stray tap never unlocks. Screen readers get an Unlock
  * action instead, since holding is hard to do with one.
+ *
+ * The hold is timed in frames, not with an animation: animations run at the system's
+ * animation scale, and with animations turned off (an accessibility setting) one would finish
+ * at once, unlocking on a tap.
  */
 @Composable
 internal fun HoldToUnlockItem(onUnlocked: () -> Unit) {
-    val progress = remember { Animatable(0f) }
+    var progress by remember { mutableFloatStateOf(0f) }
     val scope = rememberCoroutineScope()
     DropdownMenuItem(
         text = { Text("Hold to unlock") },
         leadingIcon = {
             Box(contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(progress = { progress.value }, modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                CircularProgressIndicator(progress = { progress }, modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
                 Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
             }
         },
@@ -82,13 +87,17 @@ internal fun HoldToUnlockItem(onUnlocked: () -> Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
                     val hold = scope.launch {
-                        progress.animateTo(1f, tween(EditingLock.HOLD_TO_UNLOCK.inWholeMilliseconds.toInt(), easing = LinearEasing))
+                        val started = withFrameNanos { it }
+                        val holdNanos = EditingLock.HOLD_TO_UNLOCK.inWholeNanoseconds
+                        while (progress < 1f) {
+                            withFrameNanos { progress = ((it - started).toDouble() / holdNanos).toFloat().coerceIn(0f, 1f) }
+                        }
                         onUnlocked()
                     }
                     waitForUpOrCancellation()
-                    if (progress.value < 1f) {
+                    if (progress < 1f) {
                         hold.cancel()
-                        scope.launch { progress.snapTo(0f) }
+                        progress = 0f
                     }
                 }
             }

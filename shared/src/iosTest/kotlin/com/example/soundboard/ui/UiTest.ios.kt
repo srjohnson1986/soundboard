@@ -20,6 +20,8 @@ actual fun runUiTest(landscape: Boolean, block: suspend ComposeUiTest.() -> Unit
     return runSkikoComposeUiTest(
         size = if (landscape) Size(height, width) else Size(width, height),
         density = Density(1f),
+        effectContext = NoMotion,
+        testTimeout = SKIA_TEST_TIMEOUT,
         block = block
     )
 }

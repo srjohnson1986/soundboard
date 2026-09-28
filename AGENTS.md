@@ -82,7 +82,10 @@ iOS (on a Mac): see docs/IOS.md, "Build and run it".
 - **Robolectric** hangs on a text field in a landscape, platform-width dialog. The JVM
   tests turn platform width off in landscape (`LocalDialogUsesPlatformWidth`).
 - **The browser tests sometimes lose headless Chrome** ("Disconnected ... no message in
-  120000 ms"). Rerun once. If it happens again on the same change, look for a test that
-  hangs.
+  120000 ms"). A test's wait for idle is spinning on the page's only thread (#279).
+  `runUiTest` now turns animation time off there and gives each test 20 seconds, so a spin
+  fails one test with a timeout; that test is the one to look at. Don't time something
+  with an animation (`Animatable`, `tween`) if it must not follow the system's animation
+  scale, and don't rely on an animation's length in a Skia-drawn test.
 - A menu's or dialog's open state must live above anything that recomposes differently
   by orientation, or rotating closes it (#237).

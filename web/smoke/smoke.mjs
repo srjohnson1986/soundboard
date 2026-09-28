@@ -153,13 +153,17 @@ try {
     const scope = await page.evaluate(() => navigator.serviceWorker.getRegistration().then(registration => registration?.scope));
     check(scope === BASE, `its scope is the subpath (${scope})`);
     // It keeps the files the page loaded, and the built-in board and fonts, as they arrive.
+    // Waits for all of them, not just some: going offline while one is still on its way made
+    // the reload below fail now and then with "Failed to fetch" (#281).
     const cached = await waitFor(page, 'the cache', async () => {
         const keys = await caches.open('soundboard-v1').then(cache => cache.keys());
-        const names = keys.map(request => request.url);
-        return names.some(name => name.endsWith('.wasm')) && names.some(name => name.endsWith('soundboard.js')) &&
-            names.some(name => name.endsWith('tts-care-board.zip'));
+        const names = new Set(keys.map(request => request.url.split('?')[0]));
+        const loaded = [location.href.split('?')[0].split('#')[0], ...performance.getEntriesByType('resource').map(entry => entry.name)]
+            .map(url => url.split('?')[0])
+            .filter(url => url.startsWith(location.origin) && !url.endsWith('/sw.js'));
+        return loaded.every(url => names.has(url)) && [...names].some(name => name.endsWith('tts-care-board.zip'));
     });
-    check(cached, 'the service worker has the app, its code and the built-in board');
+    check(cached, 'the service worker has every file the page loaded, and the built-in board');
 
     serverRunning = false;
     await server.stop();

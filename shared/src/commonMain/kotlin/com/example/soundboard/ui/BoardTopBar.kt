@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -309,16 +310,29 @@ private fun HamburgerMenu(
                 MenuSwitchRow(Icons.Filled.Edit, "Edit mode", editMode, onEditModeChange)
                 // Its timer, tap-to-close and mute options live in Settings → Show mode.
                 MenuSwitchRow(Icons.Filled.Visibility, "Show mode", showModeEnabled, onShowModeChange)
-                // The caregiver lock (#251): switching it on locks straight away and closes the menu.
-                MenuSwitchRow(Icons.Filled.Lock, "Lock editing", lock.enabled) { on ->
-                    lock.onEnable(on)
-                    if (on) showMenu = false
-                }
+                // The caregiver lock (#251). Items rather than a switch (#257): a switch showed the
+                // lock as on while the board was unlocked for now, which read as "still locked".
                 if (lock.enabled) {
                     DropdownMenuItem(
-                        text = { Text("Lock now") },
+                        text = {
+                            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                                Text("Lock now")
+                                HelperText("Unlocked for now. Locks again after ${EditingLock.RELOCK_AFTER_IDLE.inWholeMinutes} idle minutes.")
+                            }
+                        },
                         leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
                         onClick = menuAction(lock.onLockNow)
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Turn off the lock") },
+                        leadingIcon = { Icon(Icons.Filled.LockOpen, contentDescription = null) },
+                        onClick = menuAction { lock.onEnable(false) }
+                    )
+                } else {
+                    DropdownMenuItem(
+                        text = { Text("Lock editing") },
+                        leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                        onClick = menuAction { lock.onEnable(true) }
                     )
                 }
                 HorizontalDivider()

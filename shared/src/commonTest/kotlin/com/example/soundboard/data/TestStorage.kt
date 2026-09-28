@@ -97,4 +97,8 @@ class MapKeyValueStore : KeyValueStore {
     override fun putInt(key: String, value: Int) {
         values[key] = value
     }
+    override fun getString(key: String): String? = values[key] as? String
+    override fun putString(key: String, value: String?) {
+        if (value == null) values -= key else values[key] = value
+    }
 }

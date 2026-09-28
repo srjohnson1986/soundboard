@@ -19,7 +19,9 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -28,12 +30,14 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import com.example.soundboard.audio.SpeechVoice
 import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelFont
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.RowHeight
+import com.example.soundboard.model.SpeechSettings
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.ui.theme.presetColors
@@ -170,6 +174,7 @@ class DialogsUiTest : BoardUiTest() {
             "New pages 4×4 · standard rows · page grid in landscape",
             "Long-press: default · haptics on",
             "performance mode off",
+            "Default voice · normal speed",
             "Leaves off the last 0.25 s"
         ).forEach { onNodeWithText(it, substring = true).performScrollTo().assertIsDisplayed() }
         onNodeWithText("Off").performScrollTo().assertIsDisplayed()
@@ -296,6 +301,33 @@ class DialogsUiTest : BoardUiTest() {
         assertEquals(0, showMode.timerSeconds)
         onNodeWithText("Back").performClick()
         onNodeWithText("On · closes on tap · sounds muted · upside down").assertIsDisplayed()
+    }
+
+    @Test
+    fun theVoiceGroupPicksAVoiceSpeedAndPitchAndPreviewsThem() = runUiTest {
+        val app = launchBoard(oneTile())
+        app.speaker.voices.value = listOf(SpeechVoice("v1", "English (United States), voice 1"), SpeechVoice("v2", "English (United States), voice 2"))
+
+        openSettingsGroup("Voice")
+        pickOption("Voice", "English (United States), voice 2")
+        pickOption("Speed", "Slow")
+        pickOption("Pitch", "Higher")
+        onNodeWithText("Preview").performScrollTo().performClick()
+
+        waitUntil(timeoutMillis = 2_000) { app.speaker.spoken.isNotEmpty() }
+        assertEquals(SpeechSettings(voiceId = "v2", ratePercent = 75, pitchPercent = 125), app.speaker.configured)
+        assertEquals(SpeechSettings(voiceId = "v2", ratePercent = 75, pitchPercent = 125), app.devicePrefs.speech)
+        onNodeWithText("Back").performClick()
+        onNodeWithText("English (United States), voice 2 · slow speed, higher pitch").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun theVoiceGroupSaysWhenThereAreNoOtherVoices() = runUiTest {
+        launchBoard(oneTile())
+
+        openSettingsGroup("Voice")
+
+        onNodeWithText("doesn't offer other voices", substring = true).assertIsDisplayed()
     }
 
     // --- Page dialogs ---
@@ -500,9 +532,12 @@ class DialogsUiTest : BoardUiTest() {
         waitForIdle()
     }
 
-    /** Opens the dropdown labeled [label] and picks [option]. */
+    /**
+     * Opens the dropdown labeled [label] and picks [option]. The dropdown is the last node with
+     * that text, after a dialog title that may share it (the Voice group's Voice).
+     */
     private fun ComposeUiTest.pickOption(label: String, option: String) {
-        onNodeWithText(label).performScrollTo().performClick()
+        onAllNodesWithText(label).onLast().performScrollTo().performClick()
         onAllNodes(hasText(option) and hasClickAction()).onFirst().performClick()
         waitForIdle()
     }

@@ -37,4 +37,10 @@ interface BoardSettingsActions {
     fun setShowModeMuteSounds(value: Boolean)
     fun setShowModeFlipped(value: Boolean)
     fun setRecordingTrimEndMillis(value: Int)
+    fun setSpeechVoice(voiceId: String?)
+    fun setSpeechRatePercent(value: Int)
+    fun setSpeechPitchPercent(value: Int)
+
+    /** Says a sample sentence in the current voice, speed and pitch. */
+    fun previewSpeech()
 }

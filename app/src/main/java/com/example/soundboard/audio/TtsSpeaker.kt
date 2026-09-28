@@ -3,6 +3,8 @@ package com.example.soundboard.audio
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
+import com.example.soundboard.model.SpeechSettings
 import java.util.Locale
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,9 +26,15 @@ class TtsSpeaker(context: Context) : Speaker {
     private val _available = MutableStateFlow<Boolean?>(null)
     override val available: StateFlow<Boolean?> = _available.asStateFlow()
 
+    private val _voices = MutableStateFlow<List<SpeechVoice>>(emptyList())
+    override val voices: StateFlow<List<SpeechVoice>> = _voices.asStateFlow()
+
+    @Volatile private var settings = SpeechSettings()
+
     private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { status ->
         ready = status == TextToSpeech.SUCCESS
         _available.value = ready
+        if (ready) _voices.value = offlineVoices().map { (voice, name) -> SpeechVoice(voice.name, name) }
         if (ready) pendingText?.let(::speakNow)
         pendingText = null
     }
@@ -55,10 +63,36 @@ class TtsSpeaker(context: Context) : Speaker {
         if (ready) speakNow(text) else pendingText = text
     }
 
+    override fun configure(settings: SpeechSettings) {
+        this.settings = settings
+    }
+
     private fun speakNow(text: String) {
-        tts.language = Locale.getDefault()
+        val settings = settings
+        val voice = settings.voiceId?.let { id -> offlineVoices().firstOrNull { it.first.name == id }?.first }
+        if (voice != null) tts.voice = voice else tts.language = Locale.getDefault()
+        tts.setSpeechRate(settings.ratePercent / 100f)
+        tts.setPitch(settings.pitchPercent / 100f)
         // An utterance id, so the progress listener hears how it went.
         tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, UTTERANCE_ID)
+    }
+
+    /**
+     * The installed voices for the device's language that work without a network, since the
+     * board mustn't go quiet offline, each with a name to show. Android names voices by id
+     * ("en-us-x-iob-local"), so they're numbered within each accent instead.
+     */
+    private fun offlineVoices(): List<Pair<Voice, String>> {
+        val language = Locale.getDefault().language
+        return runCatching { tts.voices }.getOrNull().orEmpty()
+            .filter { voice ->
+                voice.locale.language == language &&
+                    !voice.isNetworkConnectionRequired &&
+                    TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED !in voice.features.orEmpty()
+            }
+            .sortedWith(compareBy({ it.locale.displayName }, { it.name }))
+            .groupBy { it.locale }
+            .flatMap { (locale, voices) -> voices.mapIndexed { i, voice -> voice to "${locale.displayName}, voice ${i + 1}" } }
     }
 
     /** For tests: whether the engine has started up. */

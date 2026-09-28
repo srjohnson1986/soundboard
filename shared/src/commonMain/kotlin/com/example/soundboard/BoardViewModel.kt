@@ -6,6 +6,7 @@ import com.example.soundboard.audio.MediaVolume
 import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.Recorder
 import com.example.soundboard.audio.Speaker
+import com.example.soundboard.audio.SpeechVoice
 import com.example.soundboard.audio.UnknownMediaVolume
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
@@ -21,6 +22,7 @@ import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.ShowModeSettings
+import com.example.soundboard.model.SpeechSettings
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
@@ -68,6 +70,17 @@ class BoardViewModel(
     /** Device-local, not part of [Board] — see [DevicePreferences.recordingTrimEndMillis]. */
     private val _recordingTrimEndMillis = MutableStateFlow(devicePrefs.recordingTrimEndMillis)
     val recordingTrimEndMillis: StateFlow<Int> = _recordingTrimEndMillis.asStateFlow()
+
+    /** Device-local, not part of [Board] — see [DevicePreferences.speech]. */
+    private val _speech = MutableStateFlow(devicePrefs.speech)
+    val speech: StateFlow<SpeechSettings> = _speech.asStateFlow()
+
+    /** The voices Settings can offer. See [Speaker.voices]. */
+    val speechVoices: StateFlow<List<SpeechVoice>> get() = speaker.voices
+
+    init {
+        speaker.configure(_speech.value)
+    }
 
     /** Whether speech works on this device; null while it's starting. See [Speaker.available]. */
     val speechAvailable: StateFlow<Boolean?> get() = speaker.available
@@ -378,6 +391,20 @@ class BoardViewModel(
     override fun setRecordingTrimEndMillis(value: Int) {
         devicePrefs.recordingTrimEndMillis = value
         _recordingTrimEndMillis.value = devicePrefs.recordingTrimEndMillis
+    }
+
+    override fun setSpeechVoice(voiceId: String?) = updateSpeech { it.copy(voiceId = voiceId) }
+
+    override fun setSpeechRatePercent(value: Int) = updateSpeech { it.copy(ratePercent = value) }
+
+    override fun setSpeechPitchPercent(value: Int) = updateSpeech { it.copy(pitchPercent = value) }
+
+    override fun previewSpeech() = speaker.speak(SPEECH_PREVIEW)
+
+    private fun updateSpeech(transform: (SpeechSettings) -> SpeechSettings) {
+        devicePrefs.speech = transform(_speech.value)
+        _speech.value = devicePrefs.speech
+        speaker.configure(_speech.value)
     }
 
     private fun updateShowMode(transform: (ShowModeSettings) -> ShowModeSettings) {
@@ -758,6 +785,9 @@ class BoardViewModel(
     }
 
     companion object {
+        /** What Settings' Preview button says in the chosen voice. */
+        const val SPEECH_PREVIEW = "Hello. This is how the board sounds."
+
         /** Bundled in every build (src/main/assets/); see [BoardRepository.importFromAsset]. */
         private const val JEREMY_BOARD_ASSET = "jeremy-care-board.zip"
 

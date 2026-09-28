@@ -75,4 +75,8 @@ interface KeyValueStore {
     fun getInt(key: String, default: Int): Int
     fun putBoolean(key: String, value: Boolean)
     fun putInt(key: String, value: Int)
+    fun getString(key: String): String?
+
+    /** Stores [value] under [key]; null removes it. */
+    fun putString(key: String, value: String?)
 }

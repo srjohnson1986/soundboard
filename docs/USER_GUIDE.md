@@ -253,6 +253,13 @@ to return to the list or **Done** to close Settings.
   - Hide blank tiles outside Edit mode
   - How long to hold a page tab to open Page options
   - Haptic feedback (the small buzz)
+- **Voice:** how tiles that speak (rather than play a recording) sound, and
+  **Speak...** too:
+  - Voice: the device's default, or one of the voices it has for its language.
+    On Android only voices that work without internet are offered, so the board
+    doesn't go quiet offline.
+  - Speed, from Slowest to Fastest, and Pitch: Lower, Normal or Higher
+  - **Preview** says a sample sentence the way the board will
 - **Screen:**
   - Keep the screen from turning off while the board is open
   - Performance mode: turns off shadows, tap ripples and similar effects
@@ -263,8 +270,9 @@ to return to the list or **Done** to close Settings.
   tap on **Stop** isn't the last thing it plays: Off, 0.1, 0.25 (the default)
   or 0.5 seconds. A very short recording is kept whole.
 
-Everything except Performance mode, Show mode and Recording is saved with the
-board, so switching boards switches these too. Those three belong to the device.
+Everything except Voice, Performance mode, Show mode and Recording is saved
+with the board, so switching boards switches these too. Those four belong to
+the device.
 
 ## Label text
 

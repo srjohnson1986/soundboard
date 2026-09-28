@@ -85,6 +85,8 @@ fun BoardScreen(vm: BoardViewModel) {
     val shownText by vm.shownText.collectAsStateWithLifecycle()
     val speechAvailable by vm.speechAvailable.collectAsStateWithLifecycle()
     val mediaMuted by vm.mediaMuted.collectAsStateWithLifecycle()
+    val speech by vm.speech.collectAsStateWithLifecycle()
+    val speechVoices by vm.speechVoices.collectAsStateWithLifecycle()
     var openDialog by remember { mutableStateOf<BoardDialog?>(null) }
     var editMode by remember { mutableStateOf(false) }
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
@@ -395,6 +397,8 @@ fun BoardScreen(vm: BoardViewModel) {
             performanceModeEnabled = performanceModeEnabled,
             showMode = showMode,
             recordingTrimEndMillis = recordingTrimEndMillis,
+            speech = speech,
+            voices = speechVoices,
             onOpenGroup = { showDialog(BoardDialog.SettingsGroupDetail(it)) },
             onDismiss = ::closeDialog
         )
@@ -405,6 +409,8 @@ fun BoardScreen(vm: BoardViewModel) {
             performanceModeEnabled = performanceModeEnabled,
             showMode = showMode,
             recordingTrimEndMillis = recordingTrimEndMillis,
+            speech = speech,
+            voices = speechVoices,
             actions = vm,
             onPickBackgroundImage = pickBackgroundImage,
             onBack = { showDialog(BoardDialog.Settings) },

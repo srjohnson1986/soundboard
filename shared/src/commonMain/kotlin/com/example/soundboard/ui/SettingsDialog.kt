@@ -1,14 +1,5 @@
 package com.example.soundboard.ui
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Smartphone
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.TouchApp
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +10,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
@@ -41,6 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.soundboard.BoardSettingsActions
+import com.example.soundboard.audio.SpeechVoice
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelFont
@@ -48,6 +50,7 @@ import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.ShowModeSettings
+import com.example.soundboard.model.SpeechSettings
 import com.example.soundboard.model.ThemeMode
 import kotlin.math.roundToInt
 
@@ -185,6 +188,7 @@ internal enum class SettingsGroup(val title: String, val icon: ImageVector) {
     TILE_LABELS("Tile labels", Icons.Filled.TextFields),
     GRID_LAYOUT("Grid layout", Icons.Filled.GridView),
     TAPPING_AND_SPEECH("Tapping & speech", Icons.Filled.TouchApp),
+    VOICE("Voice", Icons.Filled.RecordVoiceOver),
     SCREEN("Screen", Icons.Filled.Smartphone),
     SHOW_MODE("Show mode", Icons.Filled.Visibility),
     RECORDING("Recording", Icons.Filled.Mic)
@@ -196,7 +200,9 @@ private fun settingsSummary(
     board: Board,
     performanceModeEnabled: Boolean,
     showMode: ShowModeSettings,
-    recordingTrimEndMillis: Int
+    recordingTrimEndMillis: Int,
+    speech: SpeechSettings,
+    voices: List<SpeechVoice>
 ): String = when (group) {
     SettingsGroup.HOME_PAGE ->
         if (board.homePageIndex == null) {
@@ -224,6 +230,11 @@ private fun settingsSummary(
             landscapeLayoutLabel(board.landscapeLayout).lowercase() + " in landscape"
     SettingsGroup.TAPPING_AND_SPEECH ->
         "Long-press: ${longPressDurationLabel(board.longPressDurationMillis).lowercase()} · haptics ${onOff(board.hapticFeedbackEnabled)}"
+    SettingsGroup.VOICE -> buildString {
+        append(voices.firstOrNull { it.id == speech.voiceId }?.name ?: "Default voice")
+        append(" · ${speechRateLabel(speech.ratePercent).lowercase()} speed")
+        if (speech.pitchPercent != 100) append(", ${speechPitchLabel(speech.pitchPercent).lowercase()} pitch")
+    }
     SettingsGroup.SCREEN ->
         "${if (board.keepScreenAwake) "Stays awake" else "Can sleep"} · performance mode ${onOff(performanceModeEnabled)}"
     SettingsGroup.RECORDING ->
@@ -266,6 +277,8 @@ internal fun SettingsDialog(
     performanceModeEnabled: Boolean,
     showMode: ShowModeSettings,
     recordingTrimEndMillis: Int,
+    speech: SpeechSettings,
+    voices: List<SpeechVoice>,
     onOpenGroup: (SettingsGroup) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -279,7 +292,7 @@ internal fun SettingsDialog(
                         text = {
                             Column(modifier = Modifier.padding(vertical = 4.dp)) {
                                 Text(group.title)
-                                HelperText(settingsSummary(group, board, performanceModeEnabled, showMode, recordingTrimEndMillis))
+                                HelperText(settingsSummary(group, board, performanceModeEnabled, showMode, recordingTrimEndMillis, speech, voices))
                             }
                         },
                         leadingIcon = { Icon(group.icon, contentDescription = null) },
@@ -303,6 +316,8 @@ internal fun SettingsGroupDialog(
     performanceModeEnabled: Boolean,
     showMode: ShowModeSettings,
     recordingTrimEndMillis: Int,
+    speech: SpeechSettings,
+    voices: List<SpeechVoice>,
     actions: BoardSettingsActions,
     onPickBackgroundImage: () -> Unit,
     onBack: () -> Unit,
@@ -321,6 +336,7 @@ internal fun SettingsGroupDialog(
                     SettingsGroup.TILE_LABELS -> LabelStyleControls(board.labelStyle, actions::setLabelStyle)
                     SettingsGroup.GRID_LAYOUT -> GridLayoutSettings(board, actions)
                     SettingsGroup.TAPPING_AND_SPEECH -> TappingAndSpeechSettings(board, actions)
+                    SettingsGroup.VOICE -> VoiceSettings(speech, voices, actions)
                     SettingsGroup.SCREEN -> ScreenSettings(board, performanceModeEnabled, actions)
                     SettingsGroup.SHOW_MODE -> ShowModeSettingsControls(showMode, actions)
                     SettingsGroup.RECORDING -> RecordingSettings(recordingTrimEndMillis, actions)
@@ -471,6 +487,60 @@ private fun TappingAndSpeechSettings(board: Board, actions: BoardSettingsActions
     HelperText("How long to hold a page tab before its Page options open.")
     SectionDivider()
     SwitchRow("Haptic feedback", board.hapticFeedbackEnabled, actions::setHapticFeedbackEnabled)
+}
+
+private fun speechRateLabel(percent: Int) = when (percent) {
+    50 -> "Slowest"
+    75 -> "Slow"
+    100 -> "Normal"
+    125 -> "Fast"
+    150 -> "Fastest"
+    else -> "$percent%"
+}
+
+private fun speechPitchLabel(percent: Int) = when (percent) {
+    75 -> "Lower"
+    100 -> "Normal"
+    125 -> "Higher"
+    else -> "$percent%"
+}
+
+/** The voice, speed and pitch speaking tiles use on this device (#250), with a sample to hear. */
+@Composable
+private fun VoiceSettings(speech: SpeechSettings, voices: List<SpeechVoice>, actions: BoardSettingsActions) {
+    // A voice this device no longer has (e.g. uninstalled) speaks in the default, so show that.
+    OptionDropdown(
+        label = "Voice",
+        selected = speech.voiceId?.takeIf { id -> voices.any { it.id == id } },
+        options = listOf(null) + voices.map { it.id },
+        optionLabel = { id -> voices.firstOrNull { it.id == id }?.name ?: "Device default" },
+        onSelect = actions::setSpeechVoice
+    )
+    if (voices.isEmpty()) {
+        HelperText("This device doesn't offer other voices for its language that work offline.")
+    }
+    SectionDivider()
+    OptionDropdown(
+        label = "Speed",
+        selected = speech.ratePercent,
+        options = (SpeechSettings.RATE_OPTIONS_PERCENT + speech.ratePercent).distinct().sorted(),
+        optionLabel = ::speechRateLabel,
+        onSelect = actions::setSpeechRatePercent
+    )
+    OptionDropdown(
+        label = "Pitch",
+        selected = speech.pitchPercent,
+        options = (SpeechSettings.PITCH_OPTIONS_PERCENT + speech.pitchPercent).distinct().sorted(),
+        optionLabel = ::speechPitchLabel,
+        onSelect = actions::setSpeechPitchPercent
+    )
+    OutlinedButton(onClick = actions::previewSpeech, modifier = Modifier.fillMaxWidth()) {
+        Text("Preview")
+    }
+    HelperText(
+        "For tiles that speak rather than play a recording, and for Speak... in the menu. " +
+            "Applies to this device only."
+    )
 }
 
 @Composable

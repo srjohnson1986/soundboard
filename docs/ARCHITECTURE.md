@@ -850,12 +850,11 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | `Page.withGridSize()`/`.withTileMoved()`/`.normalized()`, tile opacity/border fallback, and the landscape grid defaults | `shared/src/commonTest/.../model/PageTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | Landscape column/row-height math, label size search, `formatDecimal` | `shared/src/commonTest/.../ui/GridLayoutTest.kt`, `LabelTextTest.kt`, `FormatDecimalTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | `Board` page management (`withPageAdded`/`withPageRemoved`/`withPageRenamed`/`withCurrentPage`/`withHomePage`), `updatingTile`/`findTile`, `soundFileNames`, `Tile.isPlayable`, and `hasAnySound` | `shared/src/commonTest/.../model/BoardTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
-| `BoardRepository`'s own logic — save/load, missing-sound sanitizing, backup round-trip, the zip path guard, bundled boards — plus `SavedBoardRepository` basics, against in-memory storage | `shared/src/commonTest/.../data/BoardRepositoryCommonTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
-| The `FileStore` contract every implementation must meet (in-memory, `FileSystemStore`, and `OpfsFileStore` in Chrome); the golden backup zip (`GoldenBackup.kt`, made outside the app) that both `JavaZipCodec` and `FflateZipCodec` must read identically, so backups move between Android and the web; `JavaZipCodec` reading every zip in `presets/`; `LocalStorageKeyValueStore` | `shared/src/commonTest/.../data/FileStoreContractTest.kt`, `GoldenBackup.kt`, `shared/src/androidHostTest/.../data/AndroidStorageTest.kt`, `shared/src/wasmJsTest/.../data/WebStorageTest.kt` | JVM, and WebAssembly in headless Chrome |
-| `BoardRepository` wired to real files, zips and assets, incl. the legacy-schema and `homePageIndex` migrations, additive-field defaults in `load()`, and every shipped built-in board | `test/.../data/BoardRepositoryTest.kt` | Robolectric |
-| `SavedBoardRepository` — save/list/load round-trip, `allReferencedFileNames()`, corrupt-file resilience | `test/.../data/SavedBoardRepositoryTest.kt` | Robolectric |
-| `BoardViewModel`, incl. editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, and saveBoardAs/openBoard | `test/.../BoardViewModelTest.kt` | Robolectric, `MainDispatcherRule` + `FakePlayer` + `FakeRecorder` |
-| `BoardViewModel` smoke test — fallback board, tap to speak, an edit persisting, recent boards — on in-memory storage, proving it runs on the web too | `shared/src/commonTest/.../BoardViewModelCommonTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
+| `BoardRepository` — save/load, missing-sound sanitizing, the legacy-schema and `homePageIndex` migrations, additive-field defaults, corrupt `board.json`, backup round-trips, the zip path guard, stray clips, bundled boards and original sounds; `SavedBoardRepository`, `RecentBoardsRepository` and `DevicePreferences` — all against in-memory storage (#241) | `shared/src/commonTest/.../data/BoardRepositoryTest.kt`, `SavedBoardRepositoryTest.kt`, `RecentBoardsRepositoryTest.kt`, `DevicePreferencesTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
+| The `FileStore` contract every implementation must meet (in-memory, `FileSystemStore`, and `OpfsFileStore` in Chrome); the golden backup zip (`GoldenBackup.kt`, made outside the app) that both `JavaZipCodec` and `FflateZipCodec` must read identically, so backups move between Android and the web; `JavaZipCodec` reading every zip in `presets/`; `LocalStorageKeyValueStore` and `SharedPreferencesStore`; picking and saving through the Storage Access Framework (`UriPickedFile`, `UriSaveTarget`) | `shared/src/commonTest/.../data/FileStoreContractTest.kt`, `GoldenBackup.kt`, `shared/src/androidHostTest/.../data/AndroidStorageTest.kt`, `shared/src/wasmJsTest/.../data/WebStorageTest.kt` | JVM, and WebAssembly in headless Chrome |
+| `BoardViewModel`, incl. the fresh-install board on each platform, editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, restoring an original sound, and saveBoardAs/openBoard — on in-memory storage with stand-in built-in boards (#241) | `shared/src/commonTest/.../BoardViewModelTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
+| Every built-in board the app ships, imported through the APK's assets, `java.util.zip` and the files directory | `test/.../data/ShippedBoardsTest.kt` | Robolectric |
+| `BoardViewModel` on a real thread pool and real files: back-to-back commits leave the latest board on disk (#144) | `test/.../BoardViewModelThreadingTest.kt` | Robolectric, `MainDispatcherRule` |
 | The production web bundle from a `/soundboard/` subpath, online and then offline: a tap speaks, the manifest and icons, the service worker, no console errors | `web/smoke/smoke.mjs` | Headless Chrome (Puppeteer), on master and before publishing |
 | The web app's recording and playback: `WebRecorder` records from headless Chrome's fake microphone into OPFS, `WebAudioPlayer` decodes the result, a cancelled recording saves nothing; the trim (`trimmedWav`) cuts exactly the amount asked from a known buffer and keeps a too-short one whole, and a real recording stopped with a trim is at most the time recorded minus the trim (#230) | `web/src/wasmJsTest/.../web/WebAudioTest.kt` (fake mic: `web/karma.config.d/fake-media.js`) | WebAssembly in headless Chrome |
 | `BoardScreen`'s flows: a tap playing or editing, the tile editor's Save/Cancel and Restore original sound, edit mode, Switch board, Save board as, Settings groups (Recording included), Show mode, the page tab row and page options, the sticky home row, idle-timeout auto-return; tile label sizes (no word split, #209), bold/caps, and the landscape grid in a landscape window | `shared/src/commonTest/.../ui/BoardScreenUiTest.kt`, `LabelAndLayoutUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
@@ -915,16 +914,13 @@ the app module's classes. The UI and the Android audio have no floor: the audio 
 on the emulator, which Kover doesn't measure, and so is the web-only code, which runs as
 WebAssembly.
 
-- **`FakePlayer`** (a `Player`) exists twice — once under `test/`, once under
-  `androidTest/` (`UiTestFakes.kt`) — since those source sets don't share code by default. Keep
-  both in sync if `Player`'s contract changes. **`FakeRecorder`** (a
-  `Recorder`) follows the same split, though the `androidTest/` copy is a
-  bare stub (`BoardScreenTest` doesn't exercise recording — see the known
-  limitations below) rather than a full call-recording fake.
-- **`MainDispatcherRule`** sets `Dispatchers.Main` to an
-  `UnconfinedTestDispatcher` for the duration of a test, since
-  `viewModelScope` has no `Main` dispatcher on a plain JVM. Every
-  `BoardViewModelTest` needs it (`@get:Rule`).
+- **`FakePlayer`, `FakeRecorder` and `FakeSpeaker`** exist twice: in
+  `shared/src/commonTest/.../audio/Fakes.kt` for the shared tests, and in the app's
+  `src/sharedTest/` for its unit and device tests, since the app's test source sets can't see
+  another module's tests. Keep both in step if an audio interface changes.
+- **`Dispatchers.Main`** is an `UnconfinedTestDispatcher` in view model tests, since
+  `viewModelScope` has no `Main` dispatcher off a device: the shared tests set it in
+  `@BeforeTest`, and the app's use `MainDispatcherRule` (`@get:Rule`).
 - **Robolectric needs a version that supports the project's `targetSdk`.**
   `testOptions.unitTests.isIncludeAndroidResources = true` is also required —
   without it, Robolectric silently fails to find app resources.

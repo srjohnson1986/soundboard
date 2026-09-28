@@ -14,6 +14,12 @@ class InMemoryFileStore : FileStore {
         modified[path] = ++clock
     }
 
+    /** [exists], for checking a test's outcome outside a coroutine. */
+    fun has(path: String): Boolean = path in files
+
+    /** The size of the file at [path], or 0 if there's none. */
+    fun sizeOf(path: String): Int = files[path]?.size ?: 0
+
     override suspend fun read(path: String): ByteArray? = files[path]?.copyOf()
 
     override suspend fun write(path: String, bytes: ByteArray) {

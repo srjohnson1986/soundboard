@@ -72,6 +72,11 @@ kotlin {
         binaries.executable()
     }
 
+    // iOS (#265): built and tested on the iPhone simulator by the iOS workflow, on a macOS
+    // runner. Kotlin/Native only builds these on macOS; other hosts skip them.
+    iosArm64()
+    iosSimulatorArm64()
+
     compilerOptions {
         // UiTest, the shared UI tests' base class, is an expect class (#219).
         freeCompilerArgs.add("-Xexpect-actual-classes")

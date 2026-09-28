@@ -1,0 +1,63 @@
+name: iOS
+
+# Builds the shared module for iOS and runs its tests (model, repositories, view model and
+# the shared UI tests) on the iPhone simulator (#265). Kotlin/Native's iOS targets only build
+# on macOS, which is why this has its own macOS runner; other hosts skip those targets.
+# Advisory, not a merge gate, like the UI tests: macOS runners are slower, and nothing
+# ships to iOS yet. What it catches is Android- or JVM-only code creeping into shared code.
+on:
+  push:
+    branches: [master]
+    paths-ignore: ['**.md', 'docs/**']
+  pull_request:
+    branches: [master]
+    paths-ignore: ['**.md', 'docs/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ios-tests:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # The Kotlin/Native compiler and its dependencies, downloaded on first use; about a
+      # gigabyte, so kept between runs. The key changes when the Kotlin version does.
+      - name: Cache Kotlin/Native
+        uses: actions/cache@v6
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('build.gradle.kts', 'settings.gradle.kts', 'gradle.properties') }}
+          restore-keys: konan-${{ runner.os }}-
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # The device build as well as the simulator's, since some code only compiles for one.
+      - name: Build for iOS and test on the simulator
+        run: ./gradlew :shared:compileKotlinIosArm64 :shared:iosSimulatorArm64Test --continue --stacktrace
+
+      - name: Upload iOS test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-report
+          path: shared/build/reports/tests/iosSimulatorArm64Test
+          if-no-files-found: ignore

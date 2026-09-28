@@ -5,6 +5,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import com.example.soundboard.BoardViewModel
 import com.example.soundboard.audio.FakePlayer
 import com.example.soundboard.audio.FakeRecorder
@@ -21,6 +29,7 @@ import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.ZipEntryData
 import com.example.soundboard.model.Board
 import com.example.soundboard.ui.theme.SoundboardTheme
+import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlinx.coroutines.CoroutineDispatcher
@@ -98,5 +107,51 @@ abstract class BoardUiTest : UiTest() {
         }
         waitForIdle()
         return app
+    }
+
+    protected fun ComposeUiTest.openSettings() {
+        onNodeWithContentDescription("Menu").performClick()
+        onNodeWithText("Settings").performClick()
+    }
+
+    /** Moves Compose's clock on by [millis], for delay()s that only run on it. */
+    protected fun ComposeUiTest.advanceClock(millis: Long) {
+        mainClock.autoAdvance = false
+        mainClock.advanceTimeBy(millis)
+        mainClock.autoAdvance = true
+        waitForIdle()
+    }
+
+    /** Flips one of the menu's switches, then closes the menu. */
+    protected fun ComposeUiTest.toggleMenuSwitch(label: String) {
+        onNodeWithContentDescription("Menu").performClick()
+        clickSwitchBeside(label)
+        closeMenu()
+        onNodeWithText(label).assertDoesNotExist()
+    }
+
+    /**
+     * Flips the switch for [label]. In Settings the whole row is the toggle (SwitchRow); the
+     * menu's rows are a bare Switch beside a Text, so fall back to the switch level with it.
+     */
+    protected fun ComposeUiTest.clickSwitchBeside(label: String) {
+        val labelNode = onNodeWithText(label)
+        runCatching { labelNode.performScrollTo() }
+        val labelCenter = labelNode.fetchSemanticsNode().boundsInRoot.center
+        val switches = onAllNodes(isToggleable())
+        val nodes = switches.fetchSemanticsNodes()
+        val index = nodes.indexOfFirst { it.boundsInRoot.contains(labelCenter) }
+            .takeIf { it >= 0 }
+            ?: nodes.indexOfFirst { abs(it.boundsInRoot.center.y - labelCenter.y) < 40f }
+        switches[index].performClick()
+        waitForIdle()
+    }
+
+    /** Holds a page tab down past the long-press timeout, which opens its options. */
+    protected fun ComposeUiTest.longPressPageTab(pageName: String) {
+        onNode(hasText(pageName) and hasClickAction()).performTouchInput { down(center) }
+        advanceClock(600)
+        onNode(hasText(pageName) and hasClickAction()).performTouchInput { up() }
+        waitForIdle()
     }
 }

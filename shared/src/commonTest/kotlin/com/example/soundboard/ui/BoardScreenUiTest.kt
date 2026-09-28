@@ -364,44 +364,6 @@ class BoardScreenUiTest : BoardUiTest() {
 
     // --- Helpers ---
 
-    private fun ComposeUiTest.openSettings() {
-        onNodeWithContentDescription("Menu").performClick()
-        onNodeWithText("Settings").performClick()
-    }
-
-    /** Moves Compose's clock on by [millis], for delay()s that only run on it. */
-    private fun ComposeUiTest.advanceClock(millis: Long) {
-        mainClock.autoAdvance = false
-        mainClock.advanceTimeBy(millis)
-        mainClock.autoAdvance = true
-        waitForIdle()
-    }
-
-    /** Flips one of the menu's switches, then closes the menu. */
-    private fun ComposeUiTest.toggleMenuSwitch(label: String) {
-        onNodeWithContentDescription("Menu").performClick()
-        clickSwitchBeside(label)
-        closeMenu()
-        onNodeWithText(label).assertDoesNotExist()
-    }
-
-    /**
-     * Flips the switch for [label]. In Settings the whole row is the toggle (SwitchRow); the
-     * menu's rows are a bare Switch beside a Text, so fall back to the switch level with it.
-     */
-    private fun ComposeUiTest.clickSwitchBeside(label: String) {
-        val labelNode = onNodeWithText(label)
-        runCatching { labelNode.performScrollTo() }
-        val labelCenter = labelNode.fetchSemanticsNode().boundsInRoot.center
-        val switches = onAllNodes(isToggleable())
-        val nodes = switches.fetchSemanticsNodes()
-        val index = nodes.indexOfFirst { it.boundsInRoot.contains(labelCenter) }
-            .takeIf { it >= 0 }
-            ?: nodes.indexOfFirst { abs(it.boundsInRoot.center.y - labelCenter.y) < 40f }
-        switches[index].performClick()
-        waitForIdle()
-    }
-
     /** How many nodes with [text] are on screen; the pager also composes neighboring pages. */
     private fun ComposeUiTest.displayedCount(text: String): Int {
         val nodes = onAllNodesWithText(text)
@@ -412,13 +374,5 @@ class BoardScreenUiTest : BoardUiTest() {
     private fun ComposeUiTest.displayedNode(text: String): SemanticsNodeInteraction {
         val nodes = onAllNodesWithText(text)
         return nodes[nodes.fetchSemanticsNodes().indices.single { nodes[it].isDisplayed() }]
-    }
-
-    /** Holds a page tab down past the long-press timeout, which opens its options. */
-    private fun ComposeUiTest.longPressPageTab(pageName: String) {
-        onNode(hasText(pageName) and hasClickAction()).performTouchInput { down(center) }
-        advanceClock(600)
-        onNode(hasText(pageName) and hasClickAction()).performTouchInput { up() }
-        waitForIdle()
     }
 }

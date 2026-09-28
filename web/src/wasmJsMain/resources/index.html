@@ -35,11 +35,16 @@
         // Offline support and "install" (sw.js). Not on the local dev server, whose builds
         // change constantly.
         if ('serviceWorker' in navigator && location.port !== '8080') {
+            // Hands the worker every file loaded so far, for it to keep: once when it's ready, and
+            // again when it takes over the page, since files the page fetched in between went
+            // past it uncached (#281).
+            const keepLoaded = worker => worker && worker.postMessage({
+                keep: [location.href].concat(performance.getEntriesByType('resource').map(entry => entry.name))
+            });
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').catch(() => {});
-                navigator.serviceWorker.ready.then(registration => registration.active.postMessage({
-                    keep: [location.href].concat(performance.getEntriesByType('resource').map(entry => entry.name))
-                }));
+                navigator.serviceWorker.ready.then(registration => keepLoaded(registration.active));
+                navigator.serviceWorker.addEventListener('controllerchange', () => keepLoaded(navigator.serviceWorker.controller));
             });
         }
     </script>

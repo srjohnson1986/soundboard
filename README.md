@@ -1,7 +1,9 @@
 # Soundboard
 
-A communication board for Android. Tap a tile to play a recorded clip or to
-have it speak its words aloud with the device's text-to-speech voice.
+A communication board for Android and the web, with iOS built and waiting (see
+[iOS](#ios)). Tap a tile to play a recorded clip or to have it speak its words
+aloud with the device's text-to-speech voice. All three are built from one Kotlin
+codebase, so a feature added once reaches every platform.
 
 - **Tiles:** record straight from the microphone, pick an audio file, or type
   what the tile should say.
@@ -44,11 +46,14 @@ browser or file manager the first time.
   limitations. Read this before making changes.
 - **[Releasing](docs/RELEASING.md):** the release checklist: signing, the
   `soundboard.apk` asset, and syncing the wiki.
+- **[iOS](docs/IOS.md):** where the iOS app stands, and how to build, run and ship it.
+- **[AGENTS.md](AGENTS.md):** the short version for AI assistants (and people): where
+  code goes, keeping the platforms in step, commands, and pitfalls.
 - **[Built-in boards](presets/README.md):** the boards that ship inside the
   app, and how they're made.
 
 The [wiki](https://github.com/srjohnson1986/soundboard/wiki) mirrors the user
-guide, architecture and releasing docs for anyone browsing there. `docs/` is
+guide, architecture, releasing and iOS docs for anyone browsing there. `docs/` is
 the source of truth: update the relevant doc in the same change as the
 feature, and `scripts/sync-wiki.sh` copies it to the wiki at release time.
 
@@ -69,6 +74,15 @@ run it locally instead:
 
 That serves it at http://localhost:8080. It needs a current browser: Chrome, Edge
 or Firefox, or Safari 18.2 or later.
+
+## iOS
+
+The iOS app is built from the same code and checked in CI on every change: it compiles,
+its tests pass on the iPhone simulator, and it launches and draws the board. **It's
+waiting on a contributor with an Apple Developer Program membership** to put it on
+TestFlight, and with a Mac to try it by hand first (a free Apple ID is enough for that).
+[docs/IOS.md](docs/IOS.md) has what's checked and what isn't, how to build and run it,
+and how to ship it.
 
 ## Build it
 
@@ -97,10 +111,10 @@ with Robolectric.
 ./gradlew :shared:allTests
 ```
 
-That runs the tests in the `shared` module, which holds everything the Android
-app and the upcoming web version share: the model, storage, view model and UI.
-They run twice: on the JVM, and compiled to WebAssembly in headless Chrome
-(which needs Chrome installed).
+That runs the tests in the `shared` module, which holds everything the platforms
+share: the model, storage, view model and UI. They run on the JVM and compiled to
+WebAssembly in headless Chrome (which needs Chrome installed), and on a Mac also on
+the iPhone simulator.
 
 ```bash
 ./gradlew connectedDebugAndroidTest
@@ -116,8 +130,11 @@ That measures the JVM tests' coverage (report in `build/reports/kover/htmlUnit`)
 fails if the core (`data`, `model`, `BoardViewModel`) drops below 90%.
 
 GitHub Actions runs lint, the unit tests, the browser tests, a debug build and a
-coverage check on every pull request, split into three jobs that run side by side,
-plus the UI tests on an emulator (advisory; emulators occasionally flake). Pull
+coverage check on every pull request, split into three jobs that run side by side.
+Two advisory workflows run beside them: the UI tests on an Android emulator
+(emulators occasionally flake), and **iOS** on a macOS runner, which builds the
+shared code and the iOS app, runs the tests on the iPhone simulator, and launches the
+app and screenshots it. Pull
 requests that only change Markdown skip them. Gradle's build cache, parallel mode and configuration
 cache are on (`gradle.properties`), so repeat builds, locally and in CI, only
 redo what changed.
@@ -126,7 +143,9 @@ redo what changed.
 
 Changes go through a GitHub issue, a feature branch and a pull request
 against `master`. See [Architecture](docs/ARCHITECTURE.md) before touching the
-code, and keep `docs/` current in the same pull request.
+code, and keep `docs/` current in the same pull request. [AGENTS.md](AGENTS.md)
+sums up how to keep Android, the web and iOS in step, and the pull request template
+has a checklist for it.
 
 A "Protect master" ruleset enforces that workflow:
 - `master` can't be deleted or force-pushed.

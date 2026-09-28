@@ -1,5 +1,9 @@
 # Cutting a release
 
+A release publishes the Android APK and the web version. iOS isn't released yet: it's
+waiting on an Apple Developer Program membership (docs/IOS.md, "Share it through
+TestFlight").
+
 This app is sideloaded onto specific devices rather than distributed through
 the Play Store, so a self-signed key is enough — there's no Play App
 Signing enrollment or upload key to manage.
@@ -147,13 +151,13 @@ keeps the APK as a workflow artifact.
    ```
    (Or `gh release upload vX.Y.Z soundboard.apk --clobber` if the release
    already exists. `soundboard.apk` at the repo root is gitignored.)
-6. Sync the wiki, which mirrors `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`
-   and this file for people who browse the wiki instead of the repo:
+6. Sync the wiki, which mirrors `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`,
+   `docs/IOS.md` and this file for people who browse the wiki instead of the repo:
    ```bash
    scripts/sync-wiki.sh
    ```
-   It copies those files to the wiki's User-Guide, Architecture and Releasing
-   pages, pointing their `../` repo links at GitHub, and only pushes if
+   It copies those files to the wiki's User-Guide, Architecture, Releasing
+   and iOS pages, pointing their `../` repo links at GitHub, and only pushes if
    something changed (`--dry-run` shows the diff without pushing). Edit the
    docs here, never the wiki pages directly; the next sync overwrites them.
    The wiki's Home page is the one page kept by hand.

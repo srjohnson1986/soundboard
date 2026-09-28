@@ -1,6 +1,5 @@
 package com.example.soundboard.ui
 
-import com.example.soundboard.APP_VERSION_NAME
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -26,6 +25,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -56,7 +56,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -64,8 +63,10 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.soundboard.APP_VERSION_NAME
 import com.example.soundboard.BoardRef
 import com.example.soundboard.RecentBoardItem
 import com.example.soundboard.model.Board
@@ -98,7 +99,8 @@ internal fun BoardTopBar(
     onShowRecentBoards: () -> Unit,
     onOpenBoard: (BoardRef, String) -> Unit,
     onExportBackup: () -> Unit,
-    onImportBackup: () -> Unit
+    onImportBackup: () -> Unit,
+    lock: EditingLock = EditingLock.None
 ) {
     // Held here, not in HamburgerMenu: portrait and landscape put the menu in different layouts
     // below, so rotating recomposes it from scratch and it would forget it was open (#237).
@@ -119,7 +121,8 @@ internal fun BoardTopBar(
             onShowRecentBoards = onShowRecentBoards,
             onOpenBoard = onOpenBoard,
             onExportBackup = onExportBackup,
-            onImportBackup = onImportBackup
+            onImportBackup = onImportBackup,
+            lock = lock
         )
     }
 
@@ -145,7 +148,7 @@ internal fun BoardTopBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Soundboard", style = MaterialTheme.typography.titleMedium)
-                PageTabs(board, onSelectPage, onOpenDialog, modifier = Modifier.weight(1f))
+                PageTabs(board, onSelectPage, onOpenDialog, locked = lock.locked, modifier = Modifier.weight(1f))
                 menu()
             }
         }
@@ -155,7 +158,7 @@ internal fun BoardTopBar(
                 title = { Text("Soundboard", style = MaterialTheme.typography.titleLarge) },
                 actions = { menu() }
             )
-            PageTabs(board, onSelectPage, onOpenDialog, modifier = Modifier.fillMaxWidth())
+            PageTabs(board, onSelectPage, onOpenDialog, locked = lock.locked, modifier = Modifier.fillMaxWidth())
         }
     }
 }
@@ -175,7 +178,8 @@ private fun HamburgerMenu(
     onShowRecentBoards: () -> Unit,
     onOpenBoard: (BoardRef, String) -> Unit,
     onExportBackup: () -> Unit,
-    onImportBackup: () -> Unit
+    onImportBackup: () -> Unit,
+    lock: EditingLock
 ) {
     val uriHandler = LocalUriHandler.current
     var showMenu by menuOpen
@@ -199,139 +203,163 @@ private fun HamburgerMenu(
             // and crowd the switch against the label text.
             modifier = Modifier.widthIn(min = 260.dp)
         ) {
-            MenuSectionHeader("Boards")
-            DropdownMenuItem(
-                text = { Text("Rename board (${board.name})") },
-                leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null) },
-                onClick = menuAction { onOpenDialog(BoardDialog.RenameBoard) }
-            )
-            Box {
-                // Recent boards, then the built-in ones not already among them, so the built-in
-                // boards are one tap away even on a fresh install with nothing recent (#197).
+            if (lock.locked) {
+                // Only what's for everyday use; the rest waits behind Hold to unlock (#251).
+                MenuSwitchRow(Icons.Filled.Visibility, "Show mode", showModeEnabled, onShowModeChange)
                 DropdownMenuItem(
-                    text = { Text("Switch board") },
-                    leadingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
-                    onClick = {
-                        onShowRecentBoards()
-                        showRecentBoardsMenu = true
-                    }
+                    text = { Text("Speak...") },
+                    leadingIcon = { Icon(Icons.Filled.RecordVoiceOver, contentDescription = null) },
+                    onClick = menuAction { onOpenDialog(BoardDialog.Speak) }
                 )
-                DropdownMenu(
-                    expanded = showRecentBoardsMenu,
-                    onDismissRequest = { showRecentBoardsMenu = false },
-                    modifier = Modifier.widthIn(min = 240.dp)
-                ) {
-                    val recentRefs = recentBoards.map { it.ref }.toSet()
-                    val otherBuiltIns = builtInBoards.filterNot { it in recentRefs }
-                    if (recentBoards.isNotEmpty()) {
-                        MenuSectionHeader("Recent")
-                        recentBoards.forEach { item ->
-                            DropdownMenuItem(
-                                text = {
-                                    Column {
-                                        Text(item.label)
-                                        Text(
-                                            "${if (item.ref is BoardRef.BuiltIn) "Built-in" else "Saved"} · ${relativeSavedAt(item.usedAt)}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                },
-                                onClick = {
-                                    showRecentBoardsMenu = false
-                                    showMenu = false
-                                    onOpenBoard(item.ref, item.label)
-                                }
-                            )
-                        }
-                    }
-                    if (otherBuiltIns.isNotEmpty()) {
-                        if (recentBoards.isNotEmpty()) HorizontalDivider()
-                        MenuSectionHeader("Built-in")
-                        otherBuiltIns.forEach { ref ->
-                            DropdownMenuItem(
-                                text = { Text(ref.label) },
-                                onClick = {
-                                    showRecentBoardsMenu = false
-                                    showMenu = false
-                                    onOpenBoard(ref, ref.label)
-                                }
-                            )
-                        }
-                    }
-                    if (recentBoards.isEmpty() && otherBuiltIns.isEmpty()) {
-                        DropdownMenuItem(
-                            text = { Text("No recent boards yet") },
-                            enabled = false,
-                            onClick = {}
-                        )
-                    }
-                    HorizontalDivider()
+                HorizontalDivider()
+                HoldToUnlockItem(onUnlocked = lock.onUnlock)
+            } else {
+                MenuSectionHeader("Boards")
+                DropdownMenuItem(
+                    text = { Text("Rename board (${board.name})") },
+                    leadingIcon = { Icon(Icons.Filled.DriveFileRenameOutline, contentDescription = null) },
+                    onClick = menuAction { onOpenDialog(BoardDialog.RenameBoard) }
+                )
+                Box {
+                    // Recent boards, then the built-in ones not already among them, so the built-in
+                    // boards are one tap away even on a fresh install with nothing recent (#197).
                     DropdownMenuItem(
-                        text = { Text("See all boards...") },
+                        text = { Text("Switch board") },
+                        leadingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) },
                         onClick = {
-                            showRecentBoardsMenu = false
-                            showMenu = false
-                            onOpenDialog(BoardDialog.OpenBoard)
+                            onShowRecentBoards()
+                            showRecentBoardsMenu = true
                         }
                     )
+                    DropdownMenu(
+                        expanded = showRecentBoardsMenu,
+                        onDismissRequest = { showRecentBoardsMenu = false },
+                        modifier = Modifier.widthIn(min = 240.dp)
+                    ) {
+                        val recentRefs = recentBoards.map { it.ref }.toSet()
+                        val otherBuiltIns = builtInBoards.filterNot { it in recentRefs }
+                        if (recentBoards.isNotEmpty()) {
+                            MenuSectionHeader("Recent")
+                            recentBoards.forEach { item ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(item.label)
+                                            Text(
+                                                "${if (item.ref is BoardRef.BuiltIn) "Built-in" else "Saved"} · ${relativeSavedAt(item.usedAt)}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        showRecentBoardsMenu = false
+                                        showMenu = false
+                                        onOpenBoard(item.ref, item.label)
+                                    }
+                                )
+                            }
+                        }
+                        if (otherBuiltIns.isNotEmpty()) {
+                            if (recentBoards.isNotEmpty()) HorizontalDivider()
+                            MenuSectionHeader("Built-in")
+                            otherBuiltIns.forEach { ref ->
+                                DropdownMenuItem(
+                                    text = { Text(ref.label) },
+                                    onClick = {
+                                        showRecentBoardsMenu = false
+                                        showMenu = false
+                                        onOpenBoard(ref, ref.label)
+                                    }
+                                )
+                            }
+                        }
+                        if (recentBoards.isEmpty() && otherBuiltIns.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("No recent boards yet") },
+                                enabled = false,
+                                onClick = {}
+                            )
+                        }
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("See all boards...") },
+                            onClick = {
+                                showRecentBoardsMenu = false
+                                showMenu = false
+                                onOpenDialog(BoardDialog.OpenBoard)
+                            }
+                        )
+                    }
                 }
+                // Saving a board keeps a same-device copy (see SavedBoardRepository) — lighter
+                // than a backup, which also carries the audio off the device.
+                DropdownMenuItem(
+                    text = { Text("Save board as...") },
+                    leadingIcon = { Icon(Icons.Filled.Save, contentDescription = null) },
+                    onClick = menuAction { onOpenDialog(BoardDialog.SaveBoardAs) }
+                )
+                DropdownMenuItem(
+                    text = { Text("Open board...") },
+                    leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
+                    onClick = menuAction { onOpenDialog(BoardDialog.OpenBoard) }
+                )
+                HorizontalDivider()
+                // Mode
+                MenuSwitchRow(Icons.Filled.Edit, "Edit mode", editMode, onEditModeChange)
+                // Its timer, tap-to-close and mute options live in Settings → Show mode.
+                MenuSwitchRow(Icons.Filled.Visibility, "Show mode", showModeEnabled, onShowModeChange)
+                // The caregiver lock (#251): switching it on locks straight away and closes the menu.
+                MenuSwitchRow(Icons.Filled.Lock, "Lock editing", lock.enabled) { on ->
+                    lock.onEnable(on)
+                    if (on) showMenu = false
+                }
+                if (lock.enabled) {
+                    DropdownMenuItem(
+                        text = { Text("Lock now") },
+                        leadingIcon = { Icon(Icons.Filled.Lock, contentDescription = null) },
+                        onClick = menuAction(lock.onLockNow)
+                    )
+                }
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text = { Text("Speak...") },
+                    leadingIcon = { Icon(Icons.Filled.RecordVoiceOver, contentDescription = null) },
+                    onClick = menuAction { onOpenDialog(BoardDialog.Speak) }
+                )
+                HorizontalDivider()
+                // Settings — see SettingsDialog
+                DropdownMenuItem(
+                    text = { Text("Settings") },
+                    leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
+                    onClick = menuAction { onOpenDialog(BoardDialog.Settings) }
+                )
+                HorizontalDivider()
+                MenuSectionHeader("Page")
+                DropdownMenuItem(
+                    text = { Text("Page options (${board.currentPage.name})") },
+                    leadingIcon = { Icon(Icons.Filled.MoreHoriz, contentDescription = null) },
+                    onClick = menuAction { onOpenDialog(BoardDialog.PageOptions(board.currentPageIndex)) }
+                )
+                HorizontalDivider()
+                // Backup — full, portable, self-contained (structure + audio)
+                MenuSectionHeader("Backup")
+                DropdownMenuItem(
+                    text = { Text("Export backup") },
+                    leadingIcon = { Icon(Icons.Filled.Upload, contentDescription = null) },
+                    onClick = menuAction(onExportBackup)
+                )
+                DropdownMenuItem(
+                    text = { Text("Import backup") },
+                    leadingIcon = { Icon(Icons.Filled.Download, contentDescription = null) },
+                    onClick = menuAction(onImportBackup)
+                )
+                DropdownMenuItem(
+                    text = { Text("Clean up unused clips") },
+                    leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                    onClick = menuAction { onOpenDialog(BoardDialog.StrayCleanup) }
+                )
             }
-            // Saving a board keeps a same-device copy (see SavedBoardRepository) — lighter
-            // than a backup, which also carries the audio off the device.
-            DropdownMenuItem(
-                text = { Text("Save board as...") },
-                leadingIcon = { Icon(Icons.Filled.Save, contentDescription = null) },
-                onClick = menuAction { onOpenDialog(BoardDialog.SaveBoardAs) }
-            )
-            DropdownMenuItem(
-                text = { Text("Open board...") },
-                leadingIcon = { Icon(Icons.Filled.FolderOpen, contentDescription = null) },
-                onClick = menuAction { onOpenDialog(BoardDialog.OpenBoard) }
-            )
-            HorizontalDivider()
-            // Mode
-            MenuSwitchRow(Icons.Filled.Edit, "Edit mode", editMode, onEditModeChange)
-            // Its timer, tap-to-close and mute options live in Settings → Show mode.
-            MenuSwitchRow(Icons.Filled.Visibility, "Show mode", showModeEnabled, onShowModeChange)
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text("Speak...") },
-                leadingIcon = { Icon(Icons.Filled.RecordVoiceOver, contentDescription = null) },
-                onClick = menuAction { onOpenDialog(BoardDialog.Speak) }
-            )
-            HorizontalDivider()
-            // Settings — see SettingsDialog
-            DropdownMenuItem(
-                text = { Text("Settings") },
-                leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) },
-                onClick = menuAction { onOpenDialog(BoardDialog.Settings) }
-            )
-            HorizontalDivider()
-            MenuSectionHeader("Page")
-            DropdownMenuItem(
-                text = { Text("Page options (${board.currentPage.name})") },
-                leadingIcon = { Icon(Icons.Filled.MoreHoriz, contentDescription = null) },
-                onClick = menuAction { onOpenDialog(BoardDialog.PageOptions(board.currentPageIndex)) }
-            )
-            HorizontalDivider()
-            // Backup — full, portable, self-contained (structure + audio)
-            MenuSectionHeader("Backup")
-            DropdownMenuItem(
-                text = { Text("Export backup") },
-                leadingIcon = { Icon(Icons.Filled.Upload, contentDescription = null) },
-                onClick = menuAction(onExportBackup)
-            )
-            DropdownMenuItem(
-                text = { Text("Import backup") },
-                leadingIcon = { Icon(Icons.Filled.Download, contentDescription = null) },
-                onClick = menuAction(onImportBackup)
-            )
-            DropdownMenuItem(
-                text = { Text("Clean up unused clips") },
-                leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                onClick = menuAction { onOpenDialog(BoardDialog.StrayCleanup) }
-            )
             HorizontalDivider()
             DropdownMenuItem(
                 text = {
@@ -361,6 +389,7 @@ private fun PageTabs(
     board: Board,
     onSelectPage: (Int) -> Unit,
     onOpenDialog: (BoardDialog) -> Unit,
+    locked: Boolean,
     modifier: Modifier
 ) {
     PrimaryScrollableTabRow(selectedTabIndex = board.currentPageIndex, modifier = modifier) {
@@ -377,7 +406,9 @@ private fun PageTabs(
                 // direct child PrimaryScrollableTabRow measures for its selection
                 // indicator — wrapping it in a separate Box threw off the indicator's
                 // centering, most visible on short page names.
-                modifier = Modifier.pointerInput(page.id, board.longPressDurationMillis) {
+                // Locked (#251), a long press is just a press: no Page options.
+                modifier = Modifier.pointerInput(page.id, board.longPressDurationMillis, locked) {
+                    if (locked) return@pointerInput
                     awaitEachGesture {
                         val down = awaitFirstDown(pass = PointerEventPass.Initial)
                         // Races the long-press timeout against the pointer either
@@ -427,11 +458,13 @@ private fun PageTabs(
                     ?: MaterialTheme.colorScheme.primary
             )
         }
-        Tab(
-            selected = false,
-            onClick = { onOpenDialog(BoardDialog.AddPage) },
-            icon = { Icon(Icons.Filled.Add, contentDescription = "Add page") }
-        )
+        if (!locked) {
+            Tab(
+                selected = false,
+                onClick = { onOpenDialog(BoardDialog.AddPage) },
+                icon = { Icon(Icons.Filled.Add, contentDescription = "Add page") }
+            )
+        }
     }
 }
 

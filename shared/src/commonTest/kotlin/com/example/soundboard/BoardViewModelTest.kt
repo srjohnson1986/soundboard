@@ -122,6 +122,45 @@ class BoardViewModelTest {
         assertEquals(listOf(BoardViewModel.SPEECH_PREVIEW), speaker.spoken)
     }
 
+    // --- Caregiver lock (#251) ---
+
+    @Test
+    fun `the lock is off by default, and turning it on locks at once and on every launch after`() = runTest(dispatcher) {
+        val vm = newViewModel()
+        assertFalse(vm.editingLocked.value)
+
+        vm.setEditingLockEnabled(true)
+
+        assertTrue(vm.editingLocked.value)
+        assertTrue(newViewModel().editingLocked.value)
+    }
+
+    @Test
+    fun `unlocking lasts until the board relocks or the app restarts`() = runTest(dispatcher) {
+        val vm = newViewModel()
+        vm.setEditingLockEnabled(true)
+
+        vm.unlockEditing()
+        assertFalse(vm.editingLocked.value)
+        assertTrue(vm.editingLockEnabled.value)
+        assertTrue(newViewModel().editingLocked.value)
+
+        vm.relockEditing()
+        assertTrue(vm.editingLocked.value)
+    }
+
+    @Test
+    fun `with the lock off, relocking does nothing`() = runTest(dispatcher) {
+        val vm = newViewModel()
+        vm.setEditingLockEnabled(true)
+        vm.setEditingLockEnabled(false)
+
+        vm.relockEditing()
+
+        assertFalse(vm.editingLocked.value)
+        assertFalse(newViewModel().editingLocked.value)
+    }
+
     // --- Backup reminder (#249) ---
 
     @Test

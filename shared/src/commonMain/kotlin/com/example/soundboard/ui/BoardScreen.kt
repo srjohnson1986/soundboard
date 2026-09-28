@@ -85,6 +85,7 @@ fun BoardScreen(vm: BoardViewModel) {
     val shownText by vm.shownText.collectAsStateWithLifecycle()
     val speechAvailable by vm.speechAvailable.collectAsStateWithLifecycle()
     val mediaMuted by vm.mediaMuted.collectAsStateWithLifecycle()
+    val backupReminderDue by vm.backupReminderDue.collectAsStateWithLifecycle()
     val speech by vm.speech.collectAsStateWithLifecycle()
     val speechVoices by vm.speechVoices.collectAsStateWithLifecycle()
     var openDialog by remember { mutableStateOf<BoardDialog?>(null) }
@@ -251,7 +252,7 @@ fun BoardScreen(vm: BoardViewModel) {
                         vm.refreshSavedBoards()
                     },
                     onOpenBoard = ::requestOpenBoard,
-                    onExportBackup = { exportBackup("soundboard-backup.zip") },
+                    onExportBackup = { exportBackup(BACKUP_FILE_NAME) },
                     onImportBackup = importBackup
                 )
             }
@@ -273,6 +274,9 @@ fun BoardScreen(vm: BoardViewModel) {
                         page.tiles.any { it.fileName == null && it.isPlayable(board.speakUnrecordedTilesEnabled) }
                     }
                 )
+                if (backupReminderDue) {
+                    BackupReminder(onBackUp = { exportBackup(BACKUP_FILE_NAME) }, onLater = vm::snoozeBackupReminder)
+                }
                 val homePage = board.homePage
                 if (board.stickyHomeRowEnabled && homePage != null && board.currentPageIndex != board.homePageIndex) {
                     PinnedRow(
@@ -601,3 +605,6 @@ private fun BoardBackground(board: Board, readImage: suspend (String) -> ByteArr
     }
     return backgroundBitmap != null || backgroundColorArgb != null
 }
+
+/** What a backup is called when the save picker opens. */
+private const val BACKUP_FILE_NAME = "soundboard-backup.zip"

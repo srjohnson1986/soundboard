@@ -65,6 +65,10 @@ class BoardViewModelTest {
     private val recentBoardsRepo = RecentBoardsRepository(files)
     private val mediaVolume = FakeMediaVolume()
 
+    /** The time the view model sees, in epoch milliseconds; tests move it on. */
+    private var clock = 1_000_000_000L
+    private val week = BoardViewModel.BACKUP_REMINDER_AFTER.inWholeMilliseconds
+
     @BeforeTest
     fun setMain() = Dispatchers.setMain(dispatcher)
 
@@ -72,7 +76,7 @@ class BoardViewModelTest {
     fun resetMain() = Dispatchers.resetMain()
 
     private fun newViewModel() =
-        BoardViewModel(repo, player, recorder, savedBoardRepo, speaker, devicePrefs, recentBoardsRepo, ioDispatcher = dispatcher, mediaVolume = mediaVolume)
+        BoardViewModel(repo, player, recorder, savedBoardRepo, speaker, devicePrefs, recentBoardsRepo, ioDispatcher = dispatcher, now = { clock }, mediaVolume = mediaVolume)
 
     private fun boardWith(vararg tiles: Tile) = Board(
         pages = listOf(Page(rows = 1, columns = tiles.size, tiles = tiles.toList()))
@@ -116,6 +120,88 @@ class BoardViewModelTest {
         newViewModel().previewSpeech()
 
         assertEquals(listOf(BoardViewModel.SPEECH_PREVIEW), speaker.spoken)
+    }
+
+    // --- Backup reminder (#249) ---
+
+    @Test
+    fun `a board nobody has changed never asks for a backup`() = runTest(dispatcher) {
+        val vm = newViewModel()
+
+        clock += 4 * week
+        vm.activate(Tile(id = "x", label = "Hey", speakWhenNoSound = true))
+
+        assertFalse(vm.backupReminderDue.value)
+    }
+
+    @Test
+    fun `changes that go a week without a backup bring the reminder, which lasts across launches`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        vm.setLabel("a", "Water")
+        clock += week - 1
+        vm.activate(tile(vm, "a"))
+        assertFalse(vm.backupReminderDue.value)
+
+        clock += 1
+        vm.activate(tile(vm, "a"))
+        assertTrue(vm.backupReminderDue.value)
+        assertTrue(newViewModel().backupReminderDue.value)
+    }
+
+    @Test
+    fun `a backup puts the reminder away until there are new changes`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+        vm.setLabel("a", "Water")
+        clock += week
+        vm.activate(tile(vm, "a"))
+        assertTrue(vm.backupReminderDue.value)
+
+        vm.exportBoard(CapturingSaveTarget())
+        assertFalse(vm.backupReminderDue.value)
+        clock += 4 * week
+        vm.activate(tile(vm, "a"))
+        assertFalse(vm.backupReminderDue.value)
+
+        vm.setLabel("a", "Juice")
+        clock += week
+        vm.activate(tile(vm, "a"))
+        assertTrue(vm.backupReminderDue.value)
+    }
+
+    @Test
+    fun `later puts the reminder away for a week`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+        vm.setLabel("a", "Water")
+        clock += week
+        vm.activate(tile(vm, "a"))
+
+        vm.snoozeBackupReminder()
+        assertFalse(vm.backupReminderDue.value)
+        clock += week - 1
+        vm.activate(tile(vm, "a"))
+        assertFalse(vm.backupReminderDue.value)
+
+        clock += 1
+        vm.activate(tile(vm, "a"))
+        assertTrue(vm.backupReminderDue.value)
+    }
+
+    @Test
+    fun `opening another board starts the week over`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+        vm.setLabel("a", "Water")
+        clock += week
+        vm.activate(tile(vm, "a"))
+        assertTrue(vm.backupReminderDue.value)
+
+        vm.openBoard(BoardRef.BuiltIn("tts-care-board.zip", "TTS Care Board"))
+
+        assertFalse(vm.backupReminderDue.value)
     }
 
     @Test

@@ -344,6 +344,13 @@ new device.
 on the board now is gone once the backup loads. Export first if you want to
 keep it.
 
+**A reminder to back up:** once the board has had changes for a week that
+aren't in a backup, a bar above the board says so. **Back up** exports one
+right there; **Later** puts the reminder away for another week. Recordings
+live only on the device, so a recent backup is what keeps them if it's lost,
+broken or reset. Exporting a backup, or opening or importing a board, starts
+the week over.
+
 **Clean up unused clips** finds sound files that no tile uses on the current
 board or any saved board. For example, a recording replaced by a newer one
 may still be taking up space. You can export them to a zip first and then

@@ -1,6 +1,7 @@
 package com.example.soundboard.data
 
 import com.example.soundboard.model.ShowModeSettings
+import com.example.soundboard.model.SpeechSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -53,5 +54,22 @@ class DevicePreferencesTest {
         prefs().recordingTrimEndMillis = 500
 
         assertEquals(500, prefs().recordingTrimEndMillis)
+    }
+
+    @Test
+    fun `speech defaults to the device's voice at normal speed and pitch, and persists`() {
+        assertEquals(SpeechSettings(), prefs().speech)
+
+        prefs().speech = SpeechSettings(voiceId = "en-us-x-iob-local", ratePercent = 75, pitchPercent = 125)
+
+        assertEquals(SpeechSettings(voiceId = "en-us-x-iob-local", ratePercent = 75, pitchPercent = 125), prefs().speech)
+    }
+
+    @Test
+    fun `going back to the default voice forgets the chosen one, and odd speeds are kept in range`() {
+        prefs().speech = SpeechSettings(voiceId = "some-voice")
+        prefs().speech = SpeechSettings(voiceId = null, ratePercent = 5, pitchPercent = 9_000)
+
+        assertEquals(SpeechSettings(voiceId = null, ratePercent = 25, pitchPercent = 400), prefs().speech)
     }
 }

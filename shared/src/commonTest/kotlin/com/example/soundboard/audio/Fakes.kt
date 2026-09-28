@@ -1,5 +1,6 @@
 package com.example.soundboard.audio
 
+import com.example.soundboard.model.SpeechSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Records calls instead of touching real audio. Loads and plays are treated as instant. */
@@ -72,6 +73,15 @@ class FakeRecorder : Recorder {
 class FakeSpeaker : Speaker {
     val spoken = mutableListOf<String>()
     override val available = MutableStateFlow<Boolean?>(true)
+    override val voices = MutableStateFlow<List<SpeechVoice>>(emptyList())
+
+    /** The settings it was last told to speak with. */
+    var configured: SpeechSettings? = null
+        private set
+
+    override fun configure(settings: SpeechSettings) {
+        configured = settings
+    }
     var stopped = false
     var shutdown = false
 

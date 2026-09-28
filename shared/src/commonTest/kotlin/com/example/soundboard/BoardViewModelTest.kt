@@ -24,6 +24,7 @@ import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.Page
 import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.ShowModeSettings
+import com.example.soundboard.model.SpeechSettings
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
@@ -85,6 +86,36 @@ class BoardViewModelTest {
         vm.play(tile)
 
         assertEquals(listOf("a.mp3" to 0.7f), player.played)
+    }
+
+    @Test
+    fun `the speaker starts with this device's stored voice, speed and pitch`() = runTest(dispatcher) {
+        devicePrefs.speech = SpeechSettings(voiceId = "v2", ratePercent = 75)
+
+        val vm = newViewModel()
+
+        assertEquals(SpeechSettings(voiceId = "v2", ratePercent = 75), speaker.configured)
+        assertEquals(SpeechSettings(voiceId = "v2", ratePercent = 75), vm.speech.value)
+    }
+
+    @Test
+    fun `changing the voice, speed or pitch reaches the speaker and survives a fresh view model`() = runTest(dispatcher) {
+        val vm = newViewModel()
+
+        vm.setSpeechVoice("v2")
+        vm.setSpeechRatePercent(125)
+        vm.setSpeechPitchPercent(75)
+
+        val expected = SpeechSettings(voiceId = "v2", ratePercent = 125, pitchPercent = 75)
+        assertEquals(expected, speaker.configured)
+        assertEquals(expected, newViewModel().speech.value)
+    }
+
+    @Test
+    fun `preview says a sample sentence`() = runTest(dispatcher) {
+        newViewModel().previewSpeech()
+
+        assertEquals(listOf(BoardViewModel.SPEECH_PREVIEW), speaker.spoken)
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.example.soundboard.data
 
 import com.example.soundboard.model.ShowModeSettings
+import com.example.soundboard.model.SpeechSettings
 
 /**
  * Settings that describe this device rather than the board's content — deliberately
@@ -50,6 +51,19 @@ class DevicePreferences(private val prefs: KeyValueStore) {
             prefs.putBoolean(KEY_SHOW_MODE_FLIPPED, value.flipped)
         }
 
+    /** The voice, speed and pitch speaking tiles use on this device (#250). */
+    var speech: SpeechSettings
+        get() = SpeechSettings(
+            voiceId = prefs.getString(KEY_SPEECH_VOICE_ID),
+            ratePercent = prefs.getInt(KEY_SPEECH_RATE_PERCENT, 100).coerceIn(SpeechSettings.PERCENT_RANGE),
+            pitchPercent = prefs.getInt(KEY_SPEECH_PITCH_PERCENT, 100).coerceIn(SpeechSettings.PERCENT_RANGE)
+        )
+        set(value) {
+            prefs.putString(KEY_SPEECH_VOICE_ID, value.voiceId)
+            prefs.putInt(KEY_SPEECH_RATE_PERCENT, value.ratePercent.coerceIn(SpeechSettings.PERCENT_RANGE))
+            prefs.putInt(KEY_SPEECH_PITCH_PERCENT, value.pitchPercent.coerceIn(SpeechSettings.PERCENT_RANGE))
+        }
+
     companion object {
         /** The SharedPreferences file these live in on Android. */
         const val PREFS_NAME = "device_preferences"
@@ -67,5 +81,8 @@ class DevicePreferences(private val prefs: KeyValueStore) {
         private const val KEY_SHOW_MODE_TAP_TO_CLOSE = "show_mode_tap_to_close"
         private const val KEY_SHOW_MODE_MUTE_SOUNDS = "show_mode_mute_sounds"
         private const val KEY_SHOW_MODE_FLIPPED = "show_mode_flipped"
+        private const val KEY_SPEECH_VOICE_ID = "speech_voice_id"
+        private const val KEY_SPEECH_RATE_PERCENT = "speech_rate_percent"
+        private const val KEY_SPEECH_PITCH_PERCENT = "speech_pitch_percent"
     }
 }

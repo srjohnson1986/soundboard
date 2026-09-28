@@ -86,6 +86,15 @@ class SharedPreferencesStoreTest {
         assertEquals(7, store().getInt("count", 0))
         assertEquals(3, store().getInt("missing", 3))
     }
+
+    @Test
+    fun `a string reads back from a fresh store, and storing null removes it`() {
+        store().putString("voice", "en-us-x-iob-local")
+        assertEquals("en-us-x-iob-local", store().getString("voice"))
+
+        store().putString("voice", null)
+        assertEquals(null, store().getString("voice"))
+    }
 }
 
 /**

@@ -33,6 +33,11 @@ class LocalStorageKeyValueStore(private val prefix: String) : KeyValueStore {
     override fun putBoolean(key: String, value: Boolean) = localStorageSet(prefix + key, value.toString())
 
     override fun putInt(key: String, value: Int) = localStorageSet(prefix + key, value.toString())
+
+    override fun getString(key: String): String? = localStorageGet(prefix + key)
+
+    override fun putString(key: String, value: String?) =
+        if (value == null) localStorageRemove(prefix + key) else localStorageSet(prefix + key, value)
 }
 
 /** Built-in boards served next to the web app, at [baseUrl] + name, for each of [names]. */
@@ -57,6 +62,8 @@ private fun objectKeysJson(target: JsAny): String = js("JSON.stringify(Object.ke
 private fun localStorageGet(key: String): String? = js("(() => { try { return localStorage.getItem(key); } catch (e) { return null; } })()")
 
 private fun localStorageSet(key: String, value: String): Unit = js("{ try { localStorage.setItem(key, value); } catch (e) {} }")
+
+private fun localStorageRemove(key: String): Unit = js("{ try { localStorage.removeItem(key); } catch (e) {} }")
 
 private fun fetchBytes(url: String): Promise<JsAny> = js(
     """(async () => {

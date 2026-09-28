@@ -3,15 +3,19 @@ package com.example.soundboard.web
 import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.Recorder
 import com.example.soundboard.audio.Speaker
+import com.example.soundboard.audio.SpeechVoice
 import com.example.soundboard.data.FileStore
 import com.example.soundboard.data.toUint8Array
 import com.example.soundboard.data.uint8ArrayToByteArray
+import com.example.soundboard.model.SpeechSettings
 import kotlin.js.Promise
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.await
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 
 /**
  * [Player] on the Web Audio API: each clip is decoded into memory when it's loaded (like
@@ -65,7 +69,29 @@ class WebSpeaker : Speaker {
     /** A browser without speech synthesis can't speak at all; otherwise it can (#248). */
     override val available: StateFlow<Boolean?> = MutableStateFlow(speechSupported())
 
-    override fun speak(text: String) = speakText(text)
+    private val _voices = MutableStateFlow<List<SpeechVoice>>(emptyList())
+    override val voices: StateFlow<List<SpeechVoice>> = _voices.asStateFlow()
+
+    private var settings = SpeechSettings()
+
+    init {
+        if (speechSupported()) {
+            // Browsers load their voices after the page, and say so with voiceschanged.
+            refreshVoices()
+            onVoicesChanged { refreshVoices() }
+        }
+    }
+
+    private fun refreshVoices() {
+        _voices.value = Json.decodeFromString<List<List<String>>>(voicesJson()).map { (id, name) -> SpeechVoice(id, name) }
+    }
+
+    override fun configure(settings: SpeechSettings) {
+        this.settings = settings
+    }
+
+    override fun speak(text: String) =
+        speakText(text, settings.ratePercent / 100.0, settings.pitchPercent / 100.0, settings.voiceId.orEmpty())
     override fun stop() = stopSpeaking()
     override fun shutdown() = stopSpeaking()
 }
@@ -147,12 +173,29 @@ private fun playClip(clip: JsAny, volume: Double): JsAny = js(
 
 private fun stopClip(source: JsAny): Unit = js("{ try { source.stop(); } catch (e) {} }")
 
-private fun speakText(text: String): Unit = js(
+private fun speakText(text: String, rate: Double, pitch: Double, voiceUri: String): Unit = js(
     """{
         speechSynthesis.cancel();
-        speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = rate;
+        utterance.pitch = pitch;
+        const voice = voiceUri ? speechSynthesis.getVoices().find(v => v.voiceURI === voiceUri) : null;
+        if (voice) utterance.voice = voice;
+        speechSynthesis.speak(utterance);
     }"""
 )
+
+/** The browser's voices for the page's language, as a JSON list of [voiceURI, name] pairs. */
+private fun voicesJson(): String = js(
+    """(() => {
+        const language = (navigator.language || 'en').split('-')[0].toLowerCase();
+        return JSON.stringify(speechSynthesis.getVoices()
+            .filter(v => v.lang.toLowerCase().startsWith(language))
+            .map(v => [v.voiceURI, v.name]));
+    })()"""
+)
+
+private fun onVoicesChanged(callback: () -> Unit): Unit = js("{ speechSynthesis.addEventListener('voiceschanged', () => callback()); }")
 
 private fun stopSpeaking(): Unit = js("{ speechSynthesis.cancel(); }")
 

@@ -65,4 +65,6 @@ class SharedPreferencesStore(context: Context, name: String) : KeyValueStore {
     override fun getInt(key: String, default: Int): Int = prefs.getInt(key, default)
     override fun putBoolean(key: String, value: Boolean) = prefs.edit { putBoolean(key, value) }
     override fun putInt(key: String, value: Int) = prefs.edit { putInt(key, value) }
+    override fun getString(key: String): String? = prefs.getString(key, null)
+    override fun putString(key: String, value: String?) = prefs.edit { if (value == null) remove(key) else putString(key, value) }
 }

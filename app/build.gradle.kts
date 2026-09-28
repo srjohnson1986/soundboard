@@ -9,8 +9,9 @@ plugins {
 }
 
 // Release signing is opt-in via a local, gitignored keystore.properties — see
-// docs/RELEASING.md. Without it (a fresh clone, or CI, which never runs
-// assembleRelease), the release build type stays unsigned exactly as before.
+// docs/RELEASING.md. Without it (a fresh clone), the release build type stays
+// unsigned exactly as before. The release workflow (android-release.yml) writes
+// one from repository secrets before it builds the published APK.
 val keystoreProperties = Properties().apply {
     val file = rootProject.file("keystore.properties")
     if (file.exists()) file.inputStream().use { load(it) }

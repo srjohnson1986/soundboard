@@ -39,7 +39,7 @@ class CaregiverLockUiTest : BoardUiTest() {
         val app = launchBoard(board)
 
         onNodeWithContentDescription("Menu").performClick()
-        clickSwitchBeside("Lock editing")
+        onNodeWithText("Lock editing").performScrollTo().performClick()
 
         waitUntil(timeoutMillis = 2_000) { app.vm.editingLocked.value }
         onNodeWithText("Hold to unlock").assertDoesNotExist() // the menu closed
@@ -91,8 +91,33 @@ class CaregiverLockUiTest : BoardUiTest() {
 
         holdUnlock(millis = EditingLock.HOLD_TO_UNLOCK.inWholeMilliseconds + 100)
         assertFalse(app.vm.editingLocked.value)
-        // The menu stays open, now with everything in it.
+        // The menu stays open, now with everything in it, and says it's unlocked only for now (#257).
         onNodeWithText("Settings").performScrollTo().assertIsDisplayed()
+        onNodeWithText("Unlocked for now", substring = true).performScrollTo().assertIsDisplayed()
+        onNodeWithText("Lock editing").assertDoesNotExist()
+    }
+
+    @Test
+    fun unlockedTheMenuLocksAgainOrTurnsTheLockOff() = runUiTest {
+        val app = launchBoard(board)
+        app.vm.setEditingLockEnabled(true)
+        app.vm.unlockEditing()
+        waitForIdle()
+
+        onNodeWithContentDescription("Menu").performClick()
+        onNodeWithText("Lock now").performScrollTo().performClick()
+        waitUntil(timeoutMillis = 2_000) { app.vm.editingLocked.value }
+
+        app.vm.unlockEditing()
+        waitForIdle()
+        onNodeWithContentDescription("Menu").performClick()
+        onNodeWithText("Turn off the lock").performScrollTo().performClick()
+
+        waitUntil(timeoutMillis = 2_000) { !app.vm.editingLockEnabled.value }
+        assertFalse(app.vm.editingLocked.value)
+        assertFalse(app.devicePrefs.editingLockEnabled)
+        onNodeWithContentDescription("Menu").performClick()
+        onNodeWithText("Lock editing").performScrollTo().assertIsDisplayed()
     }
 
     @Test

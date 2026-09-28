@@ -236,7 +236,7 @@ three are in **Settings → Home page**.
 ## Caregiver lock
 
 **Lock editing** in the **☰** menu keeps the board from being changed by
-accident. Switching it on locks straight away. While it's locked:
+accident. Tapping it locks straight away. While it's locked:
 
 - The **☰** menu has only **Show mode**, **Speak...** and **Hold to unlock**.
   Edit mode, Settings, switching or opening boards, Page options and backups
@@ -250,9 +250,11 @@ accident. Switching it on locks straight away. While it's locked:
 
 To unlock, open the **☰** menu and **hold Unlock for 3 seconds** while the ring
 fills. Letting go early starts over, so a stray tap never unlocks it. Unlocked,
-the menu has everything again, plus **Lock now**. The board locks itself again
-after 5 minutes without use (not while a dialog is open) and whenever the app
-restarts. Switch **Lock editing** off to turn the lock off altogether.
+the menu has everything again, plus **Lock now** and **Turn off the lock**.
+Unlocking is only for now: the board locks itself again after 5 minutes
+without use (not while a dialog is open) and whenever the app restarts.
+**Turn off the lock** turns it off altogether, until **Lock editing** is
+tapped again.
 
 The lock belongs to the device, so it isn't part of a backup. The backup
 reminder waits while the board is locked, for whoever unlocks it next.

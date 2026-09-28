@@ -408,7 +408,7 @@ the recording, where the tap on Stop is, by `DevicePreferences.recordingTrimEndM
 is depends on the device). `AudioRecorder` calls `trimAudioEnd` (`audio/AudioTrim.kt`),
 which copies the encoded AAC frames up to that point into a new file with
 `MediaExtractor`/`MediaMuxer`, so nothing is re-encoded. It keeps whole frames, so it cuts
-in steps of one frame (1024 samples: 128 ms at MediaRecorder's default 8 kHz); `WebRecorder` cuts it while converting to WAV. Both keep a recording
+in steps of one frame (1024 samples, 23 ms at 44.1 kHz); `WebRecorder` cuts it while converting to WAV. Both keep a recording
 whole if trimming would leave less than 0.3 s, and `AudioRecorder` keeps it whole
 if trimming fails for any reason.
 
@@ -416,6 +416,16 @@ if trimming fails for any reason.
 container — `SoundPlayer` branches on file size, not extension, so a
 recorded clip plays back through the exact same `SoundPool`/`MediaPlayer`
 path as an imported one, no conversion needed.
+
+**Recording settings** (#229). `AudioRecorder` asks for 44.1 kHz mono AAC at
+96 kbps (`RECORDING_SAMPLE_RATE`, `RECORDING_CHANNELS`, `RECORDING_BIT_RATE`).
+Without them MediaRecorder falls back to its framework defaults, 8 kHz at
+12.2 kbps, which is phone-call quality and made the trim step 128 ms. 96 kbps
+is plenty for mono voice and comes to 12 KB a second, so a clip stays under
+SoundPlayer's 300 KB SoundPool threshold up to about 25 s. A typical 2–5 s
+phrase is 25–60 KB. 128 kbps would sound no better for a single voice and
+would move the line to about 19 s. `AudioRecorderTest` checks the sample rate
+and channel count of a real recording with `MediaExtractor`.
 
 The flow, split between `EditTileDialog` (permission + button state) and
 `BoardViewModel` (the actual recording):

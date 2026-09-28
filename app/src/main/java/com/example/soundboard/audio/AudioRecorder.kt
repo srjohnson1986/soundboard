@@ -7,6 +7,15 @@ import com.example.soundboard.data.FileSystemStore
 import java.io.File
 
 /**
+ * 44.1 kHz mono AAC at 96 kbps (#229). MediaRecorder's own defaults are 8 kHz at 12.2 kbps,
+ * phone-call quality. 96 kbps is 12 KB a second, so clips up to about 25 s stay under
+ * [SoundPlayer]'s 300 KB SoundPool threshold.
+ */
+internal const val RECORDING_SAMPLE_RATE = 44_100
+internal const val RECORDING_BIT_RATE = 96_000
+internal const val RECORDING_CHANNELS = 1
+
+/**
  * Wraps [MediaRecorder] for short voice clips, encoded as AAC in an MP4
  * container. [SoundPlayer] picks a playback path by file size alone, not
  * format, so a recorded clip needs no conversion before it can be assigned
@@ -27,6 +36,9 @@ class AudioRecorder(private val context: Context, private val files: FileSystemS
                 setAudioSource(MediaRecorder.AudioSource.MIC)
                 setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
                 setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioChannels(RECORDING_CHANNELS)
+                setAudioSamplingRate(RECORDING_SAMPLE_RATE)
+                setAudioEncodingBitRate(RECORDING_BIT_RATE)
                 setOutputFile(file.absolutePath)
                 prepare()
                 start()

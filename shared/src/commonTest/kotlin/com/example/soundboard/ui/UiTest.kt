@@ -1,7 +1,9 @@
 package com.example.soundboard.ui
 
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.test.TestResult
 
 /**
@@ -31,3 +33,19 @@ expect fun dialogsUsePlatformWidth(): Boolean
 /** Closes the open dropdown menu, the way a user would on the platform. */
 @OptIn(ExperimentalTestApi::class)
 expect fun ComposeUiTest.closeMenu()
+
+/**
+ * Animations that finish in their first frame, for the tests that draw with Skia (the browser
+ * and iOS). Their idle wait steps the test clock a frame at a time until nothing wants
+ * another frame, and a text field's animations sometimes re-arm one another for good, so
+ * the wait never ended and headless Chrome stopped answering (#279).
+ */
+internal object NoMotion : MotionDurationScale {
+    override val scaleFactor: Float = 0f
+}
+
+/**
+ * The longest a Skia-drawn UI test may take. Its idle wait never yields to the browser, so
+ * one that never ends stalls the whole run (#279); this makes it fail that test instead.
+ */
+val SKIA_TEST_TIMEOUT = 20.seconds

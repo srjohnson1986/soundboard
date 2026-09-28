@@ -49,6 +49,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -99,8 +100,14 @@ internal fun BoardTopBar(
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit
 ) {
+    // Held here, not in HamburgerMenu: portrait and landscape put the menu in different layouts
+    // below, so rotating recomposes it from scratch and it would forget it was open (#237).
+    val menuOpen = remember { mutableStateOf(false) }
+    val recentBoardsMenuOpen = remember { mutableStateOf(false) }
     val menu: @Composable () -> Unit = {
         HamburgerMenu(
+            menuOpen = menuOpen,
+            recentBoardsMenuOpen = recentBoardsMenuOpen,
             board = board,
             recentBoards = recentBoards,
             builtInBoards = builtInBoards,
@@ -155,6 +162,8 @@ internal fun BoardTopBar(
 
 @Composable
 private fun HamburgerMenu(
+    menuOpen: MutableState<Boolean>,
+    recentBoardsMenuOpen: MutableState<Boolean>,
     board: Board,
     recentBoards: List<RecentBoardItem>,
     builtInBoards: List<BoardRef.BuiltIn>,
@@ -169,8 +178,8 @@ private fun HamburgerMenu(
     onImportBackup: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
-    var showMenu by remember { mutableStateOf(false) }
-    var showRecentBoardsMenu by remember { mutableStateOf(false) }
+    var showMenu by menuOpen
+    var showRecentBoardsMenu by recentBoardsMenuOpen
 
     /** Closes the menu, then runs [action] — every entry except Switch board and the mode switches. */
     fun menuAction(action: () -> Unit): () -> Unit = {

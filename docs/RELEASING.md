@@ -57,12 +57,28 @@ never `assembleRelease`, so it doesn't need this file at all).
      and that the bundled copies still match (see its "Keeping the bundled
      copies in sync" section, which has a one-line hash check).
    - **`docs/ARCHITECTURE.md`**: anything the release restructured.
-2. Bump `appVersionName` (and `appVersionCode`) in `gradle.properties`,
+2. **Check an update keeps everything.** Test builds are installed fresh, so
+   nothing else exercises updating over the version people already have
+   (#247). On an emulator, not a phone someone relies on:
+   1. Uninstall any debug build (it's signed with a different key), then
+      install the previous release's APK. `soundboard.apk` at the repo root is
+      the last one published; otherwise download it from its GitHub release.
+   2. Make it look used: rename the board, edit a tile's name, **Save board
+      as...** (so there's a saved and a recent board), change a board setting
+      (e.g. the theme) and a device one (e.g. Show mode or Performance mode).
+   3. Build this release, `./gradlew assembleRelease`, and install it **over**
+      the old one without clearing data:
+      `adb install -r app/build/outputs/apk/release/app-release.apk`.
+   4. Open it and check all of that is still there, the saved board under
+      **Switch board**, and no tile newly showing "needs recording" (load drops
+      a clip whose file is missing, so that would mean lost recordings).
+   Only then tag the release.
+3. Bump `appVersionName` (and `appVersionCode`) in `gradle.properties`,
    through the usual issue/branch/PR flow. The Android build reads them for
    `versionName`/`versionCode`, and the in-app version label (`APP_VERSION` in
    `shared/.../ui/BoardTopBar.kt`) and its release-notes link read the same
    value, so there's nothing else to keep in sync.
-3. Once that's merged, tag the merge commit and push the tag:
+4. Once that's merged, tag the merge commit and push the tag:
    ```bash
    git tag -a vX.Y.Z <commit> -m "vX.Y.Z"
    git push origin vX.Y.Z
@@ -78,7 +94,7 @@ never `assembleRelease`, so it doesn't need this file at all).
    deploys from `master` and `v*` tags (Settings → Environments →
    github-pages); a deploy "rejected by environment protection rules" means the
    tag doesn't match those.
-4. Build the signed APK and give it its release name:
+5. Build the signed APK and give it its release name:
    ```bash
    ./gradlew assembleRelease
    cp app/build/outputs/apk/release/app-release.apk soundboard.apk
@@ -89,13 +105,13 @@ never `assembleRelease`, so it doesn't need this file at all).
    release, which is handy to bookmark on the devices that sideload it:
    `https://github.com/srjohnson1986/soundboard/releases/latest/download/soundboard.apk`.
    (`soundboard.apk` at the repo root is gitignored.)
-5. Publish the release and attach the APK:
+6. Publish the release and attach the APK:
    ```bash
    gh release create vX.Y.Z --title vX.Y.Z --generate-notes soundboard.apk
    ```
    (Or `gh release upload vX.Y.Z soundboard.apk` if the release already
    exists without it.)
-6. Sync the wiki, which mirrors `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`
+7. Sync the wiki, which mirrors `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`
    and this file for people who browse the wiki instead of the repo:
    ```bash
    scripts/sync-wiki.sh

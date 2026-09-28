@@ -7,21 +7,22 @@ as the sole path to disk. Everything else is Compose reacting to a `StateFlow`.
 
 | Module | What's in it |
 |---|---|
-| `shared/` | Code that doesn't depend on Android, built for both Android and WebAssembly (Kotlin Multiplatform): the board model (`model/`), the repositories (`data/`), `BoardViewModel` and `BoardSettingsActions`, the `Player`/`Recorder`/`Speaker`/`MediaVolume` interfaces (`audio/`), and the whole Compose UI (`ui/`), with its fonts as Compose Resources (`composeResources/font/`). |
+| `shared/` | Code that doesn't depend on Android, built for Android, WebAssembly and iOS (Kotlin Multiplatform): the board model (`model/`), the repositories (`data/`), `BoardViewModel` and `BoardSettingsActions`, the `Player`/`Recorder`/`Speaker`/`MediaVolume` interfaces (`audio/`), and the whole Compose UI (`ui/`), with its fonts as Compose Resources (`composeResources/font/`). |
 | `web/` | The web app: `main()` (`WebMain.kt`), the browser's audio and speech (`WebAudioPlayer` on Web Audio, `WebRecorder` on MediaRecorder, `WebSpeaker` on speechSynthesis), and `index.html`. It serves the TTS board from `presets/` as `boards/tts-care-board.zip`. |
 | `app/` | The Android app: `MainActivity`, `BoardViewModelFactory`, the audio and speech implementations (`SoundPlayer`, `AudioRecorder`, `TtsSpeaker`, `AndroidMediaVolume`), the manifest, launcher icons and built-in board assets. It uses `shared` like any other library. |
+| `ios/` | The iOS app (#266): `MainViewController()` (the screen the Swift shell in `ios/app/` shows), and iOS's audio and speech (`IosAudioPlayer` on AVAudioPlayer, `IosRecorder` on AVAudioRecorder with the end trim, `IosSpeaker` on AVSpeechSynthesizer, `IosMediaVolume`), built as the `SoundboardKit` framework. `ios/app/project.yml` is the Xcode project as an XcodeGen spec. It only builds on macOS: the **iOS** workflow builds it, runs it on a simulated iPhone and screenshots it. It ships the TTS board, as the web does. |
 
 `shared`'s common code has no Android or Compose dependencies. Keep it that way:
 anything that needs a platform goes behind one of the small interfaces in
 `shared/.../data/Storage.kt`, with an implementation per platform:
 
-| Interface | What it is | Android implementation | Web implementation (`shared/src/wasmJsMain`) |
-|---|---|---|---|
-| `FileStore` | App-private files by relative path (`board.json`, `sounds/<name>`) | `FileSystemStore(filesDir)` (`shared/src/androidMain`) | `OpfsFileStore`, the browser's origin-private file system |
-| `ZipCodec` | Reads/writes zip archives (backups, built-in boards) | `JavaZipCodec`, on `java.util.zip` (`shared/src/androidMain`) | `FflateZipCodec`, on the `fflate` npm package |
-| `PickedFile` / `SaveTarget` | A file the user picked to open / somewhere they picked to save | `UriPickedFile` / `UriSaveTarget`, on content URIs (`shared/src/androidMain/.../data/AndroidStorage.kt`) | `BrowserPickedFile` / `DownloadSaveTarget`: a file chooser, and a download |
-| `BundledBoards` | The built-in board zips packaged with the build | `AssetBundledBoards`, on APK assets (same file) | `WebBundledBoards`, fetched from next to the page |
-| `KeyValueStore` | Small device-local settings (`DevicePreferences`) | `SharedPreferencesStore` (same file) | `LocalStorageKeyValueStore` |
+| Interface | What it is | Android implementation | Web implementation (`shared/src/wasmJsMain`) | iOS implementation (`shared/src/iosMain`) |
+|---|---|---|---|---|
+| `FileStore` | App-private files by relative path (`board.json`, `sounds/<name>`) | `FileSystemStore(filesDir)` (`shared/src/androidMain`) | `OpfsFileStore`, the browser's origin-private file system | `IosFileStore`, on a directory in Application Support |
+| `ZipCodec` | Reads/writes zip archives (backups, built-in boards) | `JavaZipCodec`, on `java.util.zip` (`shared/src/androidMain`) | `FflateZipCodec`, on the `fflate` npm package | `IosZipCodec`: the zip structure in Kotlin, zlib for inflating and checksums; writes entries stored |
+| `PickedFile` / `SaveTarget` | A file the user picked to open / somewhere they picked to save | `UriPickedFile` / `UriSaveTarget`, on content URIs (`shared/src/androidMain/.../data/AndroidStorage.kt`) | `BrowserPickedFile` / `DownloadSaveTarget`: a file chooser, and a download | `IosPickedFile` / `IosSaveTarget`: the Files picker, which also asks where a saved file goes |
+| `BundledBoards` | The built-in board zips packaged with the build | `AssetBundledBoards`, on APK assets (same file) | `WebBundledBoards`, fetched from next to the page | `IosBundledBoards`, from the app bundle |
+| `KeyValueStore` | Small device-local settings (`DevicePreferences`) | `SharedPreferencesStore` (same file) | `LocalStorageKeyValueStore` | `UserDefaultsKeyValueStore` |
 
 Web storage is private to the site and survives reloads, but the browser may clear
 it under storage pressure unless it grants persistent storage (`WebMain` asks); a

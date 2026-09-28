@@ -21,3 +21,8 @@ keystore.properties
 # Kotlin compiler caches (Kotlin Multiplatform)
 .kotlin/
 web/smoke/node_modules/
+
+# The iOS app's Xcode project is generated from ios/app/project.yml (xcodegen), along with its Info.plist.
+ios/app/Soundboard.xcodeproj/
+ios/app/Sources/Info.plist
+ios/app/build/

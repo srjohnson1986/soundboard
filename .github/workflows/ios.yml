@@ -1,7 +1,8 @@
 name: iOS
 
 # Builds the shared module for iOS and runs its tests (model, repositories, view model and
-# the shared UI tests) on the iPhone simulator (#265). Kotlin/Native's iOS targets only build
+# the shared UI tests) on the iPhone simulator (#265), then builds the iOS app, runs it on a
+# simulated iPhone and screenshots it (#266). Kotlin/Native's iOS targets only build
 # on macOS, which is why this has its own macOS runner; other hosts skip those targets.
 # Advisory, not a merge gate, like the UI tests: macOS runners are slower, and nothing
 # ships to iOS yet. What it catches is Android- or JVM-only code creeping into shared code.
@@ -52,7 +53,46 @@ jobs:
 
       # The device build as well as the simulator's, since some code only compiles for one.
       - name: Build for iOS and test on the simulator
-        run: ./gradlew :shared:compileKotlinIosArm64 :shared:iosSimulatorArm64Test --continue --stacktrace
+        run: ./gradlew :shared:compileKotlinIosArm64 :ios:compileKotlinIosArm64 :shared:iosSimulatorArm64Test --continue --stacktrace
+
+      # The app itself (#266): its Xcode project is generated from ios/app/project.yml, and
+      # its build phase has Gradle build the SoundboardKit framework for the simulator.
+      - name: Build the iOS app
+        run: |
+          brew install xcodegen
+          cd ios/app
+          xcodegen generate
+          xcodebuild -project Soundboard.xcodeproj -scheme Soundboard -configuration Debug             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'             -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+
+      # Launches the app on a simulated iPhone, checks it's still running after it has had
+      # time to start, and screenshots it, so a pull request shows what iOS looks like.
+      - name: Run the app on the simulator
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          print(next(d["udid"] for runtime, list_ in devices.items() if "iOS" in runtime for d in list_ if d["name"].startswith("iPhone")))')
+          xcrun simctl boot "$DEVICE"
+          xcrun simctl bootstatus "$DEVICE" -b
+          APP=$(find ios/app/build/Build/Products -name Soundboard.app -type d | head -1)
+          xcrun simctl install "$DEVICE" "$APP"
+          xcrun simctl launch "$DEVICE" com.example.soundboard
+          sleep 25
+          mkdir -p ios-screenshots
+          xcrun simctl io "$DEVICE" screenshot ios-screenshots/board.png
+          if ! xcrun simctl spawn "$DEVICE" launchctl list | grep -q com.example.soundboard; then
+            echo "The app isn't running: it crashed or quit."
+            xcrun simctl spawn "$DEVICE" log show --last 3m --style compact --predicate 'process == "Soundboard"' | tail -80
+            exit 1
+          fi
+
+      - name: Upload iOS screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-screenshots
+          path: ios-screenshots
+          if-no-files-found: ignore
 
       - name: Upload iOS test report
         if: always()

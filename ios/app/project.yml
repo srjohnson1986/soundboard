@@ -1,0 +1,57 @@
+# The iOS app's Xcode project, as an XcodeGen spec (#266): `xcodegen generate` in this
+# directory writes Soundboard.xcodeproj, which isn't kept in git. The app is a thin Swift
+# shell; everything else is the SoundboardKit framework (../build.gradle.kts), which the
+# build phase below has Gradle build for whichever device or simulator Xcode targets.
+name: Soundboard
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  Soundboard:
+    type: application
+    platform: iOS
+    scheme: {}
+    sources:
+      - path: Sources
+      # The built-in board that speaks, as on the web: no one's recorded voice ships with it.
+      - path: ../../presets/tts-care-board.zip
+        buildPhase: resources
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Soundboard
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UILaunchScreen: {}
+        # Compose draws at the display's full refresh rate.
+        CADisableMinimumFrameDurationOnPhone: true
+        NSMicrophoneUsageDescription: Soundboard records the sounds you put on its tiles.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.soundboard
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "6"
+        SWIFT_VERSION: "5.0"
+        FRAMEWORK_SEARCH_PATHS: "$(SRCROOT)/../build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        OTHER_LDFLAGS: ["$(inherited)", "-framework", "SoundboardKit"]
+        # The build phase runs Gradle, which reads and writes outside the project.
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        # The framework is built for Apple silicon simulators only (iosSimulatorArm64), as
+        # GitHub's macOS runners and current Macs are; Intel simulators would need iosX64.
+        EXCLUDED_ARCHS[sdk=iphonesimulator*]: x86_64
+    preBuildScripts:
+      - name: Build the Kotlin framework
+        basedOnDependencyAnalysis: false
+        script: |
+          cd "$SRCROOT/../.."
+          ./gradlew :ios:embedAndSignAppleFrameworkForXcode

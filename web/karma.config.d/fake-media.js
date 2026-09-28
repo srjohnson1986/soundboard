@@ -4,6 +4,11 @@ config.set({
     // Mocha's default of 2s per test is too tight for recording 1.5s of audio and then
     // decoding it, especially on a busy CI runner.
     client: { mocha: { timeout: 30000 } },
+    // Like shared/karma.config.d/timeout.js: don't fail the run on one missed heartbeat.
+    pingTimeout: 30000,
+    browserDisconnectTimeout: 30000,
+    browserDisconnectTolerance: 2,
+    browserNoActivityTimeout: 120000,
     browsers: ['ChromeHeadlessFakeMedia'],
     customLaunchers: {
         ChromeHeadlessFakeMedia: {

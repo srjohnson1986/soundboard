@@ -1,0 +1,135 @@
+name: Publish Android app
+
+# Builds the release APK from a release tag, signs it with the release key and attaches
+# it to that tag's GitHub release as soundboard.apk, so
+# https://github.com/srjohnson1986/soundboard/releases/latest/download/soundboard.apk
+# always serves the newest release. It runs when a release tag is pushed, alongside
+# web.yml, so the APK and the web version always ship together (see docs/RELEASING.md).
+#
+# "Run workflow" builds and verifies an existing tag without publishing (the APK is kept
+# as a workflow artifact instead); tick "publish" to replace that release's APK.
+#
+# Needs four repository secrets, added once (docs/RELEASING.md, "One-time: let CI sign
+# releases"): RELEASE_KEYSTORE_BASE64, RELEASE_STORE_PASSWORD, RELEASE_KEY_ALIAS and
+# RELEASE_KEY_PASSWORD.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build, e.g. v1.0.0'
+        required: true
+      publish:
+        description: 'Attach the APK to the release (otherwise a dry run)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# One publish per tag at a time, and never cancel one halfway through.
+concurrency:
+  group: android-release-${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+  PUBLISH: ${{ github.event_name == 'push' || inputs.publish }}
+  # SHA-256 of the certificate every published APK has been signed with (v0.1.0 on).
+  # Android only installs an update signed by the same key as the installed app, so an
+  # APK signed with anything else must never be published. Not a secret: anyone can read
+  # it off a published APK with `apksigner verify --print-certs`.
+  RELEASE_CERT_SHA256: 7025d027de2177f525b92159c1421da874c13bc3df2f36c1294a294e19431b1d
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ env.TAG }}
+
+      # A tag pushed before the version bump merged would otherwise publish the previous
+      # version's APK under the new tag.
+      - name: Check the tag matches appVersionName
+        run: |
+          version=$(sed -n 's/^appVersionName=//p' gradle.properties)
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::Tag $TAG doesn't match appVersionName=$version in gradle.properties."
+            exit 1
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # app/build.gradle.kts signs the release build only when keystore.properties exists,
+      # so without the secrets this would quietly build an unsigned APK. Stop instead.
+      - name: Write the signing config
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          for name in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret RELEASE_$name isn't set; see docs/RELEASING.md."
+              exit 1
+            fi
+          done
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          # Properties files treat a backslash as an escape, so double any in the values.
+          esc() { printf '%s' "$1" | sed 's/\\/\\\\/g'; }
+          {
+            echo "storeFile=$RUNNER_TEMP/release.jks"
+            echo "storePassword=$(esc "$STORE_PASSWORD")"
+            echo "keyAlias=$(esc "$KEY_ALIAS")"
+            echo "keyPassword=$(esc "$KEY_PASSWORD")"
+          } > keystore.properties
+
+      - name: Build the release APK
+        run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Check it's signed with the release key
+        run: |
+          apksigner=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner
+          digest=$("$apksigner" verify --print-certs app/build/outputs/apk/release/app-release.apk \
+            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          if [ "$digest" != "$RELEASE_CERT_SHA256" ]; then
+            echo "::error::APK is signed with certificate '$digest', not the release key $RELEASE_CERT_SHA256."
+            exit 1
+          fi
+          cp app/build/outputs/apk/release/app-release.apk soundboard.apk
+
+      - name: Keep the APK (dry run)
+        if: env.PUBLISH != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: soundboard-${{ env.TAG }}
+          path: soundboard.apk
+
+      - name: Attach it to the GitHub release
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" soundboard.apk --clobber
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag soundboard.apk
+          fi
+
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" keystore.properties

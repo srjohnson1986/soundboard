@@ -56,7 +56,9 @@ to compile); read it into a local `val` first.
 static files (`web/build/dist/wasmJs/productionExecutable`), which run from any
 folder, since every path in them is relative. CI builds them on every pull request
 (the `web-app` artifact), and `.github/workflows/web.yml` publishes them to GitHub
-Pages when a release tag is pushed, so the site always matches the newest APK.
+Pages when a release tag is pushed, so the site always matches the newest APK (the
+same tag push builds, signs and publishes that APK, via `android-release.yml`; see
+docs/RELEASING.md).
 `manifest.webmanifest` and `icons/` (drawn from the Android launcher icon) make it
 installable, and `sw.js`, a service worker, makes it work offline: network first,
 so a new release shows up on the next online visit, with a cached copy of each

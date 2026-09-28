@@ -42,8 +42,39 @@ keyPassword=...
 `keystore.properties` is gitignored — it never gets committed, and
 `app/build.gradle.kts` treats it as optional: without it, `assembleRelease`
 still builds an (unsigned) release APK exactly as it always did, which is
-what happens on a fresh clone or in CI (CI only ever runs `assembleDebug`,
-never `assembleRelease`, so it doesn't need this file at all).
+what happens on a fresh clone. Locally it's only needed for the update check
+in step 2 below; the published APK is built by CI (next section).
+
+## One-time: let CI sign releases
+
+The **Publish Android app** workflow (`.github/workflows/android-release.yml`)
+builds the published APK and signs it with the same keystore, which it reads
+from four repository secrets. It writes its own `keystore.properties` from
+them for the build and deletes both afterwards. Add them from the repo root
+(each `gh secret set` without a value prompts for it, so the password never
+lands in your shell history):
+
+```bash
+base64 -w0 ~/.android/soundboard-release.jks | gh secret set RELEASE_KEYSTORE_BASE64
+gh secret set RELEASE_STORE_PASSWORD
+gh secret set RELEASE_KEY_ALIAS
+gh secret set RELEASE_KEY_PASSWORD
+```
+
+(On macOS, `base64 -i ~/.android/soundboard-release.jks` instead.) The
+values are the same ones in your `keystore.properties`. Without them the
+workflow stops rather than publish an unsigned APK.
+
+It also refuses to publish an APK whose signing certificate isn't the one
+every release so far has used (`RELEASE_CERT_SHA256` in the workflow), since
+phones that already have the app couldn't install it as an update. If the key
+ever genuinely has to change, update that value in the same PR, and expect
+everyone to uninstall and reinstall.
+
+To check the secrets work without publishing anything: **Actions → Publish
+Android app → Run workflow**, enter an existing tag (e.g. the latest
+release's) and leave **publish** unticked. It builds and verifies that tag and
+keeps the APK as a workflow artifact.
 
 ## Every release
 
@@ -83,35 +114,40 @@ never `assembleRelease`, so it doesn't need this file at all).
    git tag -a vX.Y.Z <commit> -m "vX.Y.Z"
    git push origin vX.Y.Z
    ```
-   Pushing the tag also publishes the web version: the **Publish web app**
-   workflow (`.github/workflows/web.yml`) builds it from the tagged commit,
-   smoke-tests it (`web/smoke/smoke.mjs`: from a `/soundboard/` subpath, online and
-   offline) and deploys it to https://srjohnson1986.github.io/soundboard/, so the
-   site and the APK are always the same version. A failed smoke test stops the
-   deploy. Check the workflow went green, then open the
-   site and check the menu shows the new version. (**Run workflow** on it
-   republishes without a new tag.) The `github-pages` environment only accepts
-   deploys from `master` and `v*` tags (Settings → Environments →
-   github-pages); a deploy "rejected by environment protection rules" means the
-   tag doesn't match those.
-5. Build the signed APK and give it its release name:
+   Pushing the tag publishes both versions from the tagged commit, so the site
+   and the APK are always the same version:
+   - **Publish Android app** (`.github/workflows/android-release.yml`) checks
+     the tag matches `appVersionName`, builds the release APK signed with the
+     release key (see "One-time: let CI sign releases"), checks the signing
+     certificate, and publishes the GitHub release with generated notes and the
+     APK attached as `soundboard.apk`. Gradle always names its output
+     `app-release.apk`; every release publishes it as `soundboard.apk` instead.
+     That name is easy to recognize in a phone's Downloads, and because it
+     never changes, this link always serves the newest release, which is handy
+     to bookmark on the devices that sideload it:
+     `https://github.com/srjohnson1986/soundboard/releases/latest/download/soundboard.apk`.
+   - **Publish web app** (`.github/workflows/web.yml`) builds the web version,
+     smoke-tests it (`web/smoke/smoke.mjs`: from a `/soundboard/` subpath,
+     online and offline) and deploys it to
+     https://srjohnson1986.github.io/soundboard/. A failed smoke test stops the
+     deploy. The `github-pages` environment only accepts deploys from `master`
+     and `v*` tags (Settings → Environments → github-pages); a deploy "rejected
+     by environment protection rules" means the tag doesn't match those.
+5. Check both workflows went green, the release page has `soundboard.apk`, and
+   the site's menu shows the new version. **Run workflow** republishes either
+   one without a new tag (for the Android one, enter the tag and tick
+   **publish**).
+
+   If the Android workflow can't run (e.g. GitHub Actions is down), the manual
+   fallback is the same build on your machine, with `keystore.properties` set up:
    ```bash
    ./gradlew assembleRelease
    cp app/build/outputs/apk/release/app-release.apk soundboard.apk
-   ```
-   Gradle always names its output `app-release.apk`; every release publishes it
-   as `soundboard.apk` instead. That name is easy to recognize in a phone's
-   Downloads, and because it never changes, this link always serves the newest
-   release, which is handy to bookmark on the devices that sideload it:
-   `https://github.com/srjohnson1986/soundboard/releases/latest/download/soundboard.apk`.
-   (`soundboard.apk` at the repo root is gitignored.)
-6. Publish the release and attach the APK:
-   ```bash
    gh release create vX.Y.Z --title vX.Y.Z --generate-notes soundboard.apk
    ```
-   (Or `gh release upload vX.Y.Z soundboard.apk` if the release already
-   exists without it.)
-7. Sync the wiki, which mirrors `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`
+   (Or `gh release upload vX.Y.Z soundboard.apk --clobber` if the release
+   already exists. `soundboard.apk` at the repo root is gitignored.)
+6. Sync the wiki, which mirrors `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`
    and this file for people who browse the wiki instead of the repo:
    ```bash
    scripts/sync-wiki.sh

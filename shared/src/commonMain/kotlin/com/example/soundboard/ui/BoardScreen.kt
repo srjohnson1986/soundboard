@@ -86,6 +86,8 @@ fun BoardScreen(vm: BoardViewModel) {
     val speechAvailable by vm.speechAvailable.collectAsStateWithLifecycle()
     val mediaMuted by vm.mediaMuted.collectAsStateWithLifecycle()
     val backupReminderDue by vm.backupReminderDue.collectAsStateWithLifecycle()
+    val editingLocked by vm.editingLocked.collectAsStateWithLifecycle()
+    val editingLockEnabled by vm.editingLockEnabled.collectAsStateWithLifecycle()
     val speech by vm.speech.collectAsStateWithLifecycle()
     val speechVoices by vm.speechVoices.collectAsStateWithLifecycle()
     var openDialog by remember { mutableStateOf<BoardDialog?>(null) }
@@ -142,7 +144,10 @@ fun BoardScreen(vm: BoardViewModel) {
      */
     fun onTileTap(tileId: String, isPlayable: Boolean, fromStickyRow: Boolean, play: () -> Unit) {
         recordInteraction()
-        if (!isPlayable || editMode) {
+        if (editingLocked) {
+            // Locked (#251): a tile with nothing to play just stays quiet, rather than opening the editor.
+            if (isPlayable) play()
+        } else if (!isPlayable || editMode) {
             showDialog(BoardDialog.EditTile(tileId, fromStickyRow))
         } else {
             play()
@@ -182,6 +187,30 @@ fun BoardScreen(vm: BoardViewModel) {
             vm.switchPage(home)
         }
     }
+
+    // Locking (#251) ends any editing in progress: edit mode, and whatever dialog was open,
+    // except Speak, which is for everyday use.
+    LaunchedEffect(editingLocked) {
+        if (editingLocked) {
+            editMode = false
+            if (openDialog != null && openDialog != BoardDialog.Speak) {
+                if (openDialog is BoardDialog.EditTile) vm.discardTileEdits()
+                closeDialog()
+            }
+        }
+    }
+
+    // Unlocked, the board locks itself again once it's gone unused for a while, so it isn't
+    // left open by accident. Held off while a dialog is open, where someone is still at work.
+    val relockAfterIdle = LocalRelockAfterIdle.current
+    LaunchedEffect(lastInteractionAt, editingLockEnabled, editingLocked, openDialog != null) {
+        if (!editingLockEnabled || editingLocked || openDialog != null) return@LaunchedEffect
+        delay(relockAfterIdle)
+        vm.relockEditing()
+    }
+
+    // Blank tiles only open the editor, so they're hidden while it's locked away.
+    val hideBlankTiles = board.hideBlankTilesEnabled || editingLocked
 
     // Prevents auto-lock while the board is on screen — meant for boards mounted or left
     // open as a standing communication aid. Cleared onDispose so leaving BoardScreen (or
@@ -253,7 +282,17 @@ fun BoardScreen(vm: BoardViewModel) {
                     },
                     onOpenBoard = ::requestOpenBoard,
                     onExportBackup = { exportBackup(BACKUP_FILE_NAME) },
-                    onImportBackup = importBackup
+                    onImportBackup = importBackup,
+                    lock = EditingLock(
+                        locked = editingLocked,
+                        enabled = editingLockEnabled,
+                        onEnable = vm::setEditingLockEnabled,
+                        onUnlock = {
+                            recordInteraction()
+                            vm.unlockEditing()
+                        },
+                        onLockNow = vm::relockEditing
+                    )
                 )
             }
         ) { insets ->
@@ -274,7 +313,8 @@ fun BoardScreen(vm: BoardViewModel) {
                         page.tiles.any { it.fileName == null && it.isPlayable(board.speakUnrecordedTilesEnabled) }
                     }
                 )
-                if (backupReminderDue) {
+                // Not while locked: whoever set the lock is the one to act on it.
+                if (backupReminderDue && !editingLocked) {
                     BackupReminder(onBackUp = { exportBackup(BACKUP_FILE_NAME) }, onLater = vm::snoozeBackupReminder)
                 }
                 val homePage = board.homePage
@@ -289,7 +329,7 @@ fun BoardScreen(vm: BoardViewModel) {
                         hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                         performanceModeEnabled = performanceModeEnabled,
                         speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
-                        hideBlankTilesEnabled = board.hideBlankTilesEnabled,
+                        hideBlankTilesEnabled = hideBlankTiles,
                         onTap = { tile ->
                             onTileTap(
                                 tile.id,
@@ -325,7 +365,7 @@ fun BoardScreen(vm: BoardViewModel) {
                             hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                             performanceModeEnabled = performanceModeEnabled,
                             speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
-                            hideBlankTilesEnabled = board.hideBlankTilesEnabled,
+                            hideBlankTilesEnabled = hideBlankTiles,
                             globalTileOpacity = globalTileOpacity,
                             globalTileBorder = globalTileBorder,
                             landscapeLayout = board.landscapeLayout,

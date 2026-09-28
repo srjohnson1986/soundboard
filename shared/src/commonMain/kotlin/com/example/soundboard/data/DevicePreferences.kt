@@ -72,6 +72,14 @@ class DevicePreferences(private val prefs: KeyValueStore) {
         get() = prefs.getString(KEY_UNBACKED_CHANGES_SINCE)?.toLongOrNull()
         set(value) = prefs.putString(KEY_UNBACKED_CHANGES_SINCE, value?.toString())
 
+    /**
+     * The caregiver lock (#251): with it on, the board starts locked, with its editing
+     * hidden until someone holds Unlock. Per device, so it doesn't travel in a backup.
+     */
+    var editingLockEnabled: Boolean
+        get() = prefs.getBoolean(KEY_EDITING_LOCK_ENABLED, false)
+        set(value) = prefs.putBoolean(KEY_EDITING_LOCK_ENABLED, value)
+
     /** Until when "Later" on the backup reminder keeps it away, in epoch milliseconds. */
     var backupReminderSnoozedUntil: Long?
         get() = prefs.getString(KEY_BACKUP_REMINDER_SNOOZED_UNTIL)?.toLongOrNull()
@@ -96,6 +104,7 @@ class DevicePreferences(private val prefs: KeyValueStore) {
         private const val KEY_SHOW_MODE_FLIPPED = "show_mode_flipped"
         private const val KEY_SPEECH_VOICE_ID = "speech_voice_id"
         private const val KEY_UNBACKED_CHANGES_SINCE = "unbacked_changes_since"
+        private const val KEY_EDITING_LOCK_ENABLED = "editing_lock_enabled"
         private const val KEY_BACKUP_REMINDER_SNOOZED_UNTIL = "backup_reminder_snoozed_until"
         private const val KEY_SPEECH_RATE_PERCENT = "speech_rate_percent"
         private const val KEY_SPEECH_PITCH_PERCENT = "speech_pitch_percent"

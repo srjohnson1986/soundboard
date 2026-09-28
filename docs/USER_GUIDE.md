@@ -233,6 +233,30 @@ three are in **Settings → Home page**.
   - Turning it on or off never deletes anything; other pages just shift down
     a row.
 
+## Caregiver lock
+
+**Lock editing** in the **☰** menu keeps the board from being changed by
+accident. Switching it on locks straight away. While it's locked:
+
+- The **☰** menu has only **Show mode**, **Speak...** and **Hold to unlock**.
+  Edit mode, Settings, switching or opening boards, Page options and backups
+  are hidden.
+- Long-pressing a page tab doesn't open Page options, and there's no **+** tab
+  for a new page.
+- Blank tiles, and tiles with nothing to play, are hidden, since tapping one
+  would open the tile editor.
+- Tiles, page tabs, swiping between pages, Show mode and auto-return all work
+  as usual.
+
+To unlock, open the **☰** menu and **hold Unlock for 3 seconds** while the ring
+fills. Letting go early starts over, so a stray tap never unlocks it. Unlocked,
+the menu has everything again, plus **Lock now**. The board locks itself again
+after 5 minutes without use (not while a dialog is open) and whenever the app
+restarts. Switch **Lock editing** off to turn the lock off altogether.
+
+The lock belongs to the device, so it isn't part of a backup. The backup
+reminder waits while the board is locked, for whoever unlocks it next.
+
 ## Settings
 
 **Settings** (in the **☰** menu) is a short list of groups. Each shows a

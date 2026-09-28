@@ -94,6 +94,34 @@ class BoardViewModel(
         refreshBackupReminder()
     }
 
+    /** Whether the caregiver lock is on for this device (#251). See [DevicePreferences.editingLockEnabled]. */
+    private val _editingLockEnabled = MutableStateFlow(devicePrefs.editingLockEnabled)
+    val editingLockEnabled: StateFlow<Boolean> = _editingLockEnabled.asStateFlow()
+
+    /**
+     * Whether editing is locked away right now: the lock is on and nobody has held Unlock since
+     * the app started or the board last locked itself again ([relockEditing]).
+     */
+    private val _editingLocked = MutableStateFlow(devicePrefs.editingLockEnabled)
+    val editingLocked: StateFlow<Boolean> = _editingLocked.asStateFlow()
+
+    /** Turns the caregiver lock on, which locks at once, or off. */
+    fun setEditingLockEnabled(enabled: Boolean) {
+        devicePrefs.editingLockEnabled = enabled
+        _editingLockEnabled.value = enabled
+        _editingLocked.value = enabled
+    }
+
+    /** Held Unlock: editing is available until [relockEditing] or the app restarts. */
+    fun unlockEditing() {
+        _editingLocked.value = false
+    }
+
+    /** Locks editing away again, if the lock is on. */
+    fun relockEditing() {
+        _editingLocked.value = _editingLockEnabled.value
+    }
+
     /** Whether speech works on this device; null while it's starting. See [Speaker.available]. */
     val speechAvailable: StateFlow<Boolean?> get() = speaker.available
 

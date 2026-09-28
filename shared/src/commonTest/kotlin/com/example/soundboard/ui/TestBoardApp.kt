@@ -33,6 +33,7 @@ import com.example.soundboard.ui.theme.SoundboardTheme
 import kotlin.math.abs
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
+import kotlin.time.Duration
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -98,13 +99,20 @@ abstract class BoardUiTest : UiTest() {
     fun resetMain() = Dispatchers.resetMain()
 
     /** Shows [BoardScreen] for a [TestBoardApp] on [board], in the board's theme as the apps do. */
-    fun ComposeUiTest.launchBoard(board: Board, builtIns: Map<String, BuiltInBoard> = emptyMap()): TestBoardApp {
+    fun ComposeUiTest.launchBoard(
+        board: Board,
+        builtIns: Map<String, BuiltInBoard> = emptyMap(),
+        relockAfterIdle: Duration = EditingLock.RELOCK_AFTER_IDLE
+    ): TestBoardApp {
         val app = TestBoardApp(board, builtIns, dispatcher)
         check(app.vm.board.value.pages.first().id == board.pages.first().id) { "the board didn't load" }
         val platformWidthDialogs = dialogsUsePlatformWidth()
         setContent {
             val shown by app.vm.board.collectAsState()
-            CompositionLocalProvider(LocalDialogUsesPlatformWidth provides platformWidthDialogs) {
+            CompositionLocalProvider(
+                LocalDialogUsesPlatformWidth provides platformWidthDialogs,
+                LocalRelockAfterIdle provides relockAfterIdle
+            ) {
                 SoundboardTheme(themeMode = shown.themeMode) { BoardScreen(vm = app.vm) }
             }
         }

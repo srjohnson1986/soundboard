@@ -5,7 +5,6 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -51,6 +52,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import com.example.soundboard.model.TileBorder
@@ -120,7 +123,7 @@ internal fun BorderControls(border: TileBorder, onChange: (TileBorder) -> Unit) 
         labelStyle = MaterialTheme.typography.bodyMedium
     )
     Text("Color (first = Recommended)", style = MaterialTheme.typography.bodySmall)
-    ColorPicker(selectedArgb = border.colorArgb, onSelect = { onChange(border.copy(colorArgb = it)) })
+    ColorPicker(selectedArgb = border.colorArgb, onSelect = { onChange(border.copy(colorArgb = it)) }, noneLabel = "Recommended")
     Text("Width: ${formatDecimal(border.widthDp.toDouble(), 1)}dp", style = MaterialTheme.typography.bodySmall)
     Slider(
         value = border.widthDp,
@@ -130,34 +133,42 @@ internal fun BorderControls(border: TileBorder, onChange: (TileBorder) -> Unit) 
 }
 
 /**
- * A scrollable row of [presetColors] swatches. The first swatch is null — "none" for a
- * tile or page color, "Recommended" for a border. [showSelection] false highlights none,
- * e.g. for the background color while a background image is set instead.
+ * A scrollable row of color swatches: first a "none" one (null), named [noneLabel] for what
+ * none means there ("Default color" for a tile, "Recommended" for a border...), then the
+ * [presetColors]. Screen readers hear them as a set of radio buttons, each by name, with the
+ * chosen one selected (#245). [showSelection] false selects none, e.g. for the background
+ * color while a background image is set instead.
  */
 @Composable
-internal fun ColorPicker(selectedArgb: Int?, onSelect: (Int?) -> Unit, showSelection: Boolean = true) {
+internal fun ColorPicker(selectedArgb: Int?, onSelect: (Int?) -> Unit, noneLabel: String, showSelection: Boolean = true) {
     Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        modifier = Modifier
+            .horizontalScroll(rememberScrollState())
+            .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        presetColors.forEach { color ->
+        ColorSwatch(name = noneLabel, color = null, selected = showSelection && selectedArgb == null, onClick = { onSelect(null) })
+        presetColors.forEach { preset ->
+            val argb = preset.color.toArgb()
             ColorSwatch(
-                color = color,
-                selected = showSelection && color?.toArgb() == selectedArgb,
-                onClick = { onSelect(color?.toArgb()) }
+                name = preset.name,
+                color = preset.color,
+                selected = showSelection && argb == selectedArgb,
+                onClick = { onSelect(argb) }
             )
         }
     }
 }
 
 @Composable
-private fun ColorSwatch(color: Color?, selected: Boolean, onClick: () -> Unit) {
+private fun ColorSwatch(name: String, color: Color?, selected: Boolean, onClick: () -> Unit) {
     // Outer box is a full 48dp touch target (Material's minimum); the visible
     // circle stays 32dp so a full row of presets still fits without crowding.
     Box(
         modifier = Modifier
             .size(48.dp)
-            .clickable(onClick = onClick),
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = name },
         contentAlignment = Alignment.Center
     ) {
         Box(

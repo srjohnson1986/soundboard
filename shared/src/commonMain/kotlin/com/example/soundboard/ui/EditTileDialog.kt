@@ -232,7 +232,7 @@ internal fun EditTileDialog(
 
                 Column {
                     Text("Color", style = MaterialTheme.typography.labelMedium)
-                    ColorPicker(selectedArgb = draft.colorArgb, onSelect = { draft = draft.copy(colorArgb = it) })
+                    ColorPicker(selectedArgb = draft.colorArgb, onSelect = { draft = draft.copy(colorArgb = it) }, noneLabel = "Default color")
                 }
 
                 OverrideSection(

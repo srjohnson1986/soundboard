@@ -2,18 +2,20 @@ package com.example.soundboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.soundboard.audio.MediaVolume
 import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.Recorder
 import com.example.soundboard.audio.Speaker
+import com.example.soundboard.audio.UnknownMediaVolume
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.PickedFile
-import com.example.soundboard.data.SaveTarget
-import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.RecentBoardEntry
 import com.example.soundboard.data.RecentBoardKind
 import com.example.soundboard.data.RecentBoardsRepository
+import com.example.soundboard.data.SaveTarget
 import com.example.soundboard.data.SavedBoard
+import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
@@ -22,6 +24,7 @@ import com.example.soundboard.model.ShowModeSettings
 import com.example.soundboard.model.ThemeMode
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
+import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
@@ -32,7 +35,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlin.time.Clock
 
 class BoardViewModel(
     private val boardRepo: BoardRepository,
@@ -44,7 +46,8 @@ class BoardViewModel(
     private val recentBoardsRepo: RecentBoardsRepository,
     private val ioDispatcher: CoroutineDispatcher = defaultIoDispatcher,
     /** Milliseconds since the epoch, for when a board was last used; a parameter so tests can pin it. */
-    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() }
+    private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+    private val mediaVolume: MediaVolume = UnknownMediaVolume
 ) : ViewModel(), BoardSettingsActions {
 
     private val _board = MutableStateFlow(Board())
@@ -65,6 +68,12 @@ class BoardViewModel(
     /** Device-local, not part of [Board] — see [DevicePreferences.recordingTrimEndMillis]. */
     private val _recordingTrimEndMillis = MutableStateFlow(devicePrefs.recordingTrimEndMillis)
     val recordingTrimEndMillis: StateFlow<Int> = _recordingTrimEndMillis.asStateFlow()
+
+    /** Whether speech works on this device; null while it's starting. See [Speaker.available]. */
+    val speechAvailable: StateFlow<Boolean?> get() = speaker.available
+
+    /** Whether the media volume is off, which silences every tile. See [MediaVolume]. */
+    val mediaMuted: StateFlow<Boolean> get() = mediaVolume.muted
 
     /** The words Show mode has on screen right now; null when the text screen is closed. */
     private val _shownText = MutableStateFlow<String?>(null)
@@ -109,6 +118,7 @@ class BoardViewModel(
 
     fun play(tile: Tile) {
         if (!tile.isPlayable(_board.value.speakUnrecordedTilesEnabled)) return
+        mediaVolume.refresh()
         val name = tile.fileName
         if (name != null) player.play(name, tile.volume) else speaker.speak(tile.speechText)
     }
@@ -743,6 +753,7 @@ class BoardViewModel(
         }
         player.release()
         speaker.shutdown()
+        mediaVolume.release()
         super.onCleared()
     }
 

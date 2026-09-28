@@ -83,6 +83,8 @@ fun BoardScreen(vm: BoardViewModel) {
     val showMode by vm.showMode.collectAsStateWithLifecycle()
     val recordingTrimEndMillis by vm.recordingTrimEndMillis.collectAsStateWithLifecycle()
     val shownText by vm.shownText.collectAsStateWithLifecycle()
+    val speechAvailable by vm.speechAvailable.collectAsStateWithLifecycle()
+    val mediaMuted by vm.mediaMuted.collectAsStateWithLifecycle()
     var openDialog by remember { mutableStateOf<BoardDialog?>(null) }
     var editMode by remember { mutableStateOf(false) }
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
@@ -263,6 +265,12 @@ fun BoardScreen(vm: BoardViewModel) {
                     .padding(insets)
                     .onSizeChanged { contentAreaHeightPx = it.height }
             ) {
+                SilentBoardWarning(
+                    mediaMuted = mediaMuted,
+                    speechUnavailable = speechAvailable == false && board.pages.any { page ->
+                        page.tiles.any { it.fileName == null && it.isPlayable(board.speakUnrecordedTilesEnabled) }
+                    }
+                )
                 val homePage = board.homePage
                 if (board.stickyHomeRowEnabled && homePage != null && board.currentPageIndex != board.homePageIndex) {
                     PinnedRow(

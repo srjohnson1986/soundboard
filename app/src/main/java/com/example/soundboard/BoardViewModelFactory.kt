@@ -3,6 +3,7 @@ package com.example.soundboard
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.example.soundboard.audio.AndroidMediaVolume
 import com.example.soundboard.audio.AudioRecorder
 import com.example.soundboard.audio.SoundPlayer
 import com.example.soundboard.audio.TtsSpeaker
@@ -23,7 +24,8 @@ class BoardViewModelFactory(private val app: Application) : ViewModelProvider.Fa
             SavedBoardRepository(app),
             TtsSpeaker(app),
             DevicePreferences(app),
-            RecentBoardsRepository(app)
+            RecentBoardsRepository(app),
+            mediaVolume = AndroidMediaVolume(app)
         ) as T
     }
 }

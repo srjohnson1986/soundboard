@@ -1,5 +1,6 @@
 package com.example.soundboard
 
+import android.media.AudioManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,6 +15,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // The volume keys set the media volume here, which the board plays at, even between taps.
+        volumeControlStream = AudioManager.STREAM_MUSIC
         setContent {
             // Hoisted here (rather than defaulted inside BoardScreen) so the board's
             // themeMode can reach SoundboardTheme, which wraps BoardScreen from outside.

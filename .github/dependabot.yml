@@ -15,9 +15,15 @@ updates:
       day: monday
       time: "05:00"
       timezone: America/New_York
-    # No cooldown here (#293): Google Maven publishes a release date only for an artifact's
-    # newest release, and Dependabot's cooldown drops every version it has no date for, so
-    # it hid activity-compose 1.13.0 and most other AndroidX updates.
+    # Wait 3 days after a release before proposing it: nothing here is reviewed by a person.
+    # AndroidX is exempt (#293, #295): Google Maven dates only an artifact's newest release,
+    # and Dependabot drops every version it can't date, so activity-compose 1.13.0 (a newer
+    # alpha exists) was never proposed. Without a cooldown block Dependabot applies its own
+    # 3-day default, so this has to be explicit.
+    cooldown:
+      default-days: 3
+      exclude:
+        - "androidx.*"
     open-pull-requests-limit: 10
     groups:
       # Kotlin, Compose Multiplatform, JetBrains' AndroidX forks (lifecycle) and the

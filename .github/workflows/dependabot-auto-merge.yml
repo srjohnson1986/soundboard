@@ -1,0 +1,29 @@
+name: Dependabot auto-merge
+
+# Dependency updates (#289). When Dependabot opens (or updates) a pull request, this asks
+# GitHub to merge it once the required check, build-and-test, passes. GitHub does the
+# merge, not this job: a red build never merges, and a fix pushed to the branch later
+# (by the Claude repair routine, say) is picked up without doing anything here.
+#
+# Merging to master ships nothing to anyone's phone; a release still takes a tag and the
+# update check in docs/RELEASING.md.
+on:
+  pull_request:
+    branches: [master]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+# Dependabot's token is read-only unless the workflow asks for more.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Queue the squash merge for when build-and-test passes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"

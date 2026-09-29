@@ -41,6 +41,10 @@ before changing code, [docs/IOS.md](docs/IOS.md) for iOS, and
 
 - Every change: a GitHub issue, then a branch, then a pull request to `master` (protected).
   Fill in the pull request template's platform checklist.
+- **Dependency bumps aren't hand-made.** Dependabot opens them weekly and they merge
+  themselves when `build-and-test` passes (docs/ARCHITECTURE.md, "Testing"). Don't bump a
+  version in a feature pull request unless the feature needs it; if a Dependabot pull
+  request is red, fix it on its branch.
 - The **CI** workflow's `build-and-test` check is required: lint, unit and shared tests
   on the JVM and in Chrome, a coverage floor, and the builds. **UI tests** (Android
   emulator) and **iOS** (macOS runner) are advisory. For a pull request that's about

@@ -1,15 +1,63 @@
 version: 2
+
+# Dependency updates (#289): Dependabot opens them, dependabot-auto-merge.yml queues the
+# merge, and the required build-and-test check decides whether it lands. A bump that goes
+# red is left for the weekly Claude routine to repair (docs/ARCHITECTURE.md, "Testing").
+#
+# A dependency joins the FIRST group whose patterns match it, so the order below matters.
+# Versions that only work together are grouped so they move in one pull request; anything
+# no group matches (Kover, JUnit, Robolectric) gets a pull request of its own.
 updates:
   - package-ecosystem: gradle
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: America/New_York
+    # Wait a few days after a release before proposing it: a bad release is usually
+    # pulled or patched within that time, and nothing here is reviewed by a person.
+    cooldown:
+      default-days: 3
+    open-pull-requests-limit: 10
     groups:
-      gradle-dependencies:
+      # Kotlin, Compose Multiplatform, JetBrains' AndroidX forks (lifecycle) and the
+      # Compose artifacts that track the same version (BOM, ui-test-manifest).
+      kotlin-and-compose:
         patterns:
-          - "*"
+          - "org.jetbrains.kotlin.*"
+          - "org.jetbrains.kotlin:*"
+          - "org.jetbrains.compose*"
+          - "org.jetbrains.androidx*"
+          - "androidx.compose*"
+      # kotlinx-coroutines and kotlinx-serialization (not the Kover plugin, whose id has
+      # no colon).
+      kotlinx:
+        patterns:
+          - "org.jetbrains.kotlinx:*"
+      # The Android Gradle plugin needs a minimum Gradle, so they move together.
+      android-build:
+        patterns:
+          - "com.android.*"
+          - "gradle-wrapper"
+      androidx:
+        patterns:
+          - "androidx.*"
+      # The plugin and its two libraries share one version.
+      roborazzi:
+        patterns:
+          - "io.github.takahirom.roborazzi*"
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: America/New_York
+    cooldown:
+      default-days: 3
+    groups:
+      actions:
+        patterns:
+          - "*"

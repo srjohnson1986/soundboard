@@ -15,10 +15,9 @@ updates:
       day: monday
       time: "05:00"
       timezone: America/New_York
-    # Wait a few days after a release before proposing it: a bad release is usually
-    # pulled or patched within that time, and nothing here is reviewed by a person.
-    cooldown:
-      default-days: 3
+    # No cooldown here (#293): Google Maven publishes a release date only for an artifact's
+    # newest release, and Dependabot's cooldown drops every version it has no date for, so
+    # it hid activity-compose 1.13.0 and most other AndroidX updates.
     open-pull-requests-limit: 10
     groups:
       # Kotlin, Compose Multiplatform, JetBrains' AndroidX forks (lifecycle) and the
@@ -55,6 +54,8 @@ updates:
       day: monday
       time: "05:00"
       timezone: America/New_York
+    # Wait a few days after a release before proposing it: a bad release is usually
+    # pulled or patched within that time, and nothing here is reviewed by a person.
     cooldown:
       default-days: 3
     groups:

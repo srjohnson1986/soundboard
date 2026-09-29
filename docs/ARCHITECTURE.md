@@ -943,6 +943,25 @@ the app module's classes. The UI and the Android audio have no floor: the audio 
 on the emulator, which Kover doesn't measure, and so is the web-only code, which runs as
 WebAssembly.
 
+**Dependency updates** (#289) need nobody unless a bump breaks the build. Every Monday
+morning (US Eastern) Dependabot (`.github/dependabot.yml`) opens pull requests for newer
+versions of the Gradle dependencies, the Gradle wrapper and the GitHub Actions. Versions that
+only work together arrive in one pull request: Kotlin with Compose Multiplatform, the Android
+Gradle plugin with the wrapper, the AndroidX libraries, kotlinx, and Roborazzi; Kover, JUnit
+and Robolectric each get their own. A release has to be three days old before Dependabot
+proposes it. `.github/workflows/dependabot-auto-merge.yml` then asks GitHub to squash-merge
+each one when `build-and-test` passes, so a green bump lands without anyone looking and a
+red one just waits. That's a decision about `master`, not about phones: nothing reaches the
+family's phone or the web app until a release is tagged and checked over the previous one
+(`docs/RELEASING.md`). A weekly Claude Code routine (`soundboard-dependency-repair`, in the
+Claude cloud, not in this repository) looks for Dependabot pull requests whose checks are
+red, fixes what the new version broke and pushes to the pull request's branch, where the
+queued merge picks it up. It never merges anything, and if it can't fix one it labels the
+pull request `needs-human` and sends a notification. Events caused by a workflow's
+`GITHUB_TOKEN` don't start other workflows, so the merge queued by that workflow may not
+trigger the push-time run of **CI** on `master`; the pull request's own run is the one that
+counted.
+
 - **`FakePlayer`, `FakeRecorder` and `FakeSpeaker`** exist twice: in
   `shared/src/commonTest/.../audio/Fakes.kt` for the shared tests, and in the app's
   `src/sharedTest/` for its unit and device tests, since the app's test source sets can't see

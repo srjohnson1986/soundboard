@@ -948,8 +948,10 @@ morning (US Eastern) Dependabot (`.github/dependabot.yml`) opens pull requests f
 versions of the Gradle dependencies, the Gradle wrapper and the GitHub Actions. Versions that
 only work together arrive in one pull request: Kotlin with Compose Multiplatform, the Android
 Gradle plugin with the wrapper, the AndroidX libraries, kotlinx, and Roborazzi; Kover, JUnit
-and Robolectric each get their own. A release has to be three days old before Dependabot
-proposes it. `.github/workflows/dependabot-auto-merge.yml` then asks GitHub to squash-merge
+and Robolectric each get their own. A new version of an Action has to be three days old
+before it's proposed; the Gradle dependencies have no such wait, because Dependabot can't
+date most releases on Google Maven and drops what it can't date (#293).
+`.github/workflows/dependabot-auto-merge.yml` then asks GitHub to squash-merge
 each one when `build-and-test` passes, so a green bump lands without anyone looking and a
 red one just waits. That's a decision about `master`, not about phones: nothing reaches the
 family's phone or the web app until a release is tagged and checked over the previous one

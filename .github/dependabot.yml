@@ -27,6 +27,12 @@ updates:
       default-days: 3
       exclude:
         - "androidx.*"
+    # A version that breaks the build is ignored by number, with the reason, so Dependabot
+    # still proposes the next release. Kover 0.9.10 reads every test as 0% covered, so
+    # verifyCoreCoverage fails (#301).
+    ignore:
+      - dependency-name: "org.jetbrains.kotlinx.kover"
+        versions: ["0.9.10"]
     open-pull-requests-limit: 10
     groups:
       # Kotlin, Compose Multiplatform, JetBrains' AndroidX forks (lifecycle) and the

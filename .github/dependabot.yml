@@ -7,6 +7,9 @@ version: 2
 # A dependency joins the FIRST group whose patterns match it, so the order below matters.
 # Versions that only work together are grouped so they move in one pull request; anything
 # no group matches (Kover, JUnit, Robolectric) gets a pull request of its own.
+#
+# A change to this file starts a Dependabot run at once; that is how a run is forced
+# between Mondays (2026-10-01: after Kover 0.9.10's cooldown ended).
 updates:
   - package-ecosystem: gradle
     directory: /

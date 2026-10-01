@@ -950,7 +950,9 @@ only work together arrive in one pull request: Kotlin with Compose Multiplatform
 Gradle plugin with the wrapper, the AndroidX libraries, kotlinx, and Roborazzi; Kover, JUnit
 and Robolectric each get their own. A new version has to be three days old before it's
 proposed, except for the AndroidX libraries: Dependabot can't date most releases on Google
-Maven and drops what it can't date, so they're exempt (#293, #295).
+Maven and drops what it can't date, so they're exempt (#293, #295). A version known to
+break the build is ignored by number in `dependabot.yml`, with the reason beside it (Kover
+0.9.10, #301), so the next release is still proposed.
 `.github/workflows/dependabot-auto-merge.yml` then asks GitHub to squash-merge
 each one when `build-and-test` passes, so a green bump lands without anyone looking and a
 red one just waits. That's a decision about `master`, not about phones: nothing reaches the

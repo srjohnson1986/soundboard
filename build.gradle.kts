@@ -7,7 +7,7 @@ plugins {
     id("org.jetbrains.compose") version "1.12.1" apply false
     id("com.android.lint") version "9.4.1" apply false
     id("io.github.takahirom.roborazzi") version "1.75.0" apply false
-    id("org.jetbrains.kotlinx.kover") version "0.9.9"
+    id("org.jetbrains.kotlinx.kover") version "0.9.10"
 }
 
 // Test coverage (#222), for the JVM tests of the app and the shared module together.

@@ -125,8 +125,8 @@ kotlin {
             implementation("androidx.test:core:1.7.0")
             implementation("junit:junit:4.13.2")
             // Screenshot tests (#221).
-            implementation("io.github.takahirom.roborazzi:roborazzi:1.75.0")
-            implementation("io.github.takahirom.roborazzi:roborazzi-compose:1.75.0")
+            implementation("io.github.takahirom.roborazzi:roborazzi:1.76.0")
+            implementation("io.github.takahirom.roborazzi:roborazzi-compose:1.76.0")
             // Back, to close a menu (closeMenu).
             implementation("androidx.test.espresso:espresso-core:3.7.0")
             // Declares the empty activity runComposeUiTest starts on Android.

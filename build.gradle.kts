@@ -6,7 +6,7 @@ plugins {
     id("com.android.kotlin.multiplatform.library") version "9.4.1" apply false
     id("org.jetbrains.compose") version "1.12.1" apply false
     id("com.android.lint") version "9.4.1" apply false
-    id("io.github.takahirom.roborazzi") version "1.75.0" apply false
+    id("io.github.takahirom.roborazzi") version "1.76.0" apply false
     id("org.jetbrains.kotlinx.kover") version "0.9.9"
 }
 

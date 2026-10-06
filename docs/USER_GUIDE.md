@@ -310,7 +310,9 @@ the device.
   - Noto Serif
   - **Atkinson Hyperlegible** and **Lexend**: two fonts designed for easy
     reading. Both come with the app under the SIL Open Font License; their
-    license texts are in `assets/licenses/`.
+    license texts are in `assets/licenses/` (on the web, the site's `licenses/`
+    folder), and [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) lists them with
+    the other libraries the app uses.
 - **Text size:** a smallest and a largest size. All labels on a page share
   one size: the largest that still fits every tile on that page. Pages with
   fewer, bigger tiles get bigger text. A label that doesn't fit even at the

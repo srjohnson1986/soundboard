@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/srjohnson1986/soundboard/security/advisories/new
+    about: Please report vulnerabilities privately, not as a public issue.
+  - name: How do I use the app?
+    url: https://github.com/srjohnson1986/soundboard/blob/master/docs/USER_GUIDE.md
+    about: The user guide covers tiles, recording, pages, settings and backups.

@@ -51,6 +51,9 @@ browser or file manager the first time.
   code goes, keeping the platforms in step, commands, and pitfalls.
 - **[Built-in boards](presets/README.md):** the boards that ship inside the
   app, and how they're made.
+- **[Contributing](CONTRIBUTING.md):** how to report a bug or send a change.
+  See also the [code of conduct](CODE_OF_CONDUCT.md) and the
+  [security policy](SECURITY.md).
 
 The [wiki](https://github.com/srjohnson1986/soundboard/wiki) mirrors this README
 (as its Home page) and the user guide, architecture, releasing and iOS docs for anyone
@@ -144,7 +147,8 @@ redo what changed.
 
 ## Work on it
 
-Changes go through a GitHub issue, a feature branch and a pull request
+Contributions are welcome: [CONTRIBUTING.md](CONTRIBUTING.md) is the short version of
+this section for someone new. Changes go through a GitHub issue, a feature branch and a pull request
 against `master`. See [Architecture](docs/ARCHITECTURE.md) before touching the
 code, and keep `docs/` current in the same pull request. [AGENTS.md](AGENTS.md)
 sums up how to keep Android, the web and iOS in step, and the pull request template
@@ -157,3 +161,14 @@ A "Protect master" ruleset enforces that workflow:
   `docs` check passed and so did all of CI's build jobs (`android`, `web` and
   `coverage`), which a pull request that only changes Markdown skips.
 - Repository admins can bypass the rules in an emergency.
+
+## License
+
+Soundboard is open source under the [Apache License 2.0](LICENSE): you can use, change
+and share it, including in your own communication aids. That covers the sound clips and
+icons in the repository too. [NOTICE](NOTICE) says where those came from, and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists the libraries and fonts it builds
+on, each under its own license.
+
+If you publish a build of your own, give it its own app ID and signing key
+([CONTRIBUTING.md](CONTRIBUTING.md#forks-that-publish-their-own-build)).

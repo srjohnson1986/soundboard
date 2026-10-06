@@ -1,0 +1,19 @@
+Soundboard
+Copyright 2026 Steve Johnson
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+What's in this repository besides source code:
+
+- Sound clips. The built-in boards (presets/ and the copies under app/src/main/assets/
+  and app/src/debug/assets/) hold voice clips. Some are recordings of the project's
+  contributors in their own voices, included with their permission; others, and the
+  chime (presets/chimes/chime.wav), were generated with ElevenLabs. They are part of
+  this work and are licensed under the Apache License, Version 2.0 like the code.
+- Icons. The launcher icon and the web app icons (app/src/main/res/, and
+  web/src/wasmJsMain/resources/icons/) were made for this project with the help of
+  Claude, an AI model from Anthropic.
+- Fonts. Atkinson Hyperlegible and Lexend are bundled under the SIL Open Font License,
+  Version 1.1. They keep their own licenses; see THIRD_PARTY_NOTICES.md.
+
+Third-party libraries and fonts are listed, with their licenses, in THIRD_PARTY_NOTICES.md.

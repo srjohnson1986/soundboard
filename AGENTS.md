@@ -1,12 +1,13 @@
 # Working on Soundboard (for AI assistants, and people)
 
 Soundboard is a communication board (AAC): someone who can't easily speak taps tiles
-that play recorded clips or speak their words. The Android app is in daily use by a
-family member, so **its data must survive every update** and nothing may make it go
-quiet without saying so. It's one Kotlin codebase for **Android, the web and iOS**:
-[README](README.md) for what it does, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-before changing code, [docs/IOS.md](docs/IOS.md) for iOS, and
-[docs/RELEASING.md](docs/RELEASING.md) for releases.
+that play recorded clips or speak their words. It was built for a family member, and
+people who can't easily speak rely on boards like it, so **its data must survive every
+update** and nothing may make it go quiet without saying so. It's one Kotlin codebase
+for **Android, the web and iOS**: [README](README.md) for what it does,
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing code,
+[docs/IOS.md](docs/IOS.md) for iOS, and [docs/RELEASING.md](docs/RELEASING.md) for
+releases.
 
 ## Where code goes
 

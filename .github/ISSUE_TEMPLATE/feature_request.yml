@@ -1,0 +1,19 @@
+name: Feature request
+description: An idea that would make the board easier to use or set up
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the situation first (who is using the board, and what gets in the way), then the idea.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like it to do?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you've tried instead

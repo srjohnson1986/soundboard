@@ -155,15 +155,42 @@ try {
     // It keeps the files the page loaded, and the built-in board and fonts, as they arrive.
     // Waits for all of them, not just some: going offline while one is still on its way made
     // the reload below fail now and then with "Failed to fetch" (#281).
-    const cached = await waitFor(page, 'the cache', async () => {
-        const keys = await caches.open('soundboard-v1').then(cache => cache.keys());
-        const names = new Set(keys.map(request => request.url.split('?')[0]));
-        const loaded = [location.href.split('?')[0].split('#')[0], ...performance.getEntriesByType('resource').map(entry => entry.name)]
-            .map(url => url.split('?')[0])
-            .filter(url => url.startsWith(location.origin) && !url.endsWith('/sw.js'));
-        return loaded.every(url => names.has(url)) && [...names].some(name => name.endsWith('tts-care-board.zip'));
+    // The comparison lives in the page as window.__cacheReport, so the wait below and the
+    // failure report after it look at the cache the same way (#307).
+    await page.evaluate(() => {
+        window.__cacheReport = async () => {
+            const keys = await caches.open('soundboard-v1').then(cache => cache.keys());
+            const names = new Set(keys.map(request => request.url.split('?')[0]));
+            const loaded = [location.href.split('?')[0].split('#')[0], ...performance.getEntriesByType('resource').map(entry => entry.name)]
+                .map(url => url.split('?')[0])
+                .filter(url => url.startsWith(location.origin) && !url.endsWith('/sw.js'));
+            const missing = [...new Set(loaded.filter(url => !names.has(url)))];
+            const hasBoard = [...names].some(name => name.endsWith('tts-care-board.zip'));
+            return {
+                complete: missing.length === 0 && hasBoard,
+                missing,
+                hasBoard,
+                loaded: new Set(loaded).size,
+                cached: names.size,
+                controlled: navigator.serviceWorker.controller !== null
+            };
+        };
     });
-    check(cached, 'the service worker has every file the page loaded, and the built-in board');
+    const cached = await waitFor(page, 'the cache', () => window.__cacheReport().then(report => report.complete));
+    // When it times out, say what was missing: slow and never-cached need telling apart (#307).
+    let cacheDetail = '';
+    if (!cached) {
+        const report = await page.evaluate(() => window.__cacheReport()).catch(error => ({ error: error.message }));
+        cacheDetail = report.error
+            ? `\n      could not read the cache: ${report.error}`
+            : `\n      the page loaded ${report.loaded} files and the cache holds ${report.cached}; ` +
+              `the page was ${report.controlled ? '' : 'NOT '}controlled by the service worker` +
+              `\n      the built-in board (tts-care-board.zip) is ${report.hasBoard ? 'in' : 'NOT in'} the cache` +
+              (report.missing.length > 0
+                  ? `\n      ${report.missing.length} loaded file(s) not in the cache:\n        ${report.missing.join('\n        ')}`
+                  : '\n      every loaded file is in the cache');
+    }
+    check(cached, `the service worker has every file the page loaded, and the built-in board${cacheDetail}`);
 
     serverRunning = false;
     await server.stop();

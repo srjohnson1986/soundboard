@@ -81,7 +81,10 @@ board's Water tile is and checks that `speechSynthesis` was asked to say "Water,
 please." (speech is recorded, not spoken). It also checks that the manifest and its
 icons load, that nothing logs an error or 404s, that the service worker registers with
 the subpath as its scope and caches the app and the built-in board, and that with the
-server stopped the page reloads and the tap still speaks. Run it locally after
+server stopped the page reloads and the tap still speaks. It waits up to 30 seconds for
+the cache to hold every file the page loaded before going offline; if that times out, the
+failure names the files missing from it (#307), which tells a slow runner from a file that
+never gets cached. Run it locally after
 `./gradlew :web:wasmJsBrowserDistribution` with `npm ci` then `node smoke.mjs` in
 `web/smoke` (it finds Chrome, or takes `CHROME_PATH`).
 

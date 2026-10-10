@@ -537,6 +537,105 @@ class BoardViewModelTest {
         return recorded!!
     }
 
+    private fun pickImage(vm: BoardViewModel, content: String = "pic"): String {
+        var picked: String? = null
+        vm.importTileImage(FakePickedFile(content.encodeToByteArray(), "png")) { picked = it }
+        return picked!!
+    }
+
+    @Test
+    fun `a picked picture reaches the tile only on Save`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a", label = "Hey")))
+        val vm = newViewModel()
+
+        val name = pickImage(vm)
+
+        assertNull(tile(vm, "a").imageFileName)
+        assertTrue(files.has("icons/$name"))
+        vm.saveTile("a", tile(vm, "a").copy(imageFileName = name))
+
+        assertEquals(name, tile(vm, "a").imageFileName)
+        assertTrue(files.has("icons/$name"))
+        assertEquals("pic", vm.tileImage(name)?.decodeToString())
+    }
+
+    @Test
+    fun `cancelling the editor deletes a picture picked in it and keeps the old one`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a", label = "Hey", imageFileName = "old.png")))
+        files.put("icons/old.png", "old".encodeToByteArray())
+        val vm = newViewModel()
+
+        val picked = pickImage(vm)
+        vm.discardTileEdits()
+
+        assertEquals("old.png", tile(vm, "a").imageFileName)
+        assertTrue(files.has("icons/old.png"))
+        assertFalse(files.has("icons/$picked"))
+    }
+
+    @Test
+    fun `saving a new picture deletes the one it replaces and any tried and dropped`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a", label = "Hey", imageFileName = "old.png")))
+        files.put("icons/old.png", "old".encodeToByteArray())
+        val vm = newViewModel()
+
+        val tried = pickImage(vm, "tried")
+        val kept = pickImage(vm, "kept")
+        vm.saveTile("a", tile(vm, "a").copy(imageFileName = kept))
+
+        assertEquals(kept, tile(vm, "a").imageFileName)
+        assertTrue(files.has("icons/$kept"))
+        assertFalse(files.has("icons/old.png"))
+        assertFalse(files.has("icons/$tried"))
+    }
+
+    @Test
+    fun `a picture picked in the editor survives another board edit made before Save`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a"), Tile(id = "b")))
+        val vm = newViewModel()
+
+        val name = pickImage(vm)
+        vm.renameBoard("Something else") // commits, which prunes unreferenced pictures
+
+        assertTrue(files.has("icons/$name"))
+    }
+
+    @Test
+    fun `a picture a saved board still uses is not pruned when the tile drops it`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a", label = "Hey", imageFileName = "keep.png")))
+        files.put("icons/keep.png", "pic".encodeToByteArray())
+        val vm = newViewModel()
+        vm.saveBoardAs("Version 1")
+
+        vm.saveTile("a", tile(vm, "a").copy(imageFileName = null))
+
+        assertTrue(files.has("icons/keep.png"))
+    }
+
+    @Test
+    fun `saveTile trims the emoji and a blank one becomes none`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+
+        vm.saveTile("a", tile(vm, "a").copy(emoji = "  ❤ "))
+        assertEquals("❤", tile(vm, "a").emoji)
+
+        vm.saveTile("a", tile(vm, "a").copy(emoji = "   "))
+        assertNull(tile(vm, "a").emoji)
+    }
+
+    @Test
+    fun `clearTile also removes the emoji and picture`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a", label = "Hey", fileName = "a.m4a", emoji = "x", imageFileName = "p.png", showLabel = false)))
+        files.put("icons/p.png", "pic".encodeToByteArray())
+        val vm = newViewModel()
+
+        vm.clearTile("a")
+
+        assertEquals(Tile(id = "a"), tile(vm, "a"))
+        assertFalse(files.has("icons/p.png"))
+    }
+
     @Test
     fun `a picked sound is loaded for the editor but only reaches the tile on Save`() = runTest(dispatcher) {
         repo.save(boardWith(Tile(id = "a")))

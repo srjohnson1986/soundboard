@@ -414,4 +414,50 @@ class BoardRepositoryTest {
         assertTrue(name.endsWith(".jpg"))
         assertEquals("fake image bytes", repo.readBackground(name)?.decodeToString())
     }
+
+    @Test
+    fun `a backup export then import restores tile pictures`() = runTest {
+        val name = repo.importIcon(FakePickedFile(byteArrayOf(7, 7), extension = "png"))!!
+        val board = boardWith(Tile(id = "a", label = "Hey", emoji = "x", imageFileName = name, showLabel = false))
+        repo.save(board)
+        val target = CapturingSaveTarget()
+        assertTrue(repo.exportTo(target))
+
+        val restoredFiles = InMemoryFileStore()
+        val restored = BoardRepository(restoredFiles, zip, FakeBundledBoards())
+        assertTrue(restored.importFrom(FakePickedFile(target.written)))
+
+        assertEquals(board, restored.load())
+        assertContentEquals(byteArrayOf(7, 7), restored.readIcon(name))
+    }
+
+    @Test
+    fun `load drops a tile picture whose file is missing and keeps the emoji`() = runTest {
+        repo.save(boardWith(Tile(id = "a", label = "Hey", emoji = "x", imageFileName = "gone.png")))
+
+        val tile = repo.load().pages.first().tiles.first()
+
+        assertNull(tile.imageFileName)
+        assertEquals("x", tile.emoji)
+    }
+
+    @Test
+    fun `pruneUnusedIcons deletes exactly the pictures not kept`() = runTest {
+        files.write("icons/keep.png", byteArrayOf(1))
+        files.write("icons/drop.png", byteArrayOf(1))
+
+        repo.pruneUnusedIcons(setOf("keep.png"))
+
+        assertEquals(listOf("keep.png"), files.list("icons").map { it.name })
+    }
+
+    @Test
+    fun `import ignores icon entries that would land outside their folder`() = runTest {
+        val backup = zip.write(listOf(ZipEntryData("icons/ok.png", byteArrayOf(1)), ZipEntryData("icons/../evil.png", byteArrayOf(2))))
+
+        assertTrue(repo.importFrom(FakePickedFile(backup)))
+
+        assertEquals(listOf("ok.png"), files.list("icons").map { it.name })
+        assertFalse(files.exists("evil.png"))
+    }
 }

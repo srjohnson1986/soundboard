@@ -90,6 +90,39 @@ class BoardScreenUiTest : BoardUiTest() {
     }
 
     @Test
+    fun anEmojiSetInTheEditorShowsOnTheTileWithItsName() = runUiTest {
+        val app = launchBoard(oneTile(Tile(id = "a", label = "Hello", fileName = "a.mp3")))
+
+        toggleMenuSwitch("Edit mode")
+        onNodeWithText("Hello").performClick()
+        onNodeWithText("Show the name").assertDoesNotExist()
+        onNode(hasSetTextAction() and hasText("Emoji")).performTextInput("❤")
+        onNodeWithText("Show the name").assertExists()
+        onNodeWithText("Save").performClick()
+
+        waitForIdle()
+        assertEquals("❤", app.vm.board.value.findTile("a")?.emoji)
+        onNodeWithText("❤").assertIsDisplayed()
+        onNodeWithText("Hello").assertIsDisplayed()
+    }
+
+    @Test
+    fun anEmojiTileCanHideItsName() = runUiTest {
+        launchBoard(oneTile(Tile(id = "a", label = "Hello", fileName = "a.mp3", emoji = "❤", showLabel = false)))
+
+        onNodeWithText("❤").assertIsDisplayed()
+        onNodeWithText("Hello").assertDoesNotExist()
+    }
+
+    @Test
+    fun anEmojiOnlyTileIsNotShownAsBlank() = runUiTest {
+        launchBoard(oneTile(Tile(id = "a", emoji = "❤", fileName = "a.mp3")))
+
+        onNodeWithText("❤").assertIsDisplayed()
+        onNodeWithText("Unnamed").assertDoesNotExist()
+    }
+
+    @Test
     fun editModeMakesATapOnAFilledTileEditIt() = runUiTest {
         val app = launchBoard(oneTile(Tile(id = "a", label = "Air horn", fileName = "a.mp3")))
 

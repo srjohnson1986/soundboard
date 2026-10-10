@@ -70,6 +70,17 @@ whether Edit mode is on or not.
 In the editor:
 
 - **Name:** the label shown on the tile.
+- **Emoji:** an emoji (type or paste one, or use the keyboard's emoji key) shown
+  large on the tile, with the name as a small caption under it. Handy for
+  someone who finds a picture quicker to read than a word.
+- **Choose picture / Replace picture / Remove picture:** shows a photo or image
+  from the device on the tile instead, the same way. It's copied into the app
+  (and into backups), so deleting the original doesn't matter, and it's shrunk
+  to a sensible size, so large photos are fine. If a tile has both, the picture
+  shows and the emoji is kept for if you remove the picture.
+- **Show the name:** appears once the tile has an emoji or picture. Turn it off
+  to show only the picture or emoji, with no caption. The name is still what
+  the tile speaks (unless **What to say** is filled in).
 - **Choose sound / Replace sound:** picks an audio file from the device. It's
   copied into the app, so moving or deleting the original later doesn't
   break the tile.
@@ -95,8 +106,9 @@ In the editor:
 - **Color:** eight swatches. The first means "no color of its own".
 - **Override opacity / Override border:** gives this one tile its own
   see-through level or outline, instead of the page's or board's.
-- **Clear tile:** removes the sound, name and speech, turning it back into a
-  blank **+** tile. Only shown on a tile that has a sound or speaks.
+- **Clear tile:** removes the sound, name, speech, emoji and picture, turning it
+  back into a blank **+** tile. Only shown on a tile that has a sound, speaks or
+  shows a picture or emoji.
 
 Nothing you change in the editor reaches the tile until you tap **Save**,
 which keeps all of it. **Cancel** throws all of it away, including a new
@@ -359,7 +371,7 @@ can, and let whoever imports it record the rest.
 
 **Export backup** and **Import backup** (in the **☰** menu) save or restore
 the whole board as a single zip file. The backup includes every page, tile,
-setting, sound and background picture. Unlike a saved board, it carries its
+setting, sound, tile picture and background picture. Unlike a saved board, it carries its
 own copy of every sound, so it survives reinstalling the app or moving to a
 new device.
 

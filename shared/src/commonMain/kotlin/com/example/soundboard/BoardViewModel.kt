@@ -230,6 +230,9 @@ class BoardViewModel(
     /** Sound files added during the current tile edit, not yet saved onto any tile. */
     private val pendingSounds = mutableSetOf<String>()
 
+    /** Tile pictures added during the current tile edit, not yet saved onto any tile; deleted again if the edit is cancelled. */
+    private val pendingIcons = mutableSetOf<String>()
+
     /** Bumped whenever a tile edit ends, so a pick or recording that finishes after it knows it's too late. */
     private var editSession = 0
 
@@ -249,6 +252,26 @@ class BoardViewModel(
     }
 
     /**
+     * Copies a picked picture into app storage and hands its file name to [onImported] for the
+     * draft. Like a sound, it's pending until [saveTile] and deleted if the edit is cancelled.
+     */
+    fun importTileImage(file: PickedFile, onImported: (fileName: String) -> Unit) {
+        val session = editSession
+        viewModelScope.launch {
+            val name = withContext(ioDispatcher) { boardRepo.importIcon(file) } ?: return@launch
+            if (session != editSession) {
+                withContext(ioDispatcher) { boardRepo.deleteIcons(listOf(name)) }
+            } else {
+                pendingIcons += name
+                onImported(name)
+            }
+        }
+    }
+
+    /** The picture behind [Tile.imageFileName], for the UI to decode and draw; null if it's gone. */
+    suspend fun tileImage(name: String): ByteArray? = withContext(ioDispatcher) { boardRepo.readIcon(name) }
+
+    /**
      * Saves the tile editor's draft onto tile [tileId]: every field at once, as one board edit.
      * Pending sounds the draft didn't keep are unloaded here and pruned with the commit.
      */
@@ -257,12 +280,13 @@ class BoardViewModel(
             edited.copy(
                 id = current.id,
                 label = edited.label.trim(),
+                emoji = edited.emoji?.trim()?.ifBlank { null },
                 ttsScript = edited.ttsScript?.trim()?.ifBlank { null },
                 volume = edited.volume.coerceIn(0f, 1f),
                 opacity = edited.opacity?.coerceIn(0f, 1f)
             )
         }
-        endTileEdit(keep = setOfNotNull(edited.fileName))
+        endTileEdit(keep = setOfNotNull(edited.fileName), keepIcons = setOfNotNull(edited.imageFileName))
     }
 
     /**
@@ -311,10 +335,10 @@ class BoardViewModel(
     /** Throws the tile editor's draft away: stops any recording and deletes the sounds added while editing. */
     fun discardTileEdits() {
         cancelRecording()
-        endTileEdit(keep = emptySet())
+        endTileEdit(keep = emptySet(), keepIcons = emptySet())
     }
 
-    private fun endTileEdit(keep: Set<String>) {
+    private fun endTileEdit(keep: Set<String>, keepIcons: Set<String>) {
         editSession++
         val discarded = pendingSounds - keep
         pendingSounds.clear()
@@ -322,6 +346,9 @@ class BoardViewModel(
         // Anything the board doesn't reference is deleted here; a saved sound is on the board by now.
         val unused = discarded - _board.value.soundFileNames
         if (unused.isNotEmpty()) viewModelScope.launch(ioDispatcher) { boardRepo.deleteFiles(unused) }
+        val unusedIcons = (pendingIcons - keepIcons) - _board.value.iconFileNames
+        pendingIcons.clear()
+        if (unusedIcons.isNotEmpty()) viewModelScope.launch(ioDispatcher) { boardRepo.deleteIcons(unusedIcons) }
     }
 
     /** Records [name] as pending for edit [session], or deletes it if that edit has already ended. */
@@ -335,7 +362,9 @@ class BoardViewModel(
         onAdded(name)
     }
 
-    fun clearTile(tileId: String) = updateTile(tileId) { it.copy(label = "", fileName = null, speakWhenNoSound = false) }
+    fun clearTile(tileId: String) = updateTile(tileId) {
+        it.copy(label = "", fileName = null, speakWhenNoSound = false, emoji = null, imageFileName = null, showLabel = true)
+    }
 
     /** Detaches a tile's sound without touching its label or [Tile.speakWhenNoSound]. */
     fun removeSound(tileId: String) = updateTile(tileId) { it.copy(fileName = null) }
@@ -798,6 +827,7 @@ class BoardViewModel(
 
         // Taken now, on the main thread that changes them, not on the I/O thread below.
         val inProgress = pendingSounds.toSet() + listOfNotNull(pendingRecordingPath?.substringAfterLast('/'))
+        val iconsInProgress = pendingIcons.toSet()
         viewModelScope.launch(ioDispatcher) {
             // Back-to-back commits (e.g. Grid size's Apply) each launch a save on a pool
             // thread; without the lock they can finish out of order and leave an older
@@ -812,6 +842,8 @@ class BoardViewModel(
                 // live tile could delete audio a saved board still points at. Likewise a sound
                 // added in the tile editor but not saved yet, and a recording in progress.
                 boardRepo.pruneUnused(latest.soundFileNames + savedBoardRepo.allReferencedFileNames() + inProgress)
+                // Same for tile pictures: the live board's, any saved board's, and ones picked in the open editor.
+                boardRepo.pruneUnusedIcons(latest.iconFileNames + savedBoardRepo.allReferencedIconNames() + iconsInProgress)
             }
         }
     }

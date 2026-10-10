@@ -44,6 +44,13 @@ class SavedBoardRepository(private val files: FileStore) {
             .flatMap { it.soundFileNames }
             .toSet()
 
+    /** Every tile picture any saved board still points at; the icon counterpart of [allReferencedFileNames]. */
+    suspend fun allReferencedIconNames(): Set<String> =
+        savedBoardFiles()
+            .mapNotNull { decode(it.name) }
+            .flatMap { it.iconFileNames }
+            .toSet()
+
     private suspend fun savedBoardFiles(): List<StoredFileInfo> =
         files.list(SAVED_BOARDS_DIR).filter { it.name.endsWith(".json") }
 

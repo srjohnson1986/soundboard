@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
@@ -74,6 +75,9 @@ internal val TILE_SPACING = 8.dp
 /** Narrowest a tile gets when Fit to screen adds landscape columns — a comfortable touch target. */
 private val MIN_FIT_TO_SCREEN_TILE_WIDTH = 56.dp
 
+/** Largest a caption under a tile's picture or emoji gets, so the picture keeps most of the tile. */
+private const val CAPTION_MAX_SP = 16f
+
 /** Inset between a tile's edge and its label. */
 internal val TILE_CONTENT_PADDING = 6.dp
 
@@ -89,7 +93,8 @@ private fun rememberTilesLabelStyle(
     labelStyle: LabelStyle
 ): GridLabelStyle {
     val insetPx = with(LocalDensity.current) { (TILE_CONTENT_PADDING * 2).toPx() }
-    val texts = remember(tiles, labelStyle.allCaps) { tiles.map { tileDisplayText(it, labelStyle.allCaps) } }
+    // A tile with a picture or emoji captions it at its own size, so it doesn't shrink everyone else's names.
+    val texts = remember(tiles, labelStyle.allCaps) { tiles.filterNot { it.hasIcon }.map { tileDisplayText(it, labelStyle.allCaps) } }
     return rememberGridLabelStyle(
         texts = texts,
         boxWidthPx = (tileWidthPx - insetPx).toInt(),
@@ -495,15 +500,35 @@ private fun TileCard(
                 .fillMaxSize()
                 .padding(TILE_CONTENT_PADDING)
         ) {
-            Text(
-                text = tileDisplayText(tile, allCaps),
-                textAlign = TextAlign.Center,
-                maxLines = LABEL_MAX_LINES,
-                overflow = TextOverflow.Ellipsis,
-                style = labelStyles.forText(tileDisplayText(tile, allCaps)),
-                color = contentColor,
-                modifier = Modifier.align(Alignment.Center)
-            )
+            if (tile.hasIcon) {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) { TileIcon(tile, contentColor) }
+                    if (tile.showLabel && tile.label.isNotBlank()) {
+                        Text(
+                            text = tileDisplayText(tile, allCaps),
+                            textAlign = TextAlign.Center,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            // The grid's label style, but never larger than a caption.
+                            style = labelStyles.base.copy(fontSize = minOf(labelStyles.base.fontSize.value, CAPTION_MAX_SP).sp),
+                            color = contentColor
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    text = tileDisplayText(tile, allCaps),
+                    textAlign = TextAlign.Center,
+                    maxLines = LABEL_MAX_LINES,
+                    overflow = TextOverflow.Ellipsis,
+                    style = labelStyles.forText(tileDisplayText(tile, allCaps)),
+                    color = contentColor,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
             if (editMode) {
                 Icon(
                     Icons.Filled.Edit,

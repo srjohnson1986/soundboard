@@ -286,6 +286,22 @@ to pre-validate. `Board`'s own mutators (`withPageRemoved`, `withPageRenamed`,
   content URI) is deliberate: content URIs can be revoked when the source
   app updates, uninstalls, or the user moves the file, silently breaking the
   tile. Copying also means the app never needs `READ_EXTERNAL_STORAGE`.
+- `filesDir/icons/<uuid>.<ext>` — a tile's picture (`Tile.imageFileName`, with
+  `Tile.emoji` and `Tile.showLabel` beside it), copied in by
+  `BoardRepository.importIcon()`. It follows the sounds' rules throughout: a
+  picture picked in the tile editor is *pending* until **Save**
+  (`BoardViewModel.pendingIcons`) and deleted if the edit is cancelled;
+  `commit()` prunes `icons/` against the live board's `iconFileNames`, every saved
+  board's `allReferencedIconNames()` and the pending ones; `load()` drops a
+  `imageFileName` whose file is missing, so the tile falls back to its emoji or
+  name. Backups carry it as `icons/` in the zip (older backups and app versions
+  simply have none, and ignore the entry). The UI decodes it through
+  `TileImages` (`ui/TileIcon.kt`), provided to the whole board as
+  `LocalTileImages`: one decode at a time, shrunk to 384 px on its longest side
+  with a plain Compose canvas (so no per-platform code) and cached, so a grid of
+  full-size photos can't exhaust memory. A tile with an emoji or picture draws it
+  large with the name as a caption (capped at 16 sp); those tiles are left out of
+  the grid's shared label sizing so they don't shrink everyone else's names.
 
 **`DevicePreferences` holds the settings deliberately *not* on `Board`.**
 Everything else in Settings travels with the board on purpose (loading a
@@ -305,7 +321,8 @@ would leave neither a timer nor tap to close, and `DevicePreferences` repairs
 such a combination on read, so the text screen can never strand anyone.
 
 **Backup** (`exportTo/importFrom`) is just those two things zipped: `board.json`
-at the zip root, every file under `sounds/` mirrored into a `sounds/` entry.
+at the zip root, every file under `sounds/` mirrored into a `sounds/` entry (and
+likewise `icons/` and the background picture's `background/`).
 Both go through Storage Access Framework document pickers
 (`CreateDocument`/`OpenDocument`), so no storage permission is needed here
 either. A backup is built and read whole, in memory, rather than streamed, since

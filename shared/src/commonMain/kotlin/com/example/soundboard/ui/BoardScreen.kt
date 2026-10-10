@@ -13,6 +13,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -74,6 +75,13 @@ internal sealed interface BoardDialog {
 
 @Composable
 fun BoardScreen(vm: BoardViewModel) {
+    // One loader per view model, so a tile's picture is decoded once and shared by the grid and the editor.
+    val tileImages = remember(vm) { TileImages(vm::tileImage) }
+    CompositionLocalProvider(LocalTileImages provides tileImages) { BoardScreenContent(vm) }
+}
+
+@Composable
+private fun BoardScreenContent(vm: BoardViewModel) {
     val board by vm.board.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val isRecording by vm.isRecording.collectAsStateWithLifecycle()
@@ -420,6 +428,7 @@ fun BoardScreen(vm: BoardViewModel) {
                 isRecording = isRecording,
                 speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                 onPickSound = vm::importSound,
+                onPickImage = vm::importTileImage,
                 onClear = { vm.clearTile(editing.id) },
                 onPlay = vm::play,
                 onStartRecording = vm::startRecording,

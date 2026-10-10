@@ -39,6 +39,9 @@ on a macOS runner; advisory, it doesn't block merging):
   them imports on iOS, recordings included. (Android and the web use their own zip
   libraries. iOS reads and writes the zip format itself; its tests read a zip made
   outside the app, but nothing has yet imported an iOS backup elsewhere.)
+- [ ] A tile with an emoji draws it in colour, and one with a picture (**Choose picture** in the tile
+  editor opens the Photos/Files picker) draws the picture, still there after a backup
+  export and import.
 - [ ] Keep screen awake, rotation, the caregiver lock's hold to unlock, and Show mode.
 
 Open an issue for anything that doesn't work, or tick items off here in a pull request.

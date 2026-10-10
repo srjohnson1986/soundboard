@@ -91,8 +91,17 @@ data class Tile(
     /** Per-tile opacity override, 0..1; null inherits the page's, then the board's. */
     val opacity: Float? = null,
     /** Per-tile border override; null inherits the page's, then the board's. */
-    val border: TileBorder? = null
+    val border: TileBorder? = null,
+    /** An emoji (or a few characters) shown large on the tile; null for none. A picture ([imageFileName]) wins when both are set. */
+    val emoji: String? = null,
+    /** A picture shown large on the tile: a file inside the app's private icons directory. Null for none. */
+    val imageFileName: String? = null,
+    /** Whether the name is drawn on the tile. Only matters with an [emoji] or picture; a plain text tile always shows its name. */
+    val showLabel: Boolean = true
 ) {
+    /** Whether the tile shows an [emoji] or picture in place of (or above) its name. */
+    val hasIcon: Boolean get() = !emoji.isNullOrBlank() || imageFileName != null
+
     /**
      * Whether tapping the tile makes a sound of some kind: it has a sound file, or it's set
      * to speak. A tile without one is "blank", even if it has a label still awaiting a
@@ -101,7 +110,7 @@ data class Tile(
     val hasSound: Boolean get() = fileName != null || speakWhenNoSound
 
     /** Whether the tile holds anything worth keeping on screen — a sound, speech, or even just a label still awaiting a recording. */
-    val hasContent: Boolean get() = hasSound || label.isNotBlank()
+    val hasContent: Boolean get() = hasSound || label.isNotBlank() || hasIcon
 
     /** What TTS actually says for this tile: [ttsScript] when set, otherwise [label]. */
     val speechText: String get() = ttsScript?.takeIf { it.isNotBlank() } ?: label
@@ -325,6 +334,10 @@ data class Board(
      */
     val soundFileNames: Set<String>
         get() = pages.flatMap { it.tiles }.mapNotNull { it.fileName }.toSet()
+
+    /** Every tile picture any page points at, for keeping those files and pruning the rest. */
+    val iconFileNames: Set<String>
+        get() = pages.flatMap { it.tiles }.mapNotNull { it.imageFileName }.toSet()
 
     /** Every page brought in line with its layout rules; see [Page.normalized]. */
     fun normalized(): Board = copy(pages = pages.map { it.normalized() })

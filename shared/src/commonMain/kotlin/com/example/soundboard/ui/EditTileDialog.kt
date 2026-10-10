@@ -1,6 +1,8 @@
 package com.example.soundboard.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +29,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -51,6 +54,7 @@ internal fun EditTileDialog(
     isRecording: Boolean,
     speakUnrecordedTilesEnabled: Boolean,
     onPickSound: (PickedFile, onPicked: (String) -> Unit) -> Unit,
+    onPickImage: (PickedFile, onPicked: (String) -> Unit) -> Unit,
     onClear: () -> Unit,
     onPlay: (Tile) -> Unit,
     onStartRecording: () -> Unit,
@@ -66,6 +70,10 @@ internal fun EditTileDialog(
 
     val pickSound = rememberOpenFileLauncher(listOf("audio/*")) { file ->
         onPickSound(file) { name -> draft = draft.copy(fileName = name) }
+    }
+
+    val pickImage = rememberPickImageLauncher { file ->
+        onPickImage(file) { name -> draft = draft.copy(imageFileName = name) }
     }
 
     val requestMicrophone = rememberMicrophoneAccess { granted ->
@@ -98,6 +106,13 @@ internal fun EditTileDialog(
                     placeholder = { Text("e.g. \"Call Mom\"") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
+                )
+                IconSection(
+                    draft = draft,
+                    onEmojiChange = { draft = draft.copy(emoji = it) },
+                    onPickImage = pickImage,
+                    onRemoveImage = { draft = draft.copy(imageFileName = null) },
+                    onShowLabelChange = { draft = draft.copy(showLabel = it) }
                 )
                 if (draft.fileName != null) {
                     Row(
@@ -252,7 +267,7 @@ internal fun EditTileDialog(
                 ) { border -> BorderControls(border) { draft = draft.copy(border = it) } }
 
                 // Clearing is its own, immediate action on the saved tile, not part of the draft.
-                if (tile.hasSound) {
+                if (tile.hasSound || tile.hasIcon) {
                     TextButton(
                         onClick = {
                             onClear()
@@ -272,4 +287,64 @@ internal fun EditTileDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+}
+
+/** Longest emoji entry accepted; a single emoji can be several joined characters (a family, a flag), so this is generous. */
+private const val EMOJI_MAX_LENGTH = 16
+
+/**
+ * The picture and emoji controls of [EditTileDialog]: what the tile shows large in place of its
+ * name, with a preview, and whether the name is still drawn beneath it. A picture wins over an emoji.
+ */
+@Composable
+private fun IconSection(
+    draft: Tile,
+    onEmojiChange: (String?) -> Unit,
+    onPickImage: () -> Unit,
+    onRemoveImage: () -> Unit,
+    onShowLabelChange: (Boolean) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (draft.hasIcon) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small)
+                        .padding(4.dp)
+                ) {
+                    TileIcon(draft, MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            OutlinedTextField(
+                value = draft.emoji.orEmpty(),
+                onValueChange = { if (it.length <= EMOJI_MAX_LENGTH) onEmojiChange(it.ifEmpty { null }) },
+                label = { Text("Emoji") },
+                placeholder = { Text("Type or paste one") },
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onPickImage, modifier = Modifier.weight(1f)) {
+                Text(if (draft.imageFileName == null) "Choose picture" else "Replace picture")
+            }
+            if (draft.imageFileName != null) {
+                OutlinedButton(onClick = onRemoveImage, modifier = Modifier.weight(1f)) { Text("Remove picture") }
+            }
+        }
+        if (draft.hasIcon) {
+            SwitchRow(
+                label = "Show the name",
+                checked = draft.showLabel,
+                onCheckedChange = onShowLabelChange,
+                supportingText = "Under the picture or emoji",
+                labelStyle = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
 }

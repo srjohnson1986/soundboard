@@ -39,7 +39,7 @@ class BoardRepository(
                 pages = listOf(Page(rows = legacy.rows, columns = legacy.columns, tiles = legacy.tiles))
             )
         }
-        val sanitized = sanitizeMissingSounds(migrateHomePageIndex(board, root))
+        val sanitized = sanitizeMissingIcons(sanitizeMissingSounds(migrateHomePageIndex(board, root)))
         sanitized.normalized()
     }.getOrElse { Board() }
 
@@ -75,6 +75,21 @@ class BoardRepository(
         return board.copy(
             pages = board.pages.map { page -> page.copy(tiles = page.tiles.map(::fix)) }
         )
+    }
+
+    /**
+     * Like [sanitizeMissingSounds], for tile pictures: one whose file is gone (a backup
+     * without it, cleared storage) is dropped so the tile falls back to its emoji or name
+     * instead of drawing nothing.
+     */
+    private suspend fun sanitizeMissingIcons(board: Board): Board {
+        if (board.iconFileNames.isEmpty()) return board
+        val present = files.list(ICONS_DIR).map { it.name }.toSet()
+        fun fix(tile: Tile): Tile {
+            val name = tile.imageFileName ?: return tile
+            return if (name in present) tile else tile.copy(imageFileName = null)
+        }
+        return board.copy(pages = board.pages.map { page -> page.copy(tiles = page.tiles.map(::fix)) })
     }
 
     /** True once a board has ever been saved — false only on a fresh install. */
@@ -121,6 +136,22 @@ class BoardRepository(
     /** Copies the picked image into app storage and returns its local file name — same reasoning as [importSound]. */
     suspend fun importBackgroundImage(file: PickedFile): String? = copyIntoAppStorage(file, BACKGROUNDS_DIR)
 
+    /** Tile picture [name]'s content, for the UI to decode; null if it's gone. */
+    suspend fun readIcon(name: String): ByteArray? = files.read("$ICONS_DIR/$name")
+
+    /** Copies the picked picture into app storage and returns its local file name — same reasoning as [importSound]. */
+    suspend fun importIcon(file: PickedFile): String? = copyIntoAppStorage(file, ICONS_DIR)
+
+    /** Deletes exactly the named tile pictures, if present. */
+    suspend fun deleteIcons(names: Collection<String>) {
+        names.forEach { files.delete("$ICONS_DIR/$it") }
+    }
+
+    /** Deletes any tile picture not in [keep]. */
+    suspend fun pruneUnusedIcons(keep: Set<String>) {
+        files.list(ICONS_DIR).filter { it.name !in keep }.forEach { files.delete("$ICONS_DIR/${it.name}") }
+    }
+
     /** Copies [file]'s content into [dir] under a fresh random name, keeping its extension; returns that name, or null on failure. */
     private suspend fun copyIntoAppStorage(file: PickedFile, dir: String): String? = runCatching {
         val ext = file.extension()
@@ -146,6 +177,7 @@ class BoardRepository(
             add(ZipEntryData(BOARD_FILE, files.read(BOARD_FILE) ?: error("no board.json")))
             addDirectory(SOUNDS_DIR, ZIP_SOUNDS_DIR)
             addDirectory(BACKGROUNDS_DIR, ZIP_BACKGROUNDS_DIR)
+            addDirectory(ICONS_DIR, ZIP_ICONS_DIR)
         }
         target.write(zip.write(entries))
     }.isSuccess
@@ -215,6 +247,8 @@ class BoardRepository(
                     entry.fileNameAfter(ZIP_SOUNDS_DIR)?.let { files.write(soundPath(it), entry.bytes) }
                 entry.name.startsWith(ZIP_BACKGROUNDS_DIR) ->
                     entry.fileNameAfter(ZIP_BACKGROUNDS_DIR)?.let { files.write("$BACKGROUNDS_DIR/$it", entry.bytes) }
+                entry.name.startsWith(ZIP_ICONS_DIR) ->
+                    entry.fileNameAfter(ZIP_ICONS_DIR)?.let { files.write("$ICONS_DIR/$it", entry.bytes) }
             }
         }
     }
@@ -227,10 +261,12 @@ class BoardRepository(
         const val BOARD_FILE = "board.json"
         const val SOUNDS_DIR = "sounds"
         const val BACKGROUNDS_DIR = "backgrounds"
+        const val ICONS_DIR = "icons"
 
         /** Folder prefixes inside a backup zip. "background/" is singular unlike the on-device "backgrounds" dir; kept as-is so existing backups and built-in boards still import. */
         const val ZIP_SOUNDS_DIR = "sounds/"
         const val ZIP_BACKGROUNDS_DIR = "background/"
+        const val ZIP_ICONS_DIR = "icons/"
     }
 }
 

@@ -392,4 +392,25 @@ class BoardTest {
         assertEquals(pageBorder, page.borderFor(Tile(), boardBorder))
         assertEquals(boardBorder, Page().borderFor(Tile(), boardBorder))
     }
+
+    @Test
+    fun `a tile with only an emoji or picture has an icon and counts as content`() {
+        assertFalse(Tile().hasIcon)
+        assertTrue(Tile(emoji = "x").hasIcon)
+        assertTrue(Tile(imageFileName = "a.png").hasIcon)
+        assertFalse(Tile(emoji = "  ").hasIcon)
+        assertTrue(Tile(emoji = "x").hasContent)
+    }
+
+    @Test
+    fun `iconFileNames collects every page's pictures once`() {
+        val board = Board(
+            pages = listOf(
+                Page(tiles = listOf(Tile(imageFileName = "a.png"), Tile(imageFileName = "a.png"))),
+                Page(tiles = listOf(Tile(imageFileName = "b.png"), Tile()))
+            )
+        )
+
+        assertEquals(setOf("a.png", "b.png"), board.iconFileNames)
+    }
 }

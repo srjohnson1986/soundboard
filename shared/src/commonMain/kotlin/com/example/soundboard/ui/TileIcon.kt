@@ -32,6 +32,9 @@ import org.jetbrains.compose.resources.decodeToImageBitmap
 /** Longest side a tile picture is kept at in memory: plenty for a tile, and a whole grid of photos stays small. */
 internal const val TILE_IMAGE_MAX_SIDE_PX = 384
 
+/** Longest side a picture is kept at for Show mode's full screen. */
+internal const val SHOW_IMAGE_MAX_SIDE_PX = 1280
+
 /** How much of the smaller side of its box an emoji fills. */
 private const val EMOJI_FILL = 0.62f
 
@@ -41,15 +44,17 @@ private const val EMOJI_FILL = 0.62f
  * its tile is drawn. Decoding one at a time keeps the peak memory to a single full-size photo.
  */
 internal class TileImages(private val read: suspend (String) -> ByteArray?) {
-    private val cache = mutableMapOf<String, ImageBitmap>()
+    private val cache = mutableMapOf<Pair<String, Int>, ImageBitmap>()
     private val lock = Mutex()
 
-    suspend fun load(name: String): ImageBitmap? {
-        cache[name]?.let { return it }
+    /** [name] shrunk to at most [maxSide] px on its longer side; a tile uses the default, Show mode asks for more. */
+    suspend fun load(name: String, maxSide: Int = TILE_IMAGE_MAX_SIDE_PX): ImageBitmap? {
+        val key = name to maxSide
+        cache[key]?.let { return it }
         return lock.withLock {
-            cache[name] ?: withContext(Dispatchers.Default) {
-                runCatching { read(name)?.decodeToImageBitmap()?.scaledDownTo(TILE_IMAGE_MAX_SIDE_PX) }.getOrNull()
-            }?.also { cache[name] = it }
+            cache[key] ?: withContext(Dispatchers.Default) {
+                runCatching { read(name)?.decodeToImageBitmap()?.scaledDownTo(maxSide) }.getOrNull()
+            }?.also { cache[key] = it }
         }
     }
 }
@@ -81,11 +86,11 @@ internal fun ImageBitmap.scaledDownTo(maxSide: Int): ImageBitmap {
  * [ContentScale.Fit], so nothing of it is cropped; it draws nothing while it loads or if it can't.
  */
 @Composable
-internal fun TileIcon(tile: Tile, color: Color, modifier: Modifier = Modifier) {
+internal fun TileIcon(tile: Tile, color: Color, modifier: Modifier = Modifier, maxSidePx: Int = TILE_IMAGE_MAX_SIDE_PX) {
     val imageName = tile.imageFileName
     if (imageName != null) {
         val images = LocalTileImages.current
-        val bitmap by produceState<ImageBitmap?>(null, imageName, images) { value = images.load(imageName) }
+        val bitmap by produceState<ImageBitmap?>(null, imageName, images, maxSidePx) { value = images.load(imageName, maxSidePx) }
         bitmap?.let {
             Image(
                 bitmap = it,

@@ -73,6 +73,11 @@ In the editor:
 - **Emoji:** an emoji (type or paste one, or use the keyboard's emoji key) shown
   large on the tile, with the name as a small caption under it. Handy for
   someone who finds a picture quicker to read than a word.
+  When the tile has no name and no **What to say**, picking an emoji fills the
+  name in with a plain spoken word for it (🚽 "Bathroom", 💧 "Water", 🍽️ "I'm
+  hungry"). It's only a suggestion: change it freely. It never replaces words
+  you typed, and picking a different emoji swaps the suggestion for the new one.
+  Emoji the app has no word for leave the name empty.
 - **Choose picture / Replace picture / Remove picture:** shows a photo or image
   from the device on the tile instead, the same way. It's copied into the app
   (and into backups), so deleting the original doesn't matter, and it's shrunk
@@ -144,7 +149,10 @@ well as) hearing them. Turn it on or off with the **Show mode** switch in the
 
 While it's on, tapping a tile, or holding one to preview it, fills the screen
 with its words in large white text on black: its script if it has one,
-otherwise its name. It doesn't apply to **Speak...** or while Edit mode is on.
+otherwise its name. A tile with a picture or emoji shows it large above the words
+(or on its own, when the name is hidden and there's no script), so it works for
+someone who reads symbols more easily than words. It doesn't apply to
+**Speak...** or while Edit mode is on.
 Closing the text puts you back exactly where you were.
 
 **Settings → Show mode** has its options:

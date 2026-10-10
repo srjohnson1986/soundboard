@@ -302,6 +302,10 @@ to pre-validate. `Board`'s own mutators (`withPageRemoved`, `withPageRenamed`,
   full-size photos can't exhaust memory. A tile with an emoji or picture draws it
   large with the name as a caption (capped at 16 sp); those tiles are left out of
   the grid's shared label sizing so they don't shrink everyone else's names.
+  Picking an emoji in the editor suggests a name from `EmojiNames` (`model/`: a
+  hand-written list of about 250 emoji with plain spoken words, normalised for the
+  emoji selector and skin tones), only into a blank name (or one the dialog itself
+  suggested) while `ttsScript` is blank.
 
 **`DevicePreferences` holds the settings deliberately *not* on `Board`.**
 Everything else in Settings travels with the board on purpose (loading a
@@ -837,7 +841,11 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   previews call `vm.activate(tile)`, which sets `shownText` (the tile's
   `speechText`) when Show mode is on and calls `play()` unless it mutes sounds;
   the tile editor's own Play button still calls `play()` directly, so it never
-  opens the text screen. `BoardScreen` draws `ShowTextOverlay` over the whole
+  opens the text screen. A tile with a picture or emoji also sets `shownIcon`,
+  and the overlay draws it above the words (`TileIcon`, with a larger 1280 px
+  decode than a tile's); `Tile.shownWords` is the words, empty when the name is
+  hidden and there is no `ttsScript`, in which case `shownText` is `""` and only
+  the picture shows. `BoardScreen` draws `ShowTextOverlay` over the whole
   `Scaffold` while `shownText` is set, so closing it lands on the same page
   with nothing to navigate back to. The overlay always installs a
   `pointerInput`, even with tap to close off, since an overlay without one

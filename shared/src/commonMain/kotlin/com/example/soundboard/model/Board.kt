@@ -116,6 +116,13 @@ data class Tile(
     val speechText: String get() = ttsScript?.takeIf { it.isNotBlank() } ?: label
 
     /**
+     * The words Show mode puts on screen for this tile: [speechText], except that a tile showing
+     * a picture or emoji with its name turned off ([showLabel]) and no [ttsScript] shows no words, only the picture.
+     */
+    val shownWords: String
+        get() = if (hasIcon && !showLabel && ttsScript.isNullOrBlank()) "" else speechText.trim()
+
+    /**
      * Whether tapping this tile does anything: plays its clip, or speaks its [speechText]
      * when [speakWhenNoSound] is on or the board's [Board.speakUnrecordedTilesEnabled] fallback is.
      */

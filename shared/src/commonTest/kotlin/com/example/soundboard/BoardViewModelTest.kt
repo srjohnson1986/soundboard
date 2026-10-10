@@ -1216,6 +1216,52 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `activate in Show mode puts a tile's emoji on screen with its words`() = runTest(dispatcher) {
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+        val tile = Tile(id = "a", label = "Water", emoji = "❤", fileName = "a.mp3")
+
+        vm.activate(tile)
+
+        assertEquals("Water", vm.shownText.value)
+        assertEquals(tile, vm.shownIcon.value)
+        vm.dismissShownText()
+        assertNull(vm.shownText.value)
+        assertNull(vm.shownIcon.value)
+    }
+
+    @Test
+    fun `an icon only tile with its name hidden works in Show mode with no words`() = runTest(dispatcher) {
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+
+        vm.activate(Tile(id = "a", label = "Water", imageFileName = "p.png", showLabel = false, fileName = "a.mp3"))
+
+        assertEquals("", vm.shownText.value)
+        assertEquals("p.png", vm.shownIcon.value?.imageFileName)
+    }
+
+    @Test
+    fun `a hidden name still shows its What to say in Show mode`() = runTest(dispatcher) {
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+
+        vm.activate(Tile(id = "a", label = "Water", ttsScript = "Some water please", emoji = "x", showLabel = false, fileName = "a.mp3"))
+
+        assertEquals("Some water please", vm.shownText.value)
+    }
+
+    @Test
+    fun `a plain tile in Show mode has no icon on screen`() = runTest(dispatcher) {
+        val vm = newViewModel()
+        vm.setShowModeEnabled(true)
+
+        vm.activate(Tile(id = "a", label = "Water", fileName = "a.mp3"))
+
+        assertNull(vm.shownIcon.value)
+    }
+
+    @Test
     fun `activate on an unplayable tile shows nothing`() = runTest(dispatcher) {
         val vm = newViewModel()
         vm.setSpeakUnrecordedTilesEnabled(false)

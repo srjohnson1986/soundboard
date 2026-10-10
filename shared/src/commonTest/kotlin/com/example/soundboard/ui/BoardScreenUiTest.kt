@@ -11,6 +11,7 @@ import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.isToggleable
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -131,6 +132,86 @@ class BoardScreenUiTest : BoardUiTest() {
 
         waitForIdle()
         assertEquals("Loo", app.vm.board.value.findTile("a")?.label)
+    }
+
+    @Test
+    fun theEditorCanRemoveAPictureAndHideTheName() = runUiTest {
+        val app = launchBoard(oneTile(Tile(id = "a", label = "Photo", fileName = "a.mp3", imageFileName = "p.png")))
+
+        toggleMenuSwitch("Edit mode")
+        onNodeWithText("Photo").performClick()
+        onNodeWithText("Replace").assertIsDisplayed()
+        onNodeWithText("Remove").performClick()
+        onNodeWithText("Choose picture").assertIsDisplayed()
+        onNodeWithText("Save").performClick()
+
+        waitForIdle()
+        assertNull(app.vm.board.value.findTile("a")?.imageFileName)
+    }
+
+    @Test
+    fun turningOffShowTheNameIsSaved() = runUiTest {
+        val app = launchBoard(oneTile(Tile(id = "a", label = "Hello", fileName = "a.mp3", emoji = "❤")))
+
+        toggleMenuSwitch("Edit mode")
+        onNodeWithText("Hello").performClick()
+        onNodeWithText("Show the name").performClick()
+        onNodeWithText("Save").performClick()
+
+        waitForIdle()
+        assertEquals(false, app.vm.board.value.findTile("a")?.showLabel)
+        onNodeWithText("Hello").assertDoesNotExist()
+    }
+
+    @Test
+    fun aDifferentEmojiSwapsTheSuggestedName() = runUiTest {
+        val app = launchBoard(oneTile(Tile(id = "a")))
+
+        onNodeWithText("+").performClick()
+        onNode(hasSetTextAction() and hasText("Emoji")).performTextInput("🚽")
+        onNodeWithText("Bathroom").assertIsDisplayed()
+        onNode(hasSetTextAction() and hasText("Emoji")).performTextReplacement("💧")
+        onNodeWithText("Save").performClick()
+
+        waitForIdle()
+        assertEquals("Water", app.vm.board.value.findTile("a")?.label)
+    }
+
+    @Test
+    fun anEmojiWithNoWordsLeavesTheNameAlone() = runUiTest {
+        val app = launchBoard(oneTile(Tile(id = "a")))
+
+        onNodeWithText("+").performClick()
+        onNode(hasSetTextAction() and hasText("Emoji")).performTextInput("🦬")
+        onNodeWithText("Save").performClick()
+
+        waitForIdle()
+        assertEquals("", app.vm.board.value.findTile("a")?.label)
+        assertEquals("🦬", app.vm.board.value.findTile("a")?.emoji)
+    }
+
+    @Test
+    fun anEmojiDoesNotSuggestANameWhenWhatToSayIsFilledIn() = runUiTest {
+        val app = launchBoard(oneTile(Tile(id = "a")))
+
+        onNodeWithText("+").performClick()
+        onNode(hasSetTextAction() and hasText("What to say")).performTextInput("I need the bathroom")
+        onNode(hasSetTextAction() and hasText("Emoji")).performTextInput("🚽")
+        onNodeWithText("Save").performClick()
+
+        waitForIdle()
+        assertEquals("", app.vm.board.value.findTile("a")?.label)
+    }
+
+    @Test
+    fun clearTileOnAnEmojiOnlyTileTurnsItBackIntoABlankOne() = runUiTest {
+        val app = launchBoard(oneTile(Tile(id = "a", emoji = "❤")))
+
+        onNodeWithText("❤").performClick()
+        onNodeWithText("Clear tile").performScrollTo().performClick()
+
+        waitForIdle()
+        assertEquals(Tile(id = "a"), app.vm.board.value.findTile("a"))
     }
 
     @Test

@@ -76,4 +76,17 @@ class SavedBoardRepositoryTest {
     fun `allReferencedFileNames is empty when nothing has been saved`() = runTest {
         assertTrue(savedBoardRepo.allReferencedFileNames().isEmpty())
     }
+
+    @Test
+    fun `allReferencedIconNames collects tile pictures across every saved board`() = runTest {
+        savedBoardRepo.save(Board(pages = listOf(Page(tiles = listOf(Tile(imageFileName = "one.png"), Tile(imageFileName = "two.png"))))))
+        savedBoardRepo.save(Board(pages = listOf(Page(tiles = listOf(Tile(imageFileName = "two.png"), Tile(label = "plain"))))))
+
+        assertEquals(setOf("one.png", "two.png"), savedBoardRepo.allReferencedIconNames())
+    }
+
+    @Test
+    fun `allReferencedIconNames is empty when nothing has been saved`() = runTest {
+        assertTrue(savedBoardRepo.allReferencedIconNames().isEmpty())
+    }
 }

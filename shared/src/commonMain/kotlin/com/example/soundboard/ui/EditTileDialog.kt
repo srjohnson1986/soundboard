@@ -32,6 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.soundboard.OriginalSound
 import com.example.soundboard.data.PickedFile
@@ -343,11 +345,17 @@ private fun IconSection(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(onClick = onPickImage, modifier = Modifier.weight(1f)) {
-                Text(if (draft.imageFileName == null) "Choose picture" else "Replace picture")
+            OutlinedButton(
+                onClick = onPickImage,
+                modifier = Modifier.weight(1f).semantics { contentDescription = if (draft.imageFileName == null) "Choose picture" else "Replace picture" }
+            ) {
+                Text(if (draft.imageFileName == null) "Choose picture" else "Replace")
             }
             if (draft.imageFileName != null) {
-                OutlinedButton(onClick = onRemoveImage, modifier = Modifier.weight(1f)) { Text("Remove picture") }
+                OutlinedButton(
+                    onClick = onRemoveImage,
+                    modifier = Modifier.weight(1f).semantics { contentDescription = "Remove picture" }
+                ) { Text("Remove") }
             }
         }
         if (draft.hasIcon) {

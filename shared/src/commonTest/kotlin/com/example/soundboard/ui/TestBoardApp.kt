@@ -47,7 +47,12 @@ import kotlinx.coroutines.test.setMain
  * [builtIns] are the built-in boards the build packages, by asset name. Its work runs on
  * [dispatcher], which [BoardUiTest] also makes the main one.
  */
-class TestBoardApp(board: Board, builtIns: Map<String, BuiltInBoard> = emptyMap(), dispatcher: CoroutineDispatcher) {
+class TestBoardApp(
+    board: Board,
+    builtIns: Map<String, BuiltInBoard> = emptyMap(),
+    dispatcher: CoroutineDispatcher,
+    withIcons: Boolean = true
+) {
     val files = InMemoryFileStore()
     val zip = FakeZipCodec()
     val player = FakePlayer()
@@ -60,6 +65,8 @@ class TestBoardApp(board: Board, builtIns: Map<String, BuiltInBoard> = emptyMap(
         files.put("board.json", BoardJson.encodeToString(board).encodeToByteArray())
         // load() treats a fileName with no file behind it as "needs recording", so give every sound a file.
         board.soundFileNames.forEach { files.put("sounds/$it", it.encodeToByteArray()) }
+        // Likewise a tile picture, as one that decodes.
+        if (withIcons) board.iconFileNames.forEach { files.put("icons/$it", TINY_PNG) }
     }
 
     val vm = BoardViewModel(
@@ -104,9 +111,10 @@ abstract class BoardUiTest : UiTest() {
         board: Board,
         builtIns: Map<String, BuiltInBoard> = emptyMap(),
         relockAfterIdle: Duration = EditingLock.RELOCK_AFTER_IDLE,
-        idleMinute: Duration = 1.minutes
+        idleMinute: Duration = 1.minutes,
+        withIcons: Boolean = true
     ): TestBoardApp {
-        val app = TestBoardApp(board, builtIns, dispatcher)
+        val app = TestBoardApp(board, builtIns, dispatcher, withIcons)
         check(app.vm.board.value.pages.first().id == board.pages.first().id) { "the board didn't load" }
         val platformWidthDialogs = dialogsUsePlatformWidth()
         setContent {

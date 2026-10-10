@@ -10,6 +10,7 @@ import com.example.soundboard.data.CapturingSaveTarget
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.FakeBundledBoards
 import com.example.soundboard.data.FakePickedFile
+import com.example.soundboard.data.PickedFile
 import com.example.soundboard.data.FakeZipCodec
 import com.example.soundboard.data.InMemoryFileStore
 import com.example.soundboard.data.MapKeyValueStore
@@ -634,6 +635,27 @@ class BoardViewModelTest {
 
         assertEquals(Tile(id = "a"), tile(vm, "a"))
         assertFalse(files.has("icons/p.png"))
+    }
+
+    @Test
+    fun `a picture that arrives after its edit was cancelled is deleted rather than handed back`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var handedBack: String? = null
+
+        vm.importTileImage(object : PickedFile {
+            override suspend fun extension() = "png"
+            override suspend fun readBytes(): ByteArray {
+                gate.await()
+                return "late".encodeToByteArray()
+            }
+        }) { handedBack = it }
+        vm.discardTileEdits()
+        gate.complete(Unit)
+
+        assertNull(handedBack)
+        assertTrue(files.list("icons").isEmpty())
     }
 
     @Test

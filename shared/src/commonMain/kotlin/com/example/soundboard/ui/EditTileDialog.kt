@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.example.soundboard.OriginalSound
 import com.example.soundboard.data.PickedFile
+import com.example.soundboard.model.EmojiNames
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
 import kotlinx.coroutines.delay
@@ -67,6 +68,8 @@ internal fun EditTileDialog(
     var micPermissionDenied by remember(tile.id) { mutableStateOf(false) }
     var recordingSeconds by remember(tile.id) { mutableIntStateOf(0) }
     var restoreMessage by remember(tile.id) { mutableStateOf<String?>(null) }
+    // The name this dialog suggested from the emoji, so a later emoji can replace it but typed words never are.
+    var suggestedName by remember(tile.id) { mutableStateOf<String?>(null) }
 
     val pickSound = rememberOpenFileLauncher(listOf("audio/*")) { file ->
         onPickSound(file) { name -> draft = draft.copy(fileName = name) }
@@ -109,7 +112,17 @@ internal fun EditTileDialog(
                 )
                 IconSection(
                     draft = draft,
-                    onEmojiChange = { draft = draft.copy(emoji = it) },
+                    onEmojiChange = { emoji ->
+                        val suggestion = emoji?.let { EmojiNames.suggest(it) }
+                        val replaceable = draft.label.isBlank() || draft.label == suggestedName
+                        val canSuggest = draft.ttsScript.isNullOrBlank()
+                        draft = if (replaceable && canSuggest) {
+                            suggestedName = suggestion
+                            draft.copy(emoji = emoji, label = suggestion.orEmpty())
+                        } else {
+                            draft.copy(emoji = emoji)
+                        }
+                    },
                     onPickImage = pickImage,
                     onRemoveImage = { draft = draft.copy(imageFileName = null) },
                     onShowLabelChange = { draft = draft.copy(showLabel = it) }

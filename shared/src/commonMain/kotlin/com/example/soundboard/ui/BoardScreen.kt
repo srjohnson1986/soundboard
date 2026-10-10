@@ -92,6 +92,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
     val showMode by vm.showMode.collectAsStateWithLifecycle()
     val recordingTrimEndMillis by vm.recordingTrimEndMillis.collectAsStateWithLifecycle()
     val shownText by vm.shownText.collectAsStateWithLifecycle()
+    val shownIcon by vm.shownIcon.collectAsStateWithLifecycle()
     val speechAvailable by vm.speechAvailable.collectAsStateWithLifecycle()
     val mediaMuted by vm.mediaMuted.collectAsStateWithLifecycle()
     val backupReminderDue by vm.backupReminderDue.collectAsStateWithLifecycle()
@@ -405,6 +406,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
         shownText?.let { text ->
             ShowTextOverlay(
                 text = text,
+                icon = shownIcon,
                 showMode = showMode,
                 labelStyle = board.labelStyle,
                 onDismiss = {

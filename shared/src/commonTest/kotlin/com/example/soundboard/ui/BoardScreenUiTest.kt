@@ -3,6 +3,7 @@ package com.example.soundboard.ui
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
@@ -104,6 +105,32 @@ class BoardScreenUiTest : BoardUiTest() {
         assertEquals("❤", app.vm.board.value.findTile("a")?.emoji)
         onNodeWithText("❤").assertIsDisplayed()
         onNodeWithText("Hello").assertIsDisplayed()
+    }
+
+    @Test
+    fun pickingAnEmojiSuggestsItsNameWhenThereIsNone() = runUiTest {
+        val app = launchBoard(oneTile(Tile(id = "a")))
+
+        onNodeWithText("+").performClick()
+        onNode(hasSetTextAction() and hasText("Emoji")).performTextInput("🚽")
+        onNodeWithText("Bathroom").assertIsDisplayed()
+        onNodeWithText("Save").performClick()
+
+        waitForIdle()
+        assertEquals("Bathroom", app.vm.board.value.findTile("a")?.label)
+    }
+
+    @Test
+    fun anEmojiNeverReplacesANameTheUserTyped() = runUiTest {
+        val app = launchBoard(oneTile(Tile(id = "a")))
+
+        onNodeWithText("+").performClick()
+        onNode(hasSetTextAction() and hasText("Name")).performTextInput("Loo")
+        onNode(hasSetTextAction() and hasText("Emoji")).performTextInput("🚽")
+        onNodeWithText("Save").performClick()
+
+        waitForIdle()
+        assertEquals("Loo", app.vm.board.value.findTile("a")?.label)
     }
 
     @Test
@@ -256,6 +283,30 @@ class BoardScreenUiTest : BoardUiTest() {
         onNodeWithText("Some water please").assertDoesNotExist()
         // The closing tap landed on the text screen, not the tile under it.
         assertEquals(listOf("a.mp3"), app.player.playedKeys)
+    }
+
+    @Test
+    fun showModeShowsATilesEmojiBigWithItsWords() = runUiTest {
+        launchBoard(oneTile(Tile(id = "a", label = "Hello", emoji = "❤", fileName = "a.mp3")))
+
+        toggleMenuSwitch("Show mode")
+        onNodeWithText("Hello").performClick()
+
+        // Once on the tile under the screen, once on it.
+        onAllNodesWithText("❤").assertCountEquals(2)
+        onAllNodesWithText("Hello").assertCountEquals(2)
+        onNodeWithTag(SHOW_TEXT_OVERLAY_TAG).assertIsDisplayed()
+    }
+
+    @Test
+    fun showModeWorksForAnEmojiTileWithNoWords() = runUiTest {
+        launchBoard(oneTile(Tile(id = "a", label = "Hello", emoji = "❤", showLabel = false, fileName = "a.mp3")))
+
+        toggleMenuSwitch("Show mode")
+        onNodeWithText("❤").performClick()
+
+        onAllNodesWithText("❤").assertCountEquals(2)
+        onNodeWithTag(SHOW_TEXT_OVERLAY_TAG).assertIsDisplayed()
     }
 
     @Test

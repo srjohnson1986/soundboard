@@ -132,6 +132,10 @@ class BoardViewModel(
     private val _shownText = MutableStateFlow<String?>(null)
     val shownText: StateFlow<String?> = _shownText.asStateFlow()
 
+    /** The tile whose picture or emoji Show mode has on screen with [shownText] (which is empty if it has no words); null if it has none. */
+    private val _shownIcon = MutableStateFlow<Tile?>(null)
+    val shownIcon: StateFlow<Tile?> = _shownIcon.asStateFlow()
+
     private val _savedBoards = MutableStateFlow<List<SavedBoard>>(emptyList())
     val savedBoards: StateFlow<List<SavedBoard>> = _savedBoards.asStateFlow()
 
@@ -186,9 +190,10 @@ class BoardViewModel(
         refreshBackupReminder()
         if (!tile.isPlayable(_board.value.speakUnrecordedTilesEnabled)) return
         val showMode = _showMode.value
-        val text = tile.speechText.trim()
-        if (showMode.enabled && text.isNotEmpty()) {
+        val text = tile.shownWords
+        if (showMode.enabled && (text.isNotEmpty() || tile.hasIcon)) {
             _shownText.value = text
+            _shownIcon.value = tile.takeIf { it.hasIcon }
             if (showMode.muteSounds) return
         }
         play(tile)
@@ -197,6 +202,7 @@ class BoardViewModel(
     /** Closes the Show mode text screen. Whatever it was playing carries on to the end. */
     fun dismissShownText() {
         _shownText.value = null
+        _shownIcon.value = null
     }
 
     /** Speaks arbitrary text not tied to any tile — for a one-off phrase no pad covers. */
@@ -484,7 +490,7 @@ class BoardViewModel(
         devicePrefs.showMode = updated
         _showMode.value = updated
         // Turning Show mode off shouldn't leave its text screen stranded on top of the board.
-        if (!updated.enabled) _shownText.value = null
+        if (!updated.enabled) dismissShownText()
     }
 
     override fun setDefaultPageRows(value: Int) {

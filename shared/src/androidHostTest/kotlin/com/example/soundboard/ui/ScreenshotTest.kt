@@ -110,6 +110,16 @@ class ScreenshotTest : BoardUiTest() {
     }
 
     @Test
+    fun showModeWithEmoji() = runUiTest {
+        val app = launchBoard(
+            Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "w", label = "Water", emoji = "💧", speakWhenNoSound = true)))))
+        )
+        runOnIdle { app.vm.setShowModeEnabled(true) }
+        onNodeWithText("Water").performClick()
+        capture("show_mode_emoji")
+    }
+
+    @Test
     fun showMode() = runUiTest {
         val app = launchBoard(careBoard())
         runOnIdle { app.vm.setShowModeEnabled(true) }

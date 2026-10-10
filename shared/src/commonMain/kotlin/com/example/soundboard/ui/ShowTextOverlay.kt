@@ -2,9 +2,13 @@ package com.example.soundboard.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -31,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.ShowModeSettings
+import com.example.soundboard.model.Tile
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.delay
 
@@ -46,6 +51,7 @@ const val SHOW_TEXT_OVERLAY_TAG = "show_text_overlay"
 @Composable
 internal fun ShowTextOverlay(
     text: String,
+    icon: Tile?,
     showMode: ShowModeSettings,
     labelStyle: LabelStyle,
     onDismiss: () -> Unit
@@ -53,7 +59,7 @@ internal fun ShowTextOverlay(
     val currentOnDismiss by rememberUpdatedState(onDismiss)
     BackHandler(onBack = onDismiss)
     // Keyed on the text too, so a new tile's words get a fresh countdown.
-    LaunchedEffect(text, showMode.timerSeconds) {
+    LaunchedEffect(text, icon?.id, showMode.timerSeconds) {
         if (showMode.hasTimer) {
             delay(showMode.timerSeconds.seconds)
             currentOnDismiss()
@@ -74,7 +80,10 @@ internal fun ShowTextOverlay(
         contentAlignment = Alignment.Center
     ) {
         val widthPx = constraints.maxWidth
-        val heightPx = constraints.maxHeight
+        // With a picture or emoji, it gets the top part of the screen and the words what's left;
+        // on its own it gets the lot.
+        val hasText = text.isNotEmpty()
+        val heightPx = if (icon != null && hasText) (constraints.maxHeight * TEXT_SHARE_WITH_ICON).toInt() else constraints.maxHeight
         val base = baseLabelTextStyle(labelStyle).copy(color = Color.White, textAlign = TextAlign.Center)
         val measurer = rememberTextMeasurer()
         val style = remember(text, widthPx, heightPx, base) {
@@ -85,15 +94,31 @@ internal fun ShowTextOverlay(
         }
         // Only a script too long to fit even at the smallest size needs this; taps still
         // reach the tap-to-close handler, since scrolling only claims drags.
-        BasicText(
-            text = text,
-            style = style,
-            modifier = Modifier
-                .rotate(if (showMode.flipped) 180f else 0f)
-                .verticalScroll(rememberScrollState())
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxSize().rotate(if (showMode.flipped) 180f else 0f)
+        ) {
+            if (icon != null) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    TileIcon(icon, Color.White, maxSidePx = SHOW_IMAGE_MAX_SIDE_PX)
+                }
+            }
+            if (hasText) {
+                BasicText(
+                    text = text,
+                    style = style,
+                    modifier = Modifier
+                        .then(if (icon != null) Modifier else Modifier.weight(1f, fill = false))
+                        .verticalScroll(rememberScrollState())
+                )
+            }
+        }
     }
 }
+
+/** The share of the screen's height the words get when there's a picture or emoji above them. */
+private const val TEXT_SHARE_WITH_ICON = 0.3f
 
 private const val MIN_SIZE_SP = 24
 private const val MAX_SIZE_SP = 240

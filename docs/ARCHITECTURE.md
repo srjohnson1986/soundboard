@@ -84,7 +84,9 @@ the subpath as its scope and caches the app and the built-in board, and that wit
 server stopped the page reloads and the tap still speaks. It waits up to 30 seconds for
 the cache to hold every file the page loaded before going offline; if that times out, the
 failure names the files missing from it (#307), which tells a slow runner from a file that
-never gets cached. Run it locally after
+never gets cached. The server serves the wasm slowly, so it is still loading when the
+service worker takes over the page: `index.html` hands the worker each file as it finishes
+loading, not one snapshot, or that file would never be cached (#307). Run it locally after
 `./gradlew :web:wasmJsBrowserDistribution` with `npm ci` then `node smoke.mjs` in
 `web/smoke` (it finds Chrome, or takes `CHROME_PATH`).
 

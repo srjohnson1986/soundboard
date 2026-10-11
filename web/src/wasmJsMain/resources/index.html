@@ -35,16 +35,27 @@
         // Offline support and "install" (sw.js). Not on the local dev server, whose builds
         // change constantly.
         if ('serviceWorker' in navigator && location.port !== '8080') {
-            // Hands the worker every file loaded so far, for it to keep: once when it's ready, and
-            // again when it takes over the page, since files the page fetched in between went
-            // past it uncached (#281).
-            const keepLoaded = worker => worker && worker.postMessage({
-                keep: [location.href].concat(performance.getEntriesByType('resource').map(entry => entry.name))
-            });
+            // Hands the worker every file the page loads before the worker controls it, for it to
+            // keep (#281). A file is only listed once it has finished, so a snapshot taken when
+            // the worker is ready or takes over misses one still on its way: it began before the
+            // worker could see it and ends after the snapshot, which left a slow first visit
+            // without its wasm offline (#307). So this watches instead: every file already
+            // finished, and each one that finishes later. Files the worker itself answered
+            // (workerStart is set) it has kept already.
+            const keepLoaded = registration => {
+                const send = urls => urls.length > 0 && registration.active && registration.active.postMessage({ keep: urls });
+                send([location.href]);
+                try {
+                    new PerformanceObserver(list => send(
+                        list.getEntries().filter(entry => entry.workerStart === 0).map(entry => entry.name)
+                    )).observe({ type: 'resource', buffered: true });
+                } catch (e) {
+                    send(performance.getEntriesByType('resource').map(entry => entry.name));
+                }
+            };
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').catch(() => {});
-                navigator.serviceWorker.ready.then(registration => keepLoaded(registration.active));
-                navigator.serviceWorker.addEventListener('controllerchange', () => keepLoaded(navigator.serviceWorker.controller));
+                navigator.serviceWorker.ready.then(keepLoaded);
             });
         }
     </script>

@@ -26,6 +26,12 @@ const BASE = `http://localhost:${PORT}/soundboard/`;
 // sticky row of its home page.
 const WATER_TILE = { x: 56, y: 235 };
 
+// The wasm is served slowly, like a first visit on a slow connection, so it is still on its
+// way when the service worker takes over the page. That is the case where it used to go
+// uncached and the page failed offline now and then (#307); without the delay the test
+// only hit it on a slow runner.
+const WASM_DELAY_MS = 3_000;
+
 const TYPES = {
     '.html': 'text/html', '.js': 'text/javascript', '.wasm': 'application/wasm', '.map': 'application/json',
     '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml', '.png': 'image/png',
@@ -56,8 +62,11 @@ function startServer() {
             response.writeHead(404).end();
             return;
         }
-        response.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] ?? 'application/octet-stream' });
-        fs.createReadStream(file).pipe(response);
+        const send = () => {
+            response.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] ?? 'application/octet-stream' });
+            fs.createReadStream(file).pipe(response);
+        };
+        if (file.endsWith('.wasm')) setTimeout(send, WASM_DELAY_MS); else send();
     });
     server.on('connection', socket => {
         sockets.add(socket);

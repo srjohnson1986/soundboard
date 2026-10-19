@@ -99,12 +99,12 @@ kotlin {
                 api("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel:2.11.0")
                 implementation("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
                 // Compose Multiplatform; likewise Google's Jetpack Compose on Android.
-                api("org.jetbrains.compose.runtime:runtime:1.12.1")
-                api("org.jetbrains.compose.foundation:foundation:1.12.1")
-                api("org.jetbrains.compose.ui:ui:1.12.1")
+                api("org.jetbrains.compose.runtime:runtime:1.12.2")
+                api("org.jetbrains.compose.foundation:foundation:1.12.2")
+                api("org.jetbrains.compose.ui:ui:1.12.2")
                 api("org.jetbrains.compose.material3:material3:1.9.0")
                 implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
-                implementation("org.jetbrains.compose.components:components-resources:1.12.1")
+                implementation("org.jetbrains.compose.components:components-resources:1.12.2")
             }
         }
         wasmJsMain.dependencies {
@@ -118,7 +118,7 @@ kotlin {
             implementation(kotlin("test"))
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
             // runComposeUiTest, for the UI tests in commonTest (#219).
-            implementation("org.jetbrains.compose.ui:ui-test:1.12.1")
+            implementation("org.jetbrains.compose.ui:ui-test:1.12.2")
         }
         getByName("androidHostTest").dependencies {
             implementation("org.robolectric:robolectric:4.17")
@@ -130,7 +130,7 @@ kotlin {
             // Back, to close a menu (closeMenu).
             implementation("androidx.test.espresso:espresso-core:3.7.0")
             // Declares the empty activity runComposeUiTest starts on Android.
-            implementation("androidx.compose.ui:ui-test-manifest:1.12.1")
+            implementation("androidx.compose.ui:ui-test-manifest:1.12.2")
         }
     }
 }

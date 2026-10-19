@@ -6,7 +6,8 @@ aloud with the device's text-to-speech voice. All three are built from one Kotli
 codebase, so a feature added once reaches every platform.
 
 - **Tiles:** record straight from the microphone, pick an audio file, or type
-  what the tile should say.
+  what the tile should say. A tile can show an emoji or a picture as well as,
+  or instead of, its name.
 - **Pages and a home page:** group tiles into pages. The board can return to
   its home page on its own, and keep the home page's first row pinned above
   every other page for things that must always be within reach.

@@ -92,8 +92,8 @@ kotlin {
         commonMain {
             kotlin.srcDir(generateAppVersion.map { layout.buildDirectory.dir("generated/appVersion/commonMain/kotlin").get() })
             dependencies {
-                api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-                api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+                api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
+                api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.12.0")
                 // JetBrains' multiplatform builds of androidx.lifecycle; on Android they resolve
                 // to Google's own artifacts, so BoardViewModel is an ordinary androidx ViewModel.
                 api("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel:2.11.0")
@@ -116,7 +116,7 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.11.0")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.12.0")
             // runComposeUiTest, for the UI tests in commonTest (#219).
             implementation("org.jetbrains.compose.ui:ui-test:1.12.2")
         }

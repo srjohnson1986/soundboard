@@ -70,7 +70,8 @@ work on iOS picks up, go back to running it on every pull request: restore the
   editor opens the Photos/Files picker) draws the picture, still there after a backup
   export and import.
 - [ ] Keep screen awake, rotation, the caregiver lock's hold to unlock, and Show mode.
-- [ ] Holding a tile turns Edit mode on or off (the buzz comes as the hold registers),
+- [ ] Holding a tile turns Edit mode on (the buzz comes as the hold registers); in Edit mode,
+  holding still fills a ring and a second buzz turns it off with the finger still down;
   holding and dragging reorders, and the Edit mode bar turns it off; locked, a hold plays
   like a tap and a drag moves nothing.
 

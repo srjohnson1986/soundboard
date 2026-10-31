@@ -138,6 +138,19 @@ class DialogsUiTest : BoardUiTest() {
     }
 
     @Test
+    fun cleanUpUnusedClipsNamesEachClipByItsLastTile() = runUiTest {
+        val app = launchBoard(oneTile(Tile(id = "a", label = "Hey", fileName = "a.mp3")))
+        app.files.put("sounds/stray.mp3", ByteArray(2_000))
+        app.files.put("sounds/old.mp3", ByteArray(3_000))
+        app.files.put("clip-labels.json", """{"old.mp3": {"label": "Yes", "page": "Food"}}""".encodeToByteArray())
+
+        openMenuItem("Clean up unused clips")
+
+        onNodeWithText("Yes, Food page").assertIsDisplayed()
+        onNodeWithText("Unused clip 1").assertIsDisplayed()
+    }
+
+    @Test
     fun cleanUpUnusedClipsSaysWhenThereAreNone() = runUiTest {
         launchBoard(oneTile())
 

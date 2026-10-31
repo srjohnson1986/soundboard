@@ -364,6 +364,23 @@ last, after every file it names, so a restore that stops halfway leaves the old 
 pointing at files that are all still there. It doesn't clear `sounds/` first: the old
 board's clips stay until the next `commit()` prunes the ones nothing uses.
 
+**`clip-labels.json` remembers what each unused clip was** (#330). It sits next to
+`board.json` and maps a sound's file name to the label, emoji and page name of the
+tile it was last on (`ClipLabel`, `data/ClipLabels.kt`). `BoardViewModel.commit()` calls
+`BoardRepository.recordClipLabels(board)` on every save, before pruning, and a restore
+does too, since its sounds just got new names. It only ever adds or replaces an entry: a
+tile that is cleared or loses its sound leaves its clip's entry alone, which is how a clip
+keeps its "last tile" without every path that clears a sound having to know. An entry is
+dropped when its clip file is (`deleteFiles`, and `pruneUnused` through it) or is found
+missing at the next save; where a clip is on several tiles, the first in board order
+is kept, as in a backup. The file is a convenience and isn't part of a backup: if it is
+missing or unreadable `readClipLabels` gives an empty map, the clips show as
+`Unused clip N`, and the next save writes a fresh file. `nameUnusedClips` gives the
+cleanup dialog's descriptions ("Yes, Food page") and the export zip's paths: a folder per
+page (pages named alike apart from case share one), the tile's name by `ClipNamer`'s
+rules inside it, and `Unused clip N.<ext>` at the top for a clip with no record. The
+dialog and the zip number those clips in the same order (oldest file first).
+
 ## Saved boards
 
 **Saved boards and Backup solve different problems and deliberately don't share a

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -101,10 +102,24 @@ internal fun StrayCleanupDialog(
                 Text("No unused clips found.")
             } else {
                 val totalBytes = clips.sumOf { it.sizeBytes }
-                Text(
-                    "${clips.size} unused clip${if (clips.size == 1) "" else "s"} found, " +
-                        "totaling ${formatFileSize(totalBytes)} — not used by any page or saved board."
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "${clips.size} unused clip${if (clips.size == 1) "" else "s"} found, " +
+                            "totaling ${formatFileSize(totalBytes)} — not used by any page or saved board."
+                    )
+                    // What each was, from the last tile it was on.
+                    clips.forEach { clip ->
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(clip.description, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                formatFileSize(clip.sizeBytes),
+                                modifier = Modifier.padding(start = 12.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {

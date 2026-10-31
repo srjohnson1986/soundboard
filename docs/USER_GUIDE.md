@@ -425,6 +425,16 @@ board or any saved board. For example, a recording replaced by a newer one
 may still be taking up space. You can export them to a zip first and then
 delete them, or just delete them.
 
+The list says what each clip was: the app remembers the last tile each sound
+was on, so you see "Yes, Food page" rather than a long ID. A clip it knows
+nothing about (one from before this was remembered, or a recording that was
+never put on a tile) shows as "Unused clip 1", "Unused clip 2" and so on.
+**Export & Delete** puts the clips in a folder for each page (`Food/Yes.m4a`,
+`Home/Hello.m4a`), named like the sounds in a backup: two tiles with the same
+name get the page name and then a number, and clips with no record are
+`Unused clip 1.m4a`. That zip is only for keeping: it isn't something you can
+import.
+
 A short message at the bottom of the screen confirms whether each of these
 worked.
 

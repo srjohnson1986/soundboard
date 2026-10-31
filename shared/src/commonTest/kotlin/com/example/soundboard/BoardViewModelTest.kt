@@ -1927,6 +1927,88 @@ class BoardViewModelTest {
         assertTrue(zipOut.written != null)
     }
 
+    /** A board whose one tile "Yes" on page "Food" plays a.mp3, which a saved board keeps; then the tile is cleared and the saved board deleted, leaving a.mp3 unused. */
+    private suspend fun BoardViewModel.leaveYesClipUnused() {
+        saveBoardAs("Keep")
+        clearTile("a")
+        files.delete("presets/${savedBoardRepo.list().single().id}.json")
+    }
+
+    @Test
+    fun `a cleared tile's clip is listed under its old label and page`() = runTest(dispatcher) {
+        repo.save(Board(pages = listOf(Page(name = "Food", rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Yes", fileName = "a.mp3"))))))
+        files.put("sounds/a.mp3", "a".encodeToByteArray())
+        val vm = newViewModel()
+        vm.leaveYesClipUnused()
+
+        vm.refreshStrayClips()
+
+        assertEquals(listOf("a.mp3"), vm.strayClips.value.map { it.fileName })
+        assertEquals(listOf("Yes, Food page"), vm.strayClips.value.map { it.description })
+    }
+
+    @Test
+    fun `unused clips with no record are numbered in the order they were added`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a")))
+        files.put("sounds/first.mp3", "1".encodeToByteArray())
+        files.put("sounds/second.mp3", "2".encodeToByteArray())
+        val vm = newViewModel()
+
+        vm.refreshStrayClips()
+
+        assertEquals(listOf("first.mp3", "second.mp3"), vm.strayClips.value.map { it.fileName })
+        assertEquals(listOf("Unused clip 1", "Unused clip 2"), vm.strayClips.value.map { it.description })
+    }
+
+    @Test
+    fun `an unreadable clip-labels file leaves the cleanup list working with numbered names`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a")))
+        files.put("sounds/stray.mp3", "s".encodeToByteArray())
+        files.put("clip-labels.json", "garbage".encodeToByteArray())
+        val vm = newViewModel()
+
+        vm.refreshStrayClips()
+
+        assertEquals(listOf("Unused clip 1"), vm.strayClips.value.map { it.description })
+    }
+
+    @Test
+    fun `exporting unused clips puts them in a folder per page and deleting them forgets their labels`() = runTest(dispatcher) {
+        repo.save(Board(pages = listOf(Page(name = "Food", rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Yes", fileName = "a.mp3"))))))
+        files.put("sounds/a.mp3", "a".encodeToByteArray())
+        val vm = newViewModel()
+        vm.leaveYesClipUnused()
+        // Put here, as the saves above would prune it: a sound that was never on a tile.
+        files.put("sounds/old.mp3", "o".encodeToByteArray())
+        vm.refreshStrayClips()
+        val zipOut = CapturingSaveTarget()
+
+        vm.exportAndDeleteStrayClips(zipOut)
+
+        assertEquals(setOf("Food/Yes.mp3", "Unused clip 1.mp3"), zip.read(zipOut.written!!).map { it.name }.toSet())
+        assertFalse(files.has("sounds/a.mp3"))
+        assertTrue(repo.clipLabels().isEmpty())
+    }
+
+    @Test
+    fun `every save records the tiles' labels and restoring a backup does too`() = runTest(dispatcher) {
+        repo.save(Board(pages = listOf(Page(name = "Food", rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Yes", fileName = "a.mp3"))))))
+        files.put("sounds/a.mp3", "a".encodeToByteArray())
+        val vm = newViewModel()
+
+        vm.setLabel("a", "Yes please")
+
+        assertEquals("Yes please", repo.clipLabels().getValue("a.mp3").label)
+        assertEquals("Food", repo.clipLabels().getValue("a.mp3").page)
+
+        val backup = CapturingSaveTarget()
+        vm.exportBoard(backup)
+        vm.importBoard(FakePickedFile(backup.written))
+
+        val restoredName = vm.board.value.findTile("a")!!.fileName!!
+        assertEquals("Yes please", repo.clipLabels().getValue(restoredName).label)
+    }
+
     /** Asks for [label]'s original sound the way the tile editor does, and returns the result. */
     private fun restoreOriginal(vm: BoardViewModel, label: String): OriginalSound {
         var result: OriginalSound? = null

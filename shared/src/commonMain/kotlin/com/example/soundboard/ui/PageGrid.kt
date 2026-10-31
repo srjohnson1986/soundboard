@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -660,6 +661,9 @@ private fun TileCard(
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
+                        // A disc under the ring, so the label beneath doesn't muddy it.
+                        .background(containerColor.copy(alpha = 0.9f), CircleShape)
+                        .padding(4.dp)
                         .semantics { contentDescription = "Leaving Edit mode" },
                     contentAlignment = Alignment.Center
                 ) {

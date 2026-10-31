@@ -186,6 +186,7 @@ class EditModeHoldUiTest : BoardUiTest() {
 
         assertEditModeOn()
         assertNoRing()
+        onNodeWithText("Edit tile").assertDoesNotExist() // the release isn't a tap
         assertTrue(app.player.playedKeys.isEmpty(), "played ${app.player.playedKeys}")
         assertEquals(listOf("A", "B", "C"), app.labels())
     }

@@ -399,7 +399,7 @@ class BoardRepositoryTest {
     }
 
     @Test
-    fun `exportFiles zips exactly the requested sounds flat by name`() = runTest {
+    fun `exportFiles zips exactly the requested sounds and numbers the ones nothing is known about`() = runTest {
         files.put(repo.soundPath("a.mp3"), "aaa".encodeToByteArray())
         files.put(repo.soundPath("b.mp3"), "bbb".encodeToByteArray())
         val target = CapturingSaveTarget()
@@ -407,7 +407,7 @@ class BoardRepositoryTest {
         assertTrue(repo.exportFiles(listOf("a.mp3"), target))
 
         val entries = zip.read(target.written!!)
-        assertEquals(listOf("a.mp3"), entries.map { it.name })
+        assertEquals(listOf("Unused clip 1.mp3"), entries.map { it.name })
         assertEquals("aaa", entries.single().bytes.decodeToString())
     }
 
@@ -650,5 +650,124 @@ class BoardRepositoryTest {
         val name = repo.load().findTile("w")!!.fileName!!
         assertTrue(name != "water.wav" && name.endsWith(".wav"))
         assertContentEquals(byteArrayOf(4), files.readNow(repo.soundPath(name)))
+    }
+
+    // What each clip was, for the unused-clips cleanup (#330).
+
+    private fun yesNoBoard() = Board(
+        pages = listOf(
+            Page(name = "Home", rows = 1, columns = 2, tiles = listOf(Tile(id = "a", label = "Yes", fileName = "a.m4a"), Tile(id = "b", label = "No", fileName = "b.m4a"))),
+            Page(name = "Food", rows = 1, columns = 2, tiles = listOf(Tile(id = "c", label = "Yes", fileName = "c.m4a"), Tile(id = "d", emoji = "\uD83D\uDE00", fileName = "d.m4a")))
+        )
+    ).normalized()
+
+    @Test
+    fun `recordClipLabels remembers each clip's tile and page and keeps it when the tile is cleared`() = runTest {
+        listOf("a", "b", "c", "d").forEach { sound("$it.m4a", 1) }
+        val board = yesNoBoard()
+
+        repo.recordClipLabels(board)
+        repo.recordClipLabels(board.updatingTile("a") { it.copy(fileName = null) })
+
+        val labels = repo.clipLabels()
+        assertEquals(ClipLabel("Yes", null, "Home"), labels["a.m4a"])
+        assertEquals(ClipLabel("Yes", null, "Food"), labels["c.m4a"])
+        assertEquals("Happy", labels["d.m4a"]?.tileName)
+        assertEquals("Yes, Food page", labels["c.m4a"]?.description)
+    }
+
+    @Test
+    fun `a clip on two tiles is remembered under the first and a renamed tile updates it`() = runTest {
+        sound("a.m4a", 1)
+        val shared = boardWith(Tile(id = "a", label = "First", fileName = "a.m4a"), Tile(id = "b", label = "Second", fileName = "a.m4a"))
+
+        repo.recordClipLabels(shared)
+        assertEquals("First", repo.clipLabels().getValue("a.m4a").label)
+        repo.recordClipLabels(shared.updatingTile("a") { it.copy(label = "Renamed") })
+
+        assertEquals("Renamed", repo.clipLabels().getValue("a.m4a").label)
+    }
+
+    @Test
+    fun `entries go when their clip file is deleted or pruned`() = runTest {
+        listOf("a", "b", "c", "d").forEach { sound("$it.m4a", 1) }
+        repo.recordClipLabels(yesNoBoard())
+
+        repo.deleteFiles(listOf("a.m4a"))
+        repo.pruneUnused(setOf("c.m4a", "d.m4a"))
+
+        assertEquals(setOf("c.m4a", "d.m4a"), repo.clipLabels().keys)
+    }
+
+    @Test
+    fun `a record of a clip whose file is gone is dropped on the next save`() = runTest {
+        sound("a.m4a", 1)
+        repo.recordClipLabels(boardWith(Tile(id = "a", label = "Yes", fileName = "a.m4a")))
+        files.delete(repo.soundPath("a.m4a"))
+        sound("b.m4a", 1)
+
+        repo.recordClipLabels(boardWith(Tile(id = "b", label = "No", fileName = "b.m4a")))
+
+        assertEquals(setOf("b.m4a"), repo.clipLabels().keys)
+    }
+
+    @Test
+    fun `a missing or unreadable clip-labels file falls back to numbered names and is rewritten`() = runTest {
+        sound("a.m4a", 1)
+        sound("b.m4a", 2)
+        assertTrue(repo.clipLabels().isEmpty())
+        files.put("clip-labels.json", "{ not json".encodeToByteArray())
+
+        assertTrue(repo.clipLabels().isEmpty())
+        assertEquals(listOf("Unused clip 1", "Unused clip 2"), repo.unusedClipNames(listOf("a.m4a", "b.m4a")).map { it.description })
+        repo.recordClipLabels(boardWith(Tile(id = "a", label = "Yes", fileName = "a.m4a")))
+
+        assertEquals("Yes", repo.clipLabels().getValue("a.m4a").label)
+    }
+
+    @Test
+    fun `the unused clips zip has a folder per page and numbers clips with no record`() = runTest {
+        listOf("a", "b", "c", "d", "e", "f").forEach { sound("$it.m4a", it[0].code.toByte()) }
+        val board = yesNoBoard()
+        repo.recordClipLabels(board)
+        // e and f were never on a tile; b is no longer.
+        repo.recordClipLabels(board.updatingTile("b") { it.copy(fileName = null) })
+        val target = CapturingSaveTarget()
+
+        assertTrue(repo.exportFiles(listOf("a.m4a", "b.m4a", "c.m4a", "d.m4a", "e.m4a", "f.m4a"), target))
+
+        val entries = zip.read(target.written!!).associate { it.name to it.bytes }
+        assertEquals(
+            setOf("Home/Yes.m4a", "Home/No.m4a", "Food/Yes.m4a", "Food/Happy.m4a", "Unused clip 1.m4a", "Unused clip 2.m4a"),
+            entries.keys
+        )
+        assertContentEquals(byteArrayOf('c'.code.toByte()), entries.getValue("Food/Yes.m4a"))
+        assertContentEquals(byteArrayOf('f'.code.toByte()), entries.getValue("Unused clip 2.m4a"))
+    }
+
+    @Test
+    fun `two pages named alike share a folder and duplicate names follow the backup rules`() = runTest {
+        listOf("a", "b", "c").forEach { sound("$it.m4a", 1) }
+        val board = Board(
+            pages = listOf(
+                Page(name = "Food", rows = 1, columns = 2, tiles = listOf(Tile(id = "a", label = "Yes", fileName = "a.m4a"), Tile(id = "b", label = "yes", fileName = "b.m4a"))),
+                Page(name = "food", rows = 1, columns = 1, tiles = listOf(Tile(id = "c", label = "YES", fileName = "c.m4a")))
+            )
+        ).normalized()
+        repo.recordClipLabels(board)
+
+        val names = repo.unusedClipNames(listOf("a.m4a", "b.m4a", "c.m4a")).map { it.zipPath }
+
+        assertEquals(listOf("Food/Yes.m4a", "Food/yes (Food).m4a", "Food/YES (Food) 2.m4a"), names)
+    }
+
+    @Test
+    fun `clip labels are not part of a backup`() = runTest {
+        sound("a.m4a", 1)
+        val board = boardWith(Tile(id = "a", label = "Yes", fileName = "a.m4a"))
+        repo.save(board)
+        repo.recordClipLabels(board)
+
+        assertTrue(backupEntries().keys.none { "clip-labels" in it })
     }
 }

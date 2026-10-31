@@ -127,7 +127,43 @@ class BoardRepository(
 
     /** Deletes any audio file no longer referenced by a tile. */
     suspend fun pruneUnused(keep: Set<String>) {
-        strayFiles(keep).forEach { files.delete(soundPath(it.name)) }
+        deleteFiles(strayFiles(keep).map { it.name })
+    }
+
+    /**
+     * Remembers, for every sound on a tile of [board], the tile's label, emoji and page in
+     * `clip-labels.json`, so an unused clip can later be told apart by what it was. Entries are
+     * only ever replaced, never removed, when a tile is cleared or its sound replaced, so a clip
+     * keeps the last tile it was on; they go when their clip file does ([deleteFiles]). Where a
+     * clip is on several tiles, the first one in board order is remembered, as in a backup.
+     * A convenience: if the file can't be read or written, nothing else is affected.
+     */
+    suspend fun recordClipLabels(board: Board) {
+        val present = files.list(SOUNDS_DIR).map { it.name }.toSet()
+        val before = readClipLabels()
+        val after = before.filterKeys { it in present }.toMutableMap()
+        val seen = mutableSetOf<String>()
+        for (page in board.pages) {
+            for (tile in page.tiles) {
+                val stored = tile.fileName ?: continue
+                if (stored in present && seen.add(stored)) after[stored] = ClipLabel(tile.label, tile.emoji, page.name)
+            }
+        }
+        if (after != before) writeClipLabels(after)
+    }
+
+    /** What [recordClipLabels] remembers, by sound file name; empty if there's no record or it can't be read. */
+    suspend fun clipLabels(): Map<String, ClipLabel> = readClipLabels()
+
+    /** Names for [fileNames] (unused clips, in this order) as the cleanup dialog lists them and its export zip names them. */
+    suspend fun unusedClipNames(fileNames: List<String>): List<UnusedClipName> = nameUnusedClips(fileNames, readClipLabels())
+
+    private suspend fun readClipLabels(): Map<String, ClipLabel> = runCatching {
+        files.readText(CLIP_LABELS_FILE)?.let { json.decodeFromString<Map<String, ClipLabel>>(it) }
+    }.getOrNull().orEmpty()
+
+    private suspend fun writeClipLabels(labels: Map<String, ClipLabel>) {
+        runCatching { files.writeText(CLIP_LABELS_FILE, json.encodeToString(labels)) }
     }
 
     /** Background image [name]'s content, for the UI to decode; null if it's gone. */
@@ -162,14 +198,23 @@ class BoardRepository(
         name
     }.getOrNull()
 
-    /** Deletes exactly the named sound files, if present. */
+    /** Deletes exactly the named sound files, if present, and what [recordClipLabels] remembers about them. */
     suspend fun deleteFiles(fileNames: Collection<String>) {
+        if (fileNames.isEmpty()) return
         fileNames.forEach { files.delete(soundPath(it)) }
+        val labels = readClipLabels()
+        if (fileNames.any { it in labels }) writeClipLabels(labels - fileNames.toSet())
     }
 
-    /** Zips exactly the named sound files, flat by filename, for the user to keep before deleting them. Not a re-importable backup — no board.json, no "sounds/" prefix. */
-    suspend fun exportFiles(fileNames: Collection<String>, target: SaveTarget): Boolean = runCatching {
-        val entries = fileNames.mapNotNull { name -> files.read(soundPath(name))?.let { ZipEntryData(name, it) } }
+    /**
+     * Zips exactly the named sound files for the user to keep before deleting them, named as
+     * [unusedClipNames] has it: a folder per page (`Food/Yes.m4a`), and `Unused clip 1.m4a` for a
+     * clip nothing is remembered about. Not a re-importable backup: no board.json, no "sounds/" prefix.
+     */
+    suspend fun exportFiles(fileNames: List<String>, target: SaveTarget): Boolean = runCatching {
+        val entries = unusedClipNames(fileNames).mapNotNull { clip ->
+            files.read(soundPath(clip.fileName))?.let { ZipEntryData(clip.zipPath, it) }
+        }
         target.write(zip.write(entries))
     }.isSuccess
 
@@ -333,6 +378,9 @@ class BoardRepository(
 
     private companion object {
         const val BOARD_FILE = "board.json"
+
+        /** Next to board.json: the last tile each sound was on; see [recordClipLabels]. Not part of a backup. */
+        const val CLIP_LABELS_FILE = "clip-labels.json"
         const val SOUNDS_DIR = "sounds"
         const val BACKGROUNDS_DIR = "backgrounds"
         const val ICONS_DIR = "icons"

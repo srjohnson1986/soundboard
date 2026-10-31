@@ -685,7 +685,11 @@ class BoardViewModel(
         viewModelScope.launch {
             _strayClips.value = withContext(ioDispatcher) {
                 val keep = _board.value.soundFileNames + savedBoardRepo.allReferencedFileNames()
-                boardRepo.strayFiles(keep).map { StrayClip(it.name, it.sizeBytes) }
+                // In a fixed order, so the numbering of clips nothing is remembered about is the
+                // same here and in the export zip.
+                val strays = boardRepo.strayFiles(keep).sortedWith(compareBy({ it.lastModifiedMillis }, { it.name }))
+                val names = boardRepo.unusedClipNames(strays.map { it.name })
+                strays.zip(names) { file, name -> StrayClip(file.name, file.sizeBytes, name.description) }
             }
         }
     }
@@ -797,6 +801,8 @@ class BoardViewModel(
         if (imported) {
             player.clear()
             val loaded = withContext(ioDispatcher) { boardRepo.load() }
+            // Its sounds just came in under new names, so they have no record yet.
+            withContext(ioDispatcher) { boardRepo.recordClipLabels(loaded) }
             _board.value = loaded
             withContext(ioDispatcher) { loadSounds(loaded) }
             // Nothing on a board just opened or restored needs backing up yet.
@@ -843,6 +849,8 @@ class BoardViewModel(
             saveMutex.withLock {
                 val latest = _board.value
                 boardRepo.save(latest)
+                // Before pruning, so a sound's last tile is on record even if it goes right away.
+                boardRepo.recordClipLabels(latest)
                 // A saved board references sound files by name without copying them (see
                 // SavedBoardRepository) — protect those from pruning too, or clearing/replacing a
                 // live tile could delete audio a saved board still points at. Likewise a sound
@@ -937,4 +945,9 @@ sealed interface OriginalSound {
 data class RecentBoardItem(val ref: BoardRef, val label: String, val usedAt: Long)
 
 /** One unused sound file found by [BoardViewModel.refreshStrayClips]. */
-data class StrayClip(val fileName: String, val sizeBytes: Long)
+data class StrayClip(
+    val fileName: String,
+    val sizeBytes: Long,
+    /** What it was: "Yes, Food page" (the last tile it was on), or "Unused clip 1" if that isn't known. */
+    val description: String = fileName
+)

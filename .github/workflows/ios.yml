@@ -6,13 +6,29 @@ name: iOS
 # on macOS, which is why this has its own macOS runner; other hosts skip those targets.
 # Advisory, not a merge gate, like the UI tests: macOS runners are slower, and nothing
 # ships to iOS yet. What it catches is Android- or JVM-only code creeping into shared code.
+#
+# Until iOS has real development work, it doesn't run on every pull request (#335), only:
 on:
-  push:
-    branches: [master]
-    paths-ignore: ['**.md', 'docs/**']
+  # On pull requests that change iOS code. A new platform capability adds its iOS side
+  # under one of these, so it's still checked; shared-only changes skip it. Path filtering
+  # a whole workflow is safe here only because this isn't a required check: a filtered-out
+  # required check would leave the pull request waiting forever (see ci.yml).
   pull_request:
     branches: [master]
-    paths-ignore: ['**.md', 'docs/**']
+    paths:
+      - 'shared/src/iosMain/**'
+      - 'shared/src/iosTest/**'
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+  # Weekly, for shared code (or a Kotlin bump) that only breaks on iOS, which the paths
+  # above can't see. Monday 09:00 UTC.
+  schedule:
+    - cron: '0 9 * * 1'
+  # On a release tag, as a backstop for docs/RELEASING.md's run before tagging.
+  push:
+    tags: ['v*']
+  # By hand from the Actions tab, or `gh workflow run iOS --ref <branch>`: before tagging
+  # a release, and to check a shared-only branch you suspect.
   workflow_dispatch:
 
 permissions:

@@ -141,7 +141,8 @@ name still exists (`scripts/check-docs.py`), which also runs on docs-only change
 Two advisory workflows run beside them: the UI tests on an Android emulator
 (emulators occasionally flake), and **iOS** on a macOS runner, which builds the
 shared code and the iOS app, runs the tests on the iPhone simulator, and launches the
-app and screenshots it. Pull
+app and screenshots it. Until iOS has real development work, iOS runs only on pull
+requests that change iOS code, weekly, and before a release (docs/IOS.md). Pull
 requests that only change Markdown skip them. Gradle's build cache, parallel mode and configuration
 cache are on (`gradle.properties`), so repeat builds, locally and in CI, only
 redo what changed.

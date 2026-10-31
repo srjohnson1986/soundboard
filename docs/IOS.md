@@ -11,8 +11,13 @@ page is for you, and for your AI assistant (see also [AGENTS.md](../AGENTS.md)).
 
 ## Where it stands
 
-**Checked in CI on every code change** (the **iOS** workflow, `.github/workflows/ios.yml`,
-on a macOS runner; advisory, it doesn't block merging):
+**Checked in CI** by the **iOS** workflow (`.github/workflows/ios.yml`, on a macOS
+runner; advisory, it doesn't block merging). Until iOS has real development work it
+doesn't run on every change (#335), only on pull requests that change iOS code
+(`shared/src/iosMain`, `shared/src/iosTest`, `ios/`), weekly, before each release
+(docs/RELEASING.md, step 4), and on demand (**Run workflow** on its Actions page). When
+work on iOS picks up, go back to running it on every pull request: restore the
+`pull_request` trigger's `paths-ignore` in place of its `paths`. It checks:
 - The shared module and the `ios` module compile for iPhone and for the simulator.
 - Every shared test passes on the iPhone simulator: the model, storage, the view model
   and the shared UI tests, plus iOS's own tests for the file store, the zip codec and

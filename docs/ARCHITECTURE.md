@@ -1000,6 +1000,14 @@ occasionally flake on timing-sensitive gestures. Its HTML report is uploaded as
 the `ui-test-report` artifact. `LayoutAndLabelTest` rotates the device itself
 (`UiAutomation.setRotation`) and restores portrait afterwards.
 
+The **iOS** workflow (`.github/workflows/ios.yml`) builds for iOS and runs the shared
+tests on the iPhone simulator, on a macOS runner. It's advisory too, and until iOS has
+real development work it runs only on pull requests that change iOS code
+(`shared/src/iosMain`, `shared/src/iosTest`, `ios/`), weekly on Mondays, on release tags,
+and on demand (#335). A release runs it on `master` before tagging (docs/RELEASING.md).
+Filtering a whole workflow by path is only safe because it isn't a required check: a
+required check that never runs leaves the pull request waiting.
+
 **The Docs reminder** (#275, `.github/workflows/docs-reminder.yml`) comments on a pull
 request that changes user-facing code (a UI package, resources, an app's own screens or
 shell) without `docs/USER_GUIDE.md` or `README.md`, and removes the comment once they

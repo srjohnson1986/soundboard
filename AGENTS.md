@@ -35,8 +35,8 @@ releases.
   `DevicePreferences`. Settings that belong to the board go on `Board`, so they travel
   in backups.
 - iOS is waiting on a contributor with an Apple Developer membership (and a Mac), so
-  nothing on iOS has been tried by hand yet. Implement it anyway: CI compiles and tests
-  it. Add anything that needs checking by hand to the list in docs/IOS.md.
+  nothing on iOS has been tried by hand yet. Implement it anyway: the iOS workflow compiles
+  and tests it. Add anything that needs checking by hand to the list in docs/IOS.md.
 
 ## Workflow
 
@@ -48,8 +48,11 @@ releases.
   request is red, fix it on its branch.
 - The **CI** workflow's `build-and-test` check is required: lint, unit and shared tests
   on the JVM and in Chrome, a coverage floor, and the builds. **UI tests** (Android
-  emulator) and **iOS** (macOS runner) are advisory. For a pull request that's about
-  iOS, wait for `ios-tests` too.
+  emulator) and **iOS** (macOS runner) are advisory. Until iOS has real development
+  work, the iOS workflow runs only on pull requests that change iOS code
+  (`shared/src/iosMain`, `shared/src/iosTest`, `ios/`), weekly, and before a release
+  (#335). On a pull request it runs on, wait for `ios-tests` too; on any other, don't
+  wait for it or trigger it unless you suspect shared code that breaks only on iOS.
 - Update `docs/` in the same pull request: `USER_GUIDE.md` for anything a user sees,
   `ARCHITECTURE.md` for structure and tests, and `IOS.md` for iOS. CI's `docs` check fails
   on a broken link, anchor or path, and the **Docs reminder** comments on a pull request
@@ -78,7 +81,8 @@ iOS (on a Mac): see docs/IOS.md, "Build and run it".
 - **Test names**: no `,` `(` `)` `%` `.` `;` `:` `/` `[` `]` `<` `>`, even in backticks
   (Kotlin/Native, which builds the iOS tests, rejects them).
 - **Only macOS builds iOS.** On Windows or Linux the iOS targets are skipped silently, so
-  iOS breakage only shows in the iOS workflow.
+  iOS breakage only shows in the iOS workflow, which skips shared-only pull requests. To
+  check one anyway: `gh workflow run iOS --ref <branch>`.
 - **Compose's test clock steps one frame at a time**, so waiting minutes in a UI test takes
   minutes. Make long delays injectable (as with `LocalRelockAfterIdle`) and shorten them in
   the test.

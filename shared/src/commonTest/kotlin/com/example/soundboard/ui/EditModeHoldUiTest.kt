@@ -7,6 +7,7 @@ import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -69,6 +70,26 @@ class EditModeHoldUiTest : BoardUiTest() {
         letGo(onNodeWithText(label))
     }
 
+    /** Keeps a finger that's already down where it is for [millis] more, with the clock still stopped. */
+    private fun ComposeUiTest.keepHolding(millis: Long) {
+        mainClock.advanceTimeBy(millis)
+        mainClock.advanceTimeByFrame()
+    }
+
+    /**
+     * Holds [label] for the lift and then the whole second stage, the app's own durations (at
+     * most half a second each), and lets go: from Edit mode that leaves it.
+     */
+    private fun ComposeUiTest.holdUntilItLeavesEditMode(label: String) {
+        holdOn(onNodeWithText(label))
+        keepHolding(1_200)
+        letGo(onNodeWithText(label))
+    }
+
+    private fun ComposeUiTest.assertRingShown() = onNodeWithContentDescription("Leaving Edit mode").assertIsDisplayed()
+
+    private fun ComposeUiTest.assertNoRing() = onNodeWithContentDescription("Leaving Edit mode").assertDoesNotExist()
+
     /** How far apart neighboring tiles are, measured from where the first two are drawn. */
     private fun ComposeUiTest.cellStepPx(): Float =
         onNodeWithText("B").fetchSemanticsNode().boundsInRoot.left - onNodeWithText("A").fetchSemanticsNode().boundsInRoot.left
@@ -98,15 +119,16 @@ class EditModeHoldUiTest : BoardUiTest() {
     }
 
     @Test
-    fun holdingATileInEditModeTurnsEditModeOff() = runUiTest {
+    fun holdingATileInEditModeForTwoLongPressesTurnsEditModeOff() = runUiTest {
         val app = launchBoard(threeTiles())
         turnOnEditModeInTheMenu()
         assertEditModeOn()
 
-        hold("A")
+        holdUntilItLeavesEditMode("A")
 
         assertEditModeOff()
         assertEquals(listOf("A", "B", "C"), app.labels())
+        assertTrue(app.player.playedKeys.isEmpty(), "played ${app.player.playedKeys}")
     }
 
     @Test
@@ -115,8 +137,91 @@ class EditModeHoldUiTest : BoardUiTest() {
 
         hold("B")
         assertEditModeOn()
-        hold("B")
+        holdUntilItLeavesEditMode("B")
         assertEditModeOff()
+    }
+
+    // --- The second stage: holding still in Edit mode leaves it (#343) ---
+
+    @Test
+    fun inEditModeOneLongPressLiftsTheTileWithoutLeavingEditMode() = runUiTest {
+        launchBoard(threeTiles(), leaveEditModeAfterMillis = 2_000)
+        turnOnEditModeInTheMenu()
+
+        holdOn(onNodeWithText("A"))
+        keepHolding(500)
+
+        assertEditModeOn() // the finger is down and the tile is lifted, but Edit mode stays on
+        assertRingShown() // the second stage is filling
+        letGo(onNodeWithText("A"))
+        assertEditModeOn()
+    }
+
+    @Test
+    fun inEditModeHoldingStillForTheSecondStageLeavesEditModeWhileTheFingerIsStillDown() = runUiTest {
+        val app = launchBoard(threeTiles())
+        turnOnEditModeInTheMenu()
+
+        holdOn(onNodeWithText("A"))
+        keepHolding(700)
+
+        assertEditModeOff() // no need to let go
+        assertNoRing()
+        letGo(onNodeWithText("A"))
+        assertEditModeOff() // the release doesn't turn it back on, nor play the tile
+        assertTrue(app.player.playedKeys.isEmpty(), "played ${app.player.playedKeys}")
+        assertTrue(app.speaker.spoken.isEmpty(), "spoke ${app.speaker.spoken}")
+        assertEquals(listOf("A", "B", "C"), app.labels())
+    }
+
+    @Test
+    fun lettingGoBetweenTheTwoStagesDoesNothing() = runUiTest {
+        val app = launchBoard(threeTiles(), leaveEditModeAfterMillis = 2_000)
+        turnOnEditModeInTheMenu()
+
+        holdOn(onNodeWithText("A"))
+        keepHolding(700) // part way round the ring
+        assertRingShown()
+        letGo(onNodeWithText("A"))
+
+        assertEditModeOn()
+        assertNoRing()
+        assertTrue(app.player.playedKeys.isEmpty(), "played ${app.player.playedKeys}")
+        assertEquals(listOf("A", "B", "C"), app.labels())
+    }
+
+    @Test
+    fun movingDuringTheSecondStageCancelsTheRingAndDragsInstead() = runUiTest {
+        val app = launchBoard(threeTiles(), leaveEditModeAfterMillis = 2_000)
+        turnOnEditModeInTheMenu()
+        val step = cellStepPx()
+
+        holdOn(onNodeWithText("A"))
+        keepHolding(700)
+        assertRingShown()
+        onNodeWithText("A").performTouchInput { moveBy(Offset(step * 1.2f, 0f)) }
+        mainClock.advanceTimeByFrame()
+        assertNoRing()
+        keepHolding(3_000) // far past when the second stage would have ended
+        assertEditModeOn()
+        letGo(onNodeWithText("A"))
+
+        assertEquals(listOf("B", "A", "C"), app.labels())
+        assertEditModeOn()
+    }
+
+    @Test
+    fun aHoldFromTheNormalBoardTurnsEditModeOnAndStaysOnHoweverLongItLasts() = runUiTest {
+        launchBoard(threeTiles(), leaveEditModeAfterMillis = 500)
+
+        holdOn(onNodeWithText("A"))
+        assertEditModeOn()
+        keepHolding(3_000)
+
+        assertEditModeOn()
+        assertNoRing()
+        letGo(onNodeWithText("A"))
+        assertEditModeOn()
     }
 
     @Test
@@ -172,7 +277,7 @@ class EditModeHoldUiTest : BoardUiTest() {
         val app = launchBoard(threeTiles())
 
         hold("A") // normal board: Edit mode on
-        hold("A") // Edit mode: off
+        holdUntilItLeavesEditMode("A") // Edit mode: off
         holdAndDrag("B", cells = 1.2f)
 
         assertTrue(app.player.playedKeys.isEmpty(), "played ${app.player.playedKeys}")

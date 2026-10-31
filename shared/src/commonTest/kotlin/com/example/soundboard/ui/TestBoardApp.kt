@@ -116,7 +116,9 @@ abstract class BoardUiTest : UiTest() {
         builtIns: Map<String, BuiltInBoard> = emptyMap(),
         relockAfterIdle: Duration = EditingLock.RELOCK_AFTER_IDLE,
         idleMinute: Duration = 1.minutes,
-        withIcons: Boolean = true
+        withIcons: Boolean = true,
+        // How long a tile held in Edit mode stays lifted before leaving it; null is the app's own.
+        leaveEditModeAfterMillis: Long? = null
     ): TestBoardApp {
         val app = TestBoardApp(board, builtIns, dispatcher, withIcons)
         check(app.vm.board.value.pages.first().id == board.pages.first().id) { "the board didn't load" }
@@ -126,7 +128,8 @@ abstract class BoardUiTest : UiTest() {
             CompositionLocalProvider(
                 LocalDialogUsesPlatformWidth provides platformWidthDialogs,
                 LocalRelockAfterIdle provides relockAfterIdle,
-                LocalIdleMinute provides idleMinute
+                LocalIdleMinute provides idleMinute,
+                LocalLeaveEditModeAfterMillis provides leaveEditModeAfterMillis
             ) {
                 SoundboardTheme(themeMode = shown.themeMode) { BoardScreen(vm = app.vm) }
             }

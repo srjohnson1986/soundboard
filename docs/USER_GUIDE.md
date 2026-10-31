@@ -55,9 +55,14 @@ What your fingers do:
   picked up. As you drag, the other tiles slide over to make room, and swiping
   between pages is paused so crossing the screen moves the tile instead of
   turning the page.
-- **Press and hold without moving:** turns Edit mode on, or off if it was
-  already on. Letting go never plays the tile. The same goes for a tile in the
-  sticky home row, which can't be dragged.
+- **Press and hold without moving:** turns Edit mode on, as soon as the tile
+  lifts. If Edit mode was already on it takes two stages: the tile lifts, ready
+  to drag, and if you keep still a ring fills on it (like **Hold to unlock**)
+  and Edit mode turns off, with a second buzz, while your finger is still down.
+  Letting go before the ring is full does nothing, and moving cancels the ring
+  and drags the tile instead. Letting go never plays the tile. A tile in the
+  sticky home row can't be dragged, so a hold there simply turns Edit mode on or
+  off at the first buzz.
 
 While the board is locked (see "Caregiver lock") holding does neither: a long
 press is just a slow tap, and tiles can't be moved.
@@ -75,8 +80,8 @@ on or not.
 
 A bar above the board says **Tiles won't play while Edit mode is on**, so it's
 plain why the board has gone quiet if a hold turned it on by accident. To go
-back to normal use, tap the bar, hold a tile again, or turn off the **Edit
-mode** switch in the **☰** menu. Saving or cancelling in the editor leaves Edit
+back to normal use, tap the bar, keep holding a tile until its ring fills, or
+turn off the **Edit mode** switch in the **☰** menu. Saving or cancelling in the editor leaves Edit
 mode on, so you can go straight on to the next tile. The bar isn't shown while
 the board is locked, since locking ends Edit mode.
 

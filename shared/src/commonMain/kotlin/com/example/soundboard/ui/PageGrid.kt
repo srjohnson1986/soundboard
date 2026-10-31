@@ -28,16 +28,20 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -69,6 +73,9 @@ import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
 import com.example.soundboard.model.languageName
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /** Horizontal padding on each side of a page's grid (and the pinned row above it). */
 private val GRID_PADDING = 12.dp
@@ -81,6 +88,16 @@ private val MIN_FIT_TO_SCREEN_TILE_WIDTH = 56.dp
 
 /** Largest a caption under a tile's picture or emoji gets, so the picture keeps most of the tile. */
 private const val CAPTION_MAX_SP = 16f
+
+/** The ring that fills while a hold in Edit mode is about to leave it (#343). */
+private val LEAVE_RING_SIZE = 44.dp
+
+/**
+ * How long a tile held in Edit mode, after it lifts, must stay still before Edit mode turns off
+ * (#343): the system's long-press time, the same as it took to lift. Null in the app; the UI
+ * tests set it, since Compose's test clock steps through a wait frame by frame.
+ */
+internal val LocalLeaveEditModeAfterMillis = staticCompositionLocalOf<Long?> { null }
 
 /** Inset between a tile's edge and its label. */
 internal val TILE_CONTENT_PADDING = 6.dp
@@ -254,6 +271,13 @@ internal fun PageGrid(
     val gridWidthPx = gridSizePx.width
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    // How far through the second stage of a hold in Edit mode the held tile is, 0 to 1 (#343): the
+    // ring on it. Driven by the hold's elapsed time, never an animation.
+    var leaveProgress by remember { mutableFloatStateOf(0f) }
+    // Set once a hold has left Edit mode under the finger, until the finger lifts: that release
+    // must not play the tile now that nothing is lifted.
+    var tapSuppressed by remember { mutableStateOf(false) }
+    val leaveEditModeAfterMillis = LocalLeaveEditModeAfterMillis.current
 
     val isLandscape = isLandscape()
     val usePageGrid = isLandscape && landscapeLayout == LandscapeLayout.PAGE_GRID
@@ -291,7 +315,7 @@ internal fun PageGrid(
     // hold is in progress that click is part of the hold: it must not play the tile, or open
     // the editor now that Edit mode is on.
     fun tapUnlessHeld(tile: Tile) {
-        if (draggedIndex == null) onTap(tile)
+        if (draggedIndex == null && !tapSuppressed) onTap(tile)
     }
 
     fun tileDragModifier(index: Int, tile: Tile): Modifier {
@@ -309,75 +333,117 @@ internal fun PageGrid(
                 }
             }
             .zIndex(if (isDragged) 1f else 0f)
-            .pointerInput(tile.id, columns, isActive, hapticFeedbackEnabled, editingLocked) {
+            .pointerInput(tile.id, columns, isActive, hapticFeedbackEnabled, editingLocked, leaveEditModeAfterMillis) {
                 // Locked, a board can't be rearranged or put into Edit mode (#328): with no
                 // gesture here a long hold is just a slow tap, which the card's own click
                 // handles (it plays if released on the tile, and cancels if the finger slid off).
                 if (!isActive || editingLocked) return@pointerInput
-                // Whether a hold is under way, whether Edit mode was already on when it began, and
-                // whether the finger then travelled further than a touch (shake while holding isn't a drag).
-                var holding = false
-                var editModeAtStart = false
-                var travel = Offset.Zero
-                var moved = false
-                // A hold that never moved wasn't a reorder: it toggles Edit mode, and never plays
-                // the tile (#328). From the normal board Edit mode is already on, from when the
-                // hold began; from Edit mode, letting go turns it off. Called when the hold ends,
-                // which for one that never moved is a *cancel*, not an end: the card's own click
-                // consumes the release first, and the drag detector reads that as a cancellation.
-                fun finishHold() {
-                    if (holding && !moved && editModeAtStart) currentOnEditModeChange(false)
-                    holding = false
-                    draggedIndex = null
-                    dragOffset = Offset.Zero
-                    onDragActiveChanged(false)
-                }
-                detectDragGesturesAfterLongPress(
-                    onDragStart = {
-                        if (hapticFeedbackEnabled) {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        }
-                        holding = true
-                        editModeAtStart = currentEditMode
-                        travel = Offset.Zero
-                        moved = false
-                        // Holding a tile from the normal board turns Edit mode on at once,
-                        // so the buzz, the lift and the pencils arrive together (#328).
-                        if (!editModeAtStart) currentOnEditModeChange(true)
-                        draggedIndex = index
-                        dragOffset = Offset.Zero
-                        onDragActiveChanged(true)
-                    },
-                    onDragEnd = {
-                        finishHold()
-                        onCommitOrder()
-                    },
-                    onDragCancel = ::finishHold,
-                    onDrag = { change, amount ->
-                        change.consume()
-                        travel += amount
-                        if (travel.getDistance() > viewConfiguration.touchSlop) moved = true
-                        dragOffset += amount
-                        val current = draggedIndex ?: return@detectDragGesturesAfterLongPress
-                        if (cellStepXPx <= 0f || cellStepYPx <= 0f) return@detectDragGesturesAfterLongPress
-                        val colDelta = (dragOffset.x / cellStepXPx).roundToInt()
-                        val rowDelta = (dragOffset.y / cellStepYPx).roundToInt()
-                        if (colDelta == 0 && rowDelta == 0) return@detectDragGesturesAfterLongPress
-                        val target = dragTargetIndex(
-                            index = current,
-                            rowDelta = rowDelta,
-                            colDelta = colDelta,
-                            columns = columns,
-                            pinnedCount = if (showPinnedRowSeparately) pinnedCount else 0,
-                            lastIndex = shownTiles.lastIndex
-                        )
-                        if (target != current) {
-                            onPreviewMove(current, target)
-                            draggedIndex = target
-                            dragOffset -= Offset(colDelta * cellStepXPx, rowDelta * cellStepYPx)
-                        }
+                coroutineScope {
+                    val scope = this
+                    // Whether a hold is under way, and whether Edit mode was already on when it began.
+                    var holding = false
+                    var editModeAtStart = false
+                    var travel = Offset.Zero
+                    // The second stage of a hold in Edit mode (#343): holding still for the long-press
+                    // time again leaves Edit mode while the finger is still down. Cancelled by moving
+                    // past a touch (shake while holding isn't a drag), and by the hold ending.
+                    var leaveHold: Job? = null
+                    fun cancelLeaveHold() {
+                        leaveHold?.cancel()
+                        leaveHold = null
                     }
-                )
+                    // A hold's end puts the tile down. Called for an end and a cancel alike: a hold that
+                    // never moved ends as a *cancel*, since the card's own click consumes the release
+                    // first and the drag detector reads that as a cancellation. It never toggles Edit
+                    // mode: from the normal board that happened when the hold began, and from Edit
+                    // mode it happens only if the hold lasted for the second stage.
+                    fun finishHold() {
+                        cancelLeaveHold()
+                        holding = false
+                        tapSuppressed = false
+                        draggedIndex = null
+                        dragOffset = Offset.Zero
+                        onDragActiveChanged(false)
+                    }
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = {
+                            if (hapticFeedbackEnabled) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                            holding = true
+                            tapSuppressed = false
+                            editModeAtStart = currentEditMode
+                            travel = Offset.Zero
+                            // Holding a tile from the normal board turns Edit mode on at once,
+                            // so the buzz, the lift and the pencils arrive together (#328).
+                            if (!editModeAtStart) currentOnEditModeChange(true)
+                            draggedIndex = index
+                            dragOffset = Offset.Zero
+                            onDragActiveChanged(true)
+                            if (editModeAtStart) {
+                                // Timed in frames, not with an animation, as Hold to unlock is: an
+                                // animation would finish at once with animations turned off.
+                                val holdNanos = (leaveEditModeAfterMillis ?: viewConfiguration.longPressTimeoutMillis) * 1_000_000L
+                                leaveHold = scope.launch {
+                                    try {
+                                        val started = withFrameNanos { it }
+                                        do {
+                                            val progress = withFrameNanos {
+                                                ((it - started).toDouble() / holdNanos).toFloat().coerceIn(0f, 1f)
+                                            }
+                                            leaveProgress = progress
+                                        } while (progress < 1f)
+                                        if (hapticFeedbackEnabled) {
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        }
+                                        // The finger is still down: let the tile drop and Edit mode go now,
+                                        // and keep the release from playing it.
+                                        holding = false
+                                        tapSuppressed = true
+                                        currentOnEditModeChange(false)
+                                        draggedIndex = null
+                                        dragOffset = Offset.Zero
+                                        onDragActiveChanged(false)
+                                    } finally {
+                                        leaveProgress = 0f
+                                    }
+                                }
+                            }
+                        },
+                        onDragEnd = {
+                            val dragged = holding
+                            finishHold()
+                            if (dragged) onCommitOrder()
+                        },
+                        onDragCancel = ::finishHold,
+                        onDrag = { change, amount ->
+                            change.consume()
+                            // After Edit mode went off under the finger there's nothing left to drag.
+                            if (!holding) return@detectDragGesturesAfterLongPress
+                            travel += amount
+                            if (travel.getDistance() > viewConfiguration.touchSlop) cancelLeaveHold()
+                            dragOffset += amount
+                            val current = draggedIndex ?: return@detectDragGesturesAfterLongPress
+                            if (cellStepXPx <= 0f || cellStepYPx <= 0f) return@detectDragGesturesAfterLongPress
+                            val colDelta = (dragOffset.x / cellStepXPx).roundToInt()
+                            val rowDelta = (dragOffset.y / cellStepYPx).roundToInt()
+                            if (colDelta == 0 && rowDelta == 0) return@detectDragGesturesAfterLongPress
+                            val target = dragTargetIndex(
+                                index = current,
+                                rowDelta = rowDelta,
+                                colDelta = colDelta,
+                                columns = columns,
+                                pinnedCount = if (showPinnedRowSeparately) pinnedCount else 0,
+                                lastIndex = shownTiles.lastIndex
+                            )
+                            if (target != current) {
+                                onPreviewMove(current, target)
+                                draggedIndex = target
+                                dragOffset -= Offset(colDelta * cellStepXPx, rowDelta * cellStepYPx)
+                            }
+                        }
+                    )
+                }
             }
     }
 
@@ -420,6 +486,7 @@ internal fun PageGrid(
                         performanceModeEnabled = performanceModeEnabled,
                         hidden = !tile.hasSound && hideBlankTilesEnabled && !editMode,
                         activeLanguage = activeLanguage,
+                        leaveProgress = if (index == draggedIndex) leaveProgress else 0f,
                         modifier = Modifier.weight(1f).then(tileDragModifier(index, tile)),
                         onTap = { tapUnlessHeld(tile) }
                     )
@@ -452,6 +519,7 @@ internal fun PageGrid(
                     performanceModeEnabled = performanceModeEnabled,
                     hidden = !tile.hasSound && hideBlankTilesEnabled && !editMode,
                     activeLanguage = activeLanguage,
+                    leaveProgress = if (isDragged) leaveProgress else 0f,
                     modifier = Modifier
                         .then(if (isDragged) Modifier else Modifier.animateItem())
                         .then(tileDragModifier(index, tile)),
@@ -476,6 +544,8 @@ private fun TileCard(
     // The language the board is speaking besides English, when the switch is on ES (#331): a tile
     // with something to say and nothing in it gets a "no Spanish" marker, as it still speaks English.
     activeLanguage: String? = null,
+    // How far a hold in Edit mode is towards leaving it, 0 to 1: a ring fills over the tile (#343).
+    leaveProgress: Float = 0f,
     // A fixed row height, overriding [aspectRatio] — rows are capped by the row height
     // setting, and landscape's page grid keeps them at their portrait height even though
     // its tiles are a different width.
@@ -584,6 +654,24 @@ private fun TileCard(
                         .padding(2.dp)
                         .size(16.dp)
                 )
+            }
+            if (leaveProgress > 0f) {
+                // The same ring as Hold to unlock, with the pencil in it where that has the lock.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .semantics { contentDescription = "Leaving Edit mode" },
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        progress = { leaveProgress },
+                        modifier = Modifier.size(LEAVE_RING_SIZE),
+                        strokeWidth = 4.dp,
+                        color = contentColor,
+                        trackColor = contentColor.copy(alpha = 0.25f)
+                    )
+                    Icon(Icons.Filled.Edit, contentDescription = null, tint = contentColor, modifier = Modifier.size(20.dp))
+                }
             }
             if (noTranslation) {
                 Text(

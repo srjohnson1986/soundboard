@@ -97,8 +97,29 @@ data class Tile(
     /** A picture shown large on the tile: a file inside the app's private icons directory. Null for none. */
     val imageFileName: String? = null,
     /** Whether the name is drawn on the tile. Only matters with an [emoji] or picture; a plain text tile always shows its name. */
-    val showLabel: Boolean = true
+    val showLabel: Boolean = true,
+    /**
+     * What the tile says in other languages (#331), by language tag ("es" for Spanish). Stored on
+     * the tile, so playing it works offline and never translates anything live. A language with no
+     * entry (or a blank one) has no translation. Empty for a tile from before this existed.
+     */
+    val translations: Map<String, String> = emptyMap()
 ) {
+    /** The tile's words in [language] ("es"), or null if [language] is null or it has none. */
+    fun translationFor(language: String?): String? =
+        language?.let { translations[it] }?.takeIf { it.isNotBlank() }
+
+    /** This tile with its [language] text set to [text]; blank text removes it, so a blank is never stored. */
+    fun withTranslation(language: String, text: String): Tile =
+        copy(translations = if (text.isBlank()) translations - language else translations + (language to text))
+
+    /**
+     * Whether the tile has something to say but nothing in [language], so in that language's mode
+     * it still speaks English; the tile shows a "no Spanish" marker (#331).
+     */
+    fun lacksTranslation(language: String?): Boolean =
+        language != null && (hasSound || speechText.isNotBlank()) && translationFor(language) == null
+
     /** Whether the tile shows an [emoji] or picture in place of (or above) its name. */
     val hasIcon: Boolean get() = !emoji.isNullOrBlank() || imageFileName != null
 
@@ -321,6 +342,13 @@ data class Board(
      * into saved boards and backups.
      */
     val builtInSource: String? = null,
+    /**
+     * The tag of the second language the board can speak ("es"), which turns on the EN / ES switch,
+     * each tile's Spanish field and the Spanish voice (#331); null for a board that is English only.
+     * On the board so it travels in backups. Whether the switch is on is per device, in
+     * [com.example.soundboard.data.DevicePreferences.secondLanguageActive].
+     */
+    val secondLanguage: String? = SPANISH,
     /** Forward-looking marker for the on-disk schema shape; not branched on yet. */
     val schemaVersion: Int = CURRENT_SCHEMA_VERSION
 ) {

@@ -124,7 +124,8 @@ data class Tile(
     val label: String = "",
     val fileName: String? = null,   // null = empty tile
     val volume: Float = 1f,
-    val colorArgb: Int? = null      // null = use the theme default
+    val colorArgb: Int? = null,     // null = use the theme default
+    val translations: Map<String, String> = emptyMap()  // language tag ("es") -> what the tile says in it (#331)
 )
 
 data class Page(
@@ -142,7 +143,8 @@ data class Board(
     val name: String = "New Board",
     val pages: List<Page> = listOf(Page()),
     val currentPageIndex: Int = 0,
-    val stickyHomeRowEnabled: Boolean = false  // shows the home page's first row above every OTHER page
+    val stickyHomeRowEnabled: Boolean = false,  // shows the home page's first row above every OTHER page
+    val secondLanguage: String? = "es"          // the language the EN / ES switch speaks; null = English only (#331)
 ) {
     val homePageIndex: Int?   // computed — derived from pages, not stored; see "Why isHome is per-page" below
     val homePage: Page?       // computed — pages[homePageIndex], or null
@@ -319,7 +321,8 @@ lives in ordinary `SharedPreferences` (`DevicePreferences`, a small
 wrapper over a `KeyValueStore`) instead — opening a different board must not
 silently turn it back off. `BoardViewModel` reads it once at construction
 into its own `performanceModeEnabled: StateFlow<Boolean>`, separate from
-`board`. Show mode (`ShowModeSettings`: on/off, display timer, tap to close,
+`board`. The EN / ES switch (`secondLanguageActive`, #331) is there for the same reason, and so is the
+Spanish voice, in `SpeechSettings`. Show mode (`ShowModeSettings`: on/off, display timer, tap to close,
 mute, flip upside down) is there for the same reason — it's about where the board is being used —
 and is exposed the same way as `showMode: StateFlow<ShowModeSettings>`.
 `ShowModeSettings.withTimerSeconds`/`withTapToClose` refuse a change that
@@ -467,6 +470,47 @@ underlying `SoundPool` object, so the player can keep being used —
 `BoardViewModel.importBoard()` calls this before reloading from a freshly
 imported board, so stale keys from the previous state can't linger.
 `release()` is the real teardown, called once from `onCleared()`.
+
+## Speaking Spanish (#331)
+
+The board's names and the app's text stay English; only what it *says* can switch. The
+data is two additive fields, so old boards and backups load unchanged (a test loads a
+`board.json` from before them): `Tile.translations`, a map from language tag to text,
+and `Board.secondLanguage`, `"es"` by default or null for a board that should be English
+only. Both are on the board, so they travel in backups and saved boards. A translation is
+text stored on the tile and spoken from there: playback never translates anything live,
+so it works offline. `saveTile` trims them and drops blanks; `clearTile` clears them.
+
+**The switch is a device setting**, `DevicePreferences.secondLanguageActive` (like Show mode:
+about who this device is talking to, so opening another board mustn't flip it), exposed as
+`BoardViewModel.secondLanguageOn`. The language the board speaks now is
+`activeLanguage()`: the board's `secondLanguage` while the switch is on ES, else null. It is
+in the top bar (`LanguageSwitch` in `BoardTopBar.kt`), not the menu, so the locked board
+keeps it. The Spanish voice is `SpeechSettings.spanishVoiceId`, beside the English
+`voiceId`, because a device's voices belong to a language; speed and pitch are shared.
+
+**`Speaker` knows languages.** `speak(text, language)` takes a tag (null is the device's
+language), and `spanishVoices` is the list of Spanish voices, **null until the device has
+said what it has** and empty when it has none: the board warns on empty, never on null, or
+every launch would flash a warning while the engine started. Each platform implements both:
+`TtsSpeaker` (Android) filters `TextToSpeech.voices` by language for offline installed ones;
+`WebSpeaker` filters `speechSynthesis.getVoices()` by language tag and, since a browser with
+no voices may never fire `voiceschanged`, settles to "none" after two seconds;
+`IosSpeaker` filters `AVSpeechSynthesisVoice.speechVoices()`. **Whichever platform, a
+language with no voice is never spoken in another language's voice.**
+
+**What a tap does** (`BoardViewModel.play`): in Spanish mode a tile with Spanish text
+speaks it with `speaker.speak(text, "es")`, **over an English recording** too. A tile with
+none plays as in English and gets a small "no spanish" marker (`Tile.lacksTranslation`, drawn
+by `TileCard`). If the device is *known* to have no Spanish voice (`voiceMissingFor`), the
+tile plays its English instead, and `SilentBoardWarning` shows why, so the board is never
+silent without saying so. The same warning row also covers the existing "speech isn't
+working" case for tiles that have Spanish (they speak whatever their recording).
+**Show mode** puts the Spanish in `shownText` and the tile's English in `shownSubtext`,
+which `ShowTextOverlay` draws small under it (`SHOW_SUBTEXT_TAG`). **Speak...** in Spanish
+mode speaks what is typed in the Spanish voice (`speakAdHoc`), or puts the "no Spanish voice"
+message in the snackbar. The tile editor's Spanish field edits the draft like any other, and
+**Hear the Spanish** calls `speakSecondLanguage`, which ignores the switch.
 
 ## Audio recording
 
@@ -949,6 +993,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | `Board` page management (`withPageAdded`/`withPageRemoved`/`withPageRenamed`/`withCurrentPage`/`withHomePage`), `updatingTile`/`findTile`, `soundFileNames`, `Tile.isPlayable`, and `hasAnySound` | `shared/src/commonTest/.../model/BoardTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | `BoardRepository` — save/load, missing-sound sanitizing, the legacy-schema and `homePageIndex` migrations, additive-field defaults, corrupt `board.json`, backup round-trips, the zip path guard, stray clips, bundled boards and original sounds; `SavedBoardRepository`, `RecentBoardsRepository` and `DevicePreferences` — all against in-memory storage (#241) | `shared/src/commonTest/.../data/BoardRepositoryTest.kt`, `SavedBoardRepositoryTest.kt`, `RecentBoardsRepositoryTest.kt`, `DevicePreferencesTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | The `FileStore` contract every implementation must meet (in-memory, `FileSystemStore`, and `OpfsFileStore` in Chrome); the golden backup zip (`GoldenBackup.kt`, made outside the app) that both `JavaZipCodec` and `FflateZipCodec` must read identically, so backups move between Android and the web; `JavaZipCodec` reading every zip in `presets/`; `LocalStorageKeyValueStore` and `SharedPreferencesStore`; picking and saving through the Storage Access Framework (`UriPickedFile`, `UriSaveTarget`) | `shared/src/commonTest/.../data/FileStoreContractTest.kt`, `GoldenBackup.kt`, `shared/src/androidHostTest/.../data/AndroidStorageTest.kt`, `shared/src/wasmJsTest/.../data/WebStorageTest.kt` | JVM, and WebAssembly in headless Chrome |
+| Speaking Spanish (#331): Spanish mode picks a tile's Spanish, falls back to English, speaks over an English recording in the Spanish voice, and never in the wrong voice; Show mode's two lines; the Speak... box; the Spanish voice setting. The EN / ES switch (also while locked), the no-spanish marker, the editor's Spanish field, Show mode, the no-Spanish-voice bar and the Voice settings. An old `board.json` with no translations, and backups and saved boards carrying them | `shared/src/commonTest/.../SecondLanguageViewModelTest.kt`, `ui/SecondLanguageUiTest.kt`, `ui/DialogsUiTest.kt`, `data/BoardRepositoryTest.kt`, `data/DevicePreferencesTest.kt` | JVM (Robolectric) and WebAssembly in headless Chrome |
 | `BoardViewModel`, incl. the fresh-install board on each platform, editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, restoring an original sound, and saveBoardAs/openBoard — on in-memory storage with stand-in built-in boards (#241) | `shared/src/commonTest/.../BoardViewModelTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | Every built-in board the app ships, imported through the APK's assets, `java.util.zip` and the files directory | `test/.../data/ShippedBoardsTest.kt` | Robolectric |
 | `BoardViewModel` on a real thread pool and real files: back-to-back commits leave the latest board on disk (#144) | `test/.../BoardViewModelThreadingTest.kt` | Robolectric, `MainDispatcherRule` |
@@ -1067,7 +1112,9 @@ counted.
 - **`FakePlayer`, `FakeRecorder` and `FakeSpeaker`** exist twice: in
   `shared/src/commonTest/.../audio/Fakes.kt` for the shared tests, and in the app's
   `src/sharedTest/` for its unit and device tests, since the app's test source sets can't see
-  another module's tests. Keep both in step if an audio interface changes.
+  another module's tests. Keep both in step if an audio interface changes. `FakeSpeaker` records
+  each utterance with its language (`spokenIn`; `spokenOf(...)` builds the expected list) and has
+  one Spanish voice, which a test replaces with null (not known yet) or empty (none).
 - **`Dispatchers.Main`** is an `UnconfinedTestDispatcher` in view model tests, since
   `viewModelScope` has no `Main` dispatcher off a device: the shared tests set it in
   `@BeforeTest`, and the app's use `MainDispatcherRule` (`@get:Rule`).

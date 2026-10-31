@@ -1,6 +1,15 @@
 package com.example.soundboard.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -71,6 +80,7 @@ import com.example.soundboard.APP_VERSION_NAME
 import com.example.soundboard.BoardRef
 import com.example.soundboard.RecentBoardItem
 import com.example.soundboard.model.Board
+import com.example.soundboard.model.languageName
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Shown at the bottom of the menu; comes from `versionName` in app/build.gradle.kts, so there's one place to bump per release. */
@@ -101,7 +111,8 @@ internal fun BoardTopBar(
     onOpenBoard: (BoardRef, String) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
-    lock: EditingLock = EditingLock.None
+    lock: EditingLock = EditingLock.None,
+    language: LanguageSwitch = LanguageSwitch.None
 ) {
     // Held here, not in HamburgerMenu: portrait and landscape put the menu in different layouts
     // below, so rotating recomposes it from scratch and it would forget it was open (#237).
@@ -150,6 +161,7 @@ internal fun BoardTopBar(
             ) {
                 Text("Soundboard", style = MaterialTheme.typography.titleMedium)
                 PageTabs(board, onSelectPage, onOpenDialog, locked = lock.locked, modifier = Modifier.weight(1f))
+                LanguageSwitchButton(language)
                 menu()
             }
         }
@@ -157,10 +169,64 @@ internal fun BoardTopBar(
         Column {
             TopAppBar(
                 title = { Text("Soundboard", style = MaterialTheme.typography.titleLarge) },
-                actions = { menu() }
+                actions = {
+                    LanguageSwitchButton(language)
+                    menu()
+                }
             )
             PageTabs(board, onSelectPage, onOpenDialog, locked = lock.locked, modifier = Modifier.fillMaxWidth())
         }
+    }
+}
+
+/**
+ * The EN / ES switch (#331): whether the board speaks English or its second language. Per device, and
+ * in the top bar rather than the menu because it is for everyday use, so it stays while the board is
+ * locked. [secondLanguage] is null when the board has no second language, which hides the switch.
+ */
+internal data class LanguageSwitch(
+    val secondLanguage: String?,
+    val secondLanguageOn: Boolean,
+    val onChange: (Boolean) -> Unit
+) {
+    companion object {
+        val None = LanguageSwitch(secondLanguage = null, secondLanguageOn = false, onChange = {})
+    }
+}
+
+/** Two segments, EN and ES, with the language in use filled in. */
+@Composable
+private fun LanguageSwitchButton(language: LanguageSwitch) {
+    val second = language.secondLanguage ?: return
+    Row(
+        modifier = Modifier
+            .padding(end = 4.dp)
+            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(50))
+            .clip(RoundedCornerShape(50))
+            .selectableGroup(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LanguageSegment("EN", "English", selected = !language.secondLanguageOn) { language.onChange(false) }
+        LanguageSegment(second.uppercase(), languageName(second), selected = language.secondLanguageOn) { language.onChange(true) }
+    }
+}
+
+@Composable
+private fun LanguageSegment(text: String, description: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = description }
+            .defaultMinSize(minWidth = 44.dp, minHeight = 40.dp)
+            .padding(horizontal = 8.dp)
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 

@@ -41,6 +41,63 @@ class BoardRepositoryTest {
     }
 
     @Test
+    fun `a board from before Spanish loads unchanged with no translations and Spanish on offer`() = runTest {
+        files.write(repo.soundPath("x.mp3"), byteArrayOf(1))
+        // A board.json as an older build wrote it: no translations on the tile, no secondLanguage.
+        files.write(
+            "board.json",
+            """{"name":"Old","pages":[{"id":"p","name":"One","rows":1,"columns":2,"tiles":[{"id":"x","label":"Hello","fileName":"x.mp3","volume":0.5},{"id":"y"}]}],"currentPageIndex":0,"schemaVersion":1}"""
+                .encodeToByteArray()
+        )
+
+        val board = repo.load()
+
+        assertEquals("Old", board.name)
+        val tile = board.findTile("x")!!
+        assertEquals("Hello", tile.label)
+        assertEquals("x.mp3", tile.fileName)
+        assertEquals(0.5f, tile.volume)
+        assertEquals(emptyMap(), tile.translations)
+        assertNull(tile.translationFor("es"))
+        assertEquals("es", board.secondLanguage)
+    }
+
+    @Test
+    fun `a board saved by a newer build still loads with the translations ignored by an older reader`() = runTest {
+        // The reverse direction: ignoreUnknownKeys is what lets an older build read a newer file.
+        files.write(
+            "board.json",
+            """{"pages":[{"id":"p","tiles":[{"id":"x","label":"Hi","translations":{"es":"Hola","fr":"Salut"},"somethingNew":1}]}],"secondLanguage":null}"""
+                .encodeToByteArray()
+        )
+
+        val board = repo.load()
+
+        assertEquals(mapOf("es" to "Hola", "fr" to "Salut"), board.findTile("x")?.translations)
+        assertNull(board.secondLanguage)
+    }
+
+    @Test
+    fun `save then load round-trips a tile's Spanish and the second language and so does a backup`() = runTest {
+        val board = boardWith(Tile(id = "a", label = "Water", translations = mapOf("es" to "Agua"))).copy(secondLanguage = null)
+        repo.save(board)
+
+        assertEquals(mapOf("es" to "Agua"), repo.load().findTile("a")?.translations)
+        assertNull(repo.load().secondLanguage)
+        exportThenImport { repo.save(Board()) }
+        assertEquals(mapOf("es" to "Agua"), repo.load().findTile("a")?.translations)
+        assertNull(repo.load().secondLanguage)
+    }
+
+    @Test
+    fun `a saved board keeps a tile's Spanish`() = runTest {
+        val saved = SavedBoardRepository(files)
+        val id = saved.save(boardWith(Tile(id = "a", label = "Water", translations = mapOf("es" to "Agua"))))
+
+        assertEquals(mapOf("es" to "Agua"), saved.load(id)?.findTile("a")?.translations)
+    }
+
+    @Test
     fun `load empties a tile whose sound file is missing`() = runTest {
         repo.save(boardWith(Tile(id = "a", label = "Hey", fileName = "gone.m4a")))
 

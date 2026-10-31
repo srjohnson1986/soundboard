@@ -41,6 +41,15 @@ interface BoardSettingsActions {
     fun setSpeechRatePercent(value: Int)
     fun setSpeechPitchPercent(value: Int)
 
+    /** The voice for Spanish (#331); null is the device's first Spanish voice. */
+    fun setSpanishVoice(voiceId: String?)
+
+    /** Whether the board offers a second language (Spanish): the EN / ES switch and each tile's Spanish field. */
+    fun setSecondLanguageEnabled(value: Boolean)
+
     /** Says a sample sentence in the current voice, speed and pitch. */
     fun previewSpeech()
+
+    /** Says a sample sentence in the Spanish voice. */
+    fun previewSpanishSpeech()
 }

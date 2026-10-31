@@ -7,6 +7,7 @@ import com.example.soundboard.audio.SpeechVoice
 import com.example.soundboard.data.FileStore
 import com.example.soundboard.data.toUint8Array
 import com.example.soundboard.data.uint8ArrayToByteArray
+import com.example.soundboard.model.SPANISH
 import com.example.soundboard.model.SpeechSettings
 import kotlin.js.Promise
 import kotlinx.coroutines.CoroutineScope
@@ -72,28 +73,53 @@ class WebSpeaker : Speaker {
     private val _voices = MutableStateFlow<List<SpeechVoice>>(emptyList())
     override val voices: StateFlow<List<SpeechVoice>> = _voices.asStateFlow()
 
+    private val _spanishVoices = MutableStateFlow<List<SpeechVoice>?>(if (speechSupported()) null else emptyList())
+    override val spanishVoices: StateFlow<List<SpeechVoice>?> = _spanishVoices.asStateFlow()
+
     private var settings = SpeechSettings()
 
     init {
         if (speechSupported()) {
             // Browsers load their voices after the page, and say so with voiceschanged.
             refreshVoices()
-            onVoicesChanged { refreshVoices() }
+            onVoicesChanged { refreshVoices(settled = true) }
+            // A browser with no voices at all may never say anything, so after a moment what it
+            // has is what it has: the board then warns that there is no Spanish voice, rather than
+            // waiting for one for ever.
+            afterSeconds(VOICES_SETTLE_SECONDS) { refreshVoices(settled = true) }
         }
     }
 
-    private fun refreshVoices() {
-        _voices.value = Json.decodeFromString<List<List<String>>>(voicesJson()).map { (id, name) -> SpeechVoice(id, name) }
+    /** [settled]: the browser has said it has loaded its voices, or long enough has passed; until then no voices means not known yet. */
+    private fun refreshVoices(settled: Boolean = false) {
+        _voices.value = decodeVoices(voicesJson(""))
+        val spanish = decodeVoices(voicesJson(SPANISH))
+        // Some browsers have their voices as soon as the page loads, and never say so.
+        if (spanish.isNotEmpty() || settled || _voices.value.isNotEmpty() || _spanishVoices.value != null) {
+            _spanishVoices.value = spanish
+        }
     }
+
+    private fun decodeVoices(json: String): List<SpeechVoice> =
+        Json.decodeFromString<List<List<String>>>(json).map { (id, name) -> SpeechVoice(id, name) }
 
     override fun configure(settings: SpeechSettings) {
         this.settings = settings
     }
 
-    override fun speak(text: String) =
-        speakText(text, settings.ratePercent / 100.0, settings.pitchPercent / 100.0, settings.voiceId.orEmpty())
+    override fun speak(text: String, language: String?) {
+        val voiceUri = if (language == SPANISH) settings.spanishVoiceId.orEmpty() else if (language == null) settings.voiceId.orEmpty() else ""
+        // For another language the browser picks a voice by tag; with none it says nothing, never a
+        // voice for the wrong language (callers check spanishVoices first and tell the user).
+        speakText(text, settings.ratePercent / 100.0, settings.pitchPercent / 100.0, voiceUri, language.orEmpty())
+    }
+
     override fun stop() = stopSpeaking()
     override fun shutdown() = stopSpeaking()
+
+    private companion object {
+        const val VOICES_SETTLE_SECONDS = 2
+    }
 }
 
 /**
@@ -173,27 +199,41 @@ private fun playClip(clip: JsAny, volume: Double): JsAny = js(
 
 private fun stopClip(source: JsAny): Unit = js("{ try { source.stop(); } catch (e) {} }")
 
-private fun speakText(text: String, rate: Double, pitch: Double, voiceUri: String): Unit = js(
+private fun speakText(text: String, rate: Double, pitch: Double, voiceUri: String, language: String): Unit = js(
     """{
         speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = rate;
         utterance.pitch = pitch;
-        const voice = voiceUri ? speechSynthesis.getVoices().find(v => v.voiceURI === voiceUri) : null;
+        const voices = speechSynthesis.getVoices();
+        let voice = voiceUri ? voices.find(v => v.voiceURI === voiceUri) : null;
+        if (language) {
+            // Only a voice for that language: the chosen one if it is, else the first.
+            const matches = v => v.lang.toLowerCase().replace('_', '-').split('-')[0] === language;
+            if (voice && !matches(voice)) voice = null;
+            if (!voice) voice = voices.find(matches) || null;
+            if (!voice) return;
+            utterance.lang = voice.lang;
+        }
         if (voice) utterance.voice = voice;
         speechSynthesis.speak(utterance);
     }"""
 )
 
-/** The browser's voices for the page's language, as a JSON list of [voiceURI, name] pairs. */
-private fun voicesJson(): String = js(
+/**
+ * The browser's voices for [language] (the page's own language when it is empty), as a JSON list
+ * of [voiceURI, name] pairs.
+ */
+private fun voicesJson(language: String): String = js(
     """(() => {
-        const language = (navigator.language || 'en').split('-')[0].toLowerCase();
+        const wanted = language || (navigator.language || 'en').split('-')[0].toLowerCase();
         return JSON.stringify(speechSynthesis.getVoices()
-            .filter(v => v.lang.toLowerCase().startsWith(language))
+            .filter(v => v.lang.toLowerCase().replace('_', '-').split('-')[0] === wanted)
             .map(v => [v.voiceURI, v.name]));
     })()"""
 )
+
+private fun afterSeconds(seconds: Int, callback: () -> Unit): Unit = js("{ setTimeout(() => callback(), seconds * 1000); }")
 
 private fun onVoicesChanged(callback: () -> Unit): Unit = js("{ speechSynthesis.addEventListener('voiceschanged', () => callback()); }")
 

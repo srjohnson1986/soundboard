@@ -111,6 +111,12 @@ private fun BoardScreenContent(vm: BoardViewModel) {
         lastInteractionAt = Clock.System.now().toEpochMilliseconds()
     }
 
+    /** Turns Edit mode on or off from the board itself (a held tile, the banner), which counts as use. */
+    fun setEditMode(on: Boolean) {
+        recordInteraction()
+        editMode = on
+    }
+
     /** Opens [dialog], first refreshing whatever list it shows from disk. */
     fun showDialog(dialog: BoardDialog) {
         when (dialog) {
@@ -324,6 +330,11 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                         page.tiles.any { it.fileName == null && it.isPlayable(board.speakUnrecordedTilesEnabled) }
                     }
                 )
+                // Locking ends Edit mode, so this never shows locked; the check keeps it that way
+                // for the frame before that effect runs.
+                if (editMode && !editingLocked) {
+                    EditModeBanner(onTurnOff = { setEditMode(false) })
+                }
                 // Not while locked: whoever set the lock is the one to act on it.
                 if (backupReminderDue && !editingLocked) {
                     BackupReminder(onBackUp = { exportBackup(BACKUP_FILE_NAME) }, onLater = vm::snoozeBackupReminder)
@@ -339,8 +350,8 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                         globalTileBorder = globalTileBorder,
                         hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                         performanceModeEnabled = performanceModeEnabled,
-                        speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                         hideBlankTilesEnabled = hideBlankTiles,
+                        editingLocked = editingLocked,
                         onTap = { tile ->
                             onTileTap(
                                 tile.id,
@@ -348,10 +359,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                                 fromStickyRow = true
                             ) { vm.activate(tile) }
                         },
-                        onPreviewSound = { tile ->
-                            recordInteraction()
-                            vm.activate(tile)
-                        }
+                        onEditModeChange = ::setEditMode
                     )
                 }
                 HorizontalPager(
@@ -375,8 +383,8 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                             isActive = pageIndex == board.currentPageIndex,
                             hapticFeedbackEnabled = board.hapticFeedbackEnabled,
                             performanceModeEnabled = performanceModeEnabled,
-                            speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                             hideBlankTilesEnabled = hideBlankTiles,
+                            editingLocked = editingLocked,
                             globalTileOpacity = globalTileOpacity,
                             globalTileBorder = globalTileBorder,
                             landscapeLayout = board.landscapeLayout,
@@ -391,10 +399,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                                     fromStickyRow = false
                                 ) { vm.activate(tile) }
                             },
-                            onPreviewSound = { tile ->
-                                recordInteraction()
-                                vm.activate(tile)
-                            },
+                            onEditModeChange = ::setEditMode,
                             onPreviewMove = vm::previewMove,
                             onCommitOrder = vm::commitOrder,
                             onDragActiveChanged = { isDragActive = it }

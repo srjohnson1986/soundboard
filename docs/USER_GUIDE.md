@@ -48,13 +48,17 @@ What your fingers do:
   these open the editor instead, turn off **Settings → Tapping & speech →
   Speak label when there's no clip**.
 - **Tap a blank tile:** opens the editor so you can give it a sound.
-- **Press and hold a tile, then drag:** moves it. A small buzz and a slight
-  lift show the tile is picked up. As you drag, the other tiles slide over to
-  make room, and swiping between pages is paused so crossing the screen moves
-  the tile instead of turning the page. Letting go where you started leaves
-  everything as it was.
-- **Press and hold without moving:** plays the tile as a preview (outside Edit
-  mode).
+- **Press and hold a tile, then drag:** moves it, and turns Edit mode on if it
+  wasn't (see "Editing a tile"). A small buzz and a slight lift show the tile is
+  picked up. As you drag, the other tiles slide over to make room, and swiping
+  between pages is paused so crossing the screen moves the tile instead of
+  turning the page.
+- **Press and hold without moving:** turns Edit mode on, or off if it was
+  already on. Letting go never plays the tile. The same goes for a tile in the
+  sticky home row, which can't be dragged.
+
+While the board is locked (see "Caregiver lock") holding does neither: a long
+press is just a slow tap, and tiles can't be moved.
 
 To stop stray taps on empty spots from opening the editor, turn on **Settings →
 Tapping & speech → Hide blank tiles**. Blank tiles then disappear, and can't be
@@ -62,10 +66,17 @@ tapped, until you turn on Edit mode.
 
 ## Editing a tile
 
-Turn on **Edit mode** in the **☰** menu. While it's on, a small pencil shows
-on every tile, and tapping any tile opens the editor instead of playing it.
-Turn it off again to go back to normal use. Blank tiles open the editor
-whether Edit mode is on or not.
+Turn on **Edit mode** in the **☰** menu, or just press and hold a tile. While
+it's on, a small pencil shows on every tile, and tapping any tile opens the
+editor instead of playing it. Blank tiles open the editor whether Edit mode is
+on or not.
+
+A bar above the board says **Tiles won't play while Edit mode is on**, so it's
+plain why the board has gone quiet if a hold turned it on by accident. To go
+back to normal use, tap the bar, hold a tile again, or turn off the **Edit
+mode** switch in the **☰** menu. Saving or cancelling in the editor leaves Edit
+mode on, so you can go straight on to the next tile. The bar isn't shown while
+the board is locked, since locking ends Edit mode.
 
 In the editor:
 
@@ -147,9 +158,8 @@ Show mode puts a tile's words on screen for someone to read, instead of (or as
 well as) hearing them. Turn it on or off with the **Show mode** switch in the
 **☰** menu.
 
-While it's on, tapping a tile, or holding one to preview it, fills the screen
-with its words in large white text on black: its script if it has one,
-otherwise its name. A tile with a picture or emoji shows it large above the words
+While it's on, tapping a tile fills the screen with its words in large white
+text on black: its script if it has one, otherwise its name. A tile with a picture or emoji shows it large above the words
 (or on its own, when the name is hidden and there's no script), so it works for
 someone who reads symbols more easily than words. It doesn't apply to
 **Speak...** or while Edit mode is on.
@@ -265,6 +275,9 @@ accident. Tapping it locks straight away. While it's locked:
   for a new page.
 - Blank tiles, and tiles with nothing to play, are hidden, since tapping one
   would open the tile editor.
+- Tiles can't be moved, and holding one doesn't turn on Edit mode. A hold
+  works like a tap: the tile plays when you let go on it, and nothing happens
+  if your finger slides off first.
 - Tiles, page tabs, swiping between pages, Show mode and auto-return all work
   as usual.
 

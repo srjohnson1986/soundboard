@@ -34,6 +34,7 @@ import com.example.soundboard.BoardRef
 import com.example.soundboard.BoardViewModel
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LandscapeLayout
+import com.example.soundboard.model.SPANISH
 import com.example.soundboard.model.TileBorder
 import org.jetbrains.compose.resources.decodeToImageBitmap
 import kotlin.time.Clock
@@ -100,6 +101,11 @@ private fun BoardScreenContent(vm: BoardViewModel) {
     val editingLockEnabled by vm.editingLockEnabled.collectAsStateWithLifecycle()
     val speech by vm.speech.collectAsStateWithLifecycle()
     val speechVoices by vm.speechVoices.collectAsStateWithLifecycle()
+    val spanishVoices by vm.spanishVoices.collectAsStateWithLifecycle()
+    val secondLanguageOn by vm.secondLanguageOn.collectAsStateWithLifecycle()
+    val shownSubtext by vm.shownSubtext.collectAsStateWithLifecycle()
+    // The language the board is speaking besides English right now; null in English or on a board without one.
+    val activeLanguage = board.secondLanguage.takeIf { secondLanguageOn }
     var openDialog by remember { mutableStateOf<BoardDialog?>(null) }
     var editMode by remember { mutableStateOf(false) }
     var lastInteractionAt by remember { mutableLongStateOf(0L) }
@@ -309,7 +315,8 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                             vm.unlockEditing()
                         },
                         onLockNow = vm::relockEditing
-                    )
+                    ),
+                    language = LanguageSwitch(board.secondLanguage, secondLanguageOn, vm::setSecondLanguageOn)
                 )
             }
         ) { insets ->
@@ -327,8 +334,14 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                 SilentBoardWarning(
                     mediaMuted = mediaMuted,
                     speechUnavailable = speechAvailable == false && board.pages.any { page ->
-                        page.tiles.any { it.fileName == null && it.isPlayable(board.speakUnrecordedTilesEnabled) }
-                    }
+                        page.tiles.any {
+                            // A tile with Spanish text speaks it in Spanish mode, recording or not.
+                            (it.fileName == null || it.translationFor(activeLanguage) != null) &&
+                                it.isPlayable(board.speakUnrecordedTilesEnabled)
+                        }
+                    },
+                    // Known to have none: while the device is still saying what it has, it isn't a warning yet.
+                    spanishVoiceMissing = activeLanguage == SPANISH && spanishVoices?.isEmpty() == true
                 )
                 // Locking ends Edit mode, so this never shows locked; the check keeps it that way
                 // for the frame before that effect runs.
@@ -359,7 +372,8 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                                 fromStickyRow = true
                             ) { vm.activate(tile) }
                         },
-                        onEditModeChange = ::setEditMode
+                        onEditModeChange = ::setEditMode,
+                        activeLanguage = activeLanguage
                     )
                 }
                 HorizontalPager(
@@ -402,7 +416,8 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                             onEditModeChange = ::setEditMode,
                             onPreviewMove = vm::previewMove,
                             onCommitOrder = vm::commitOrder,
-                            onDragActiveChanged = { isDragActive = it }
+                            onDragActiveChanged = { isDragActive = it },
+                            activeLanguage = activeLanguage
                         )
                     }
                 }
@@ -413,6 +428,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                 text = text,
                 icon = shownIcon,
                 showMode = showMode,
+                subtext = shownSubtext,
                 labelStyle = board.labelStyle,
                 onDismiss = {
                     recordInteraction()
@@ -434,6 +450,8 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                 tile = editing,
                 isRecording = isRecording,
                 speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
+                secondLanguage = board.secondLanguage,
+                onPlaySecondLanguage = vm::speakSecondLanguage,
                 onPickSound = vm::importSound,
                 onPickImage = vm::importTileImage,
                 onClear = { vm.clearTile(editing.id) },
@@ -452,7 +470,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
             )
         }
 
-        BoardDialog.Speak -> SpeakDialog(onSpeak = vm::speakAdHoc, onDismiss = ::closeDialog)
+        BoardDialog.Speak -> SpeakDialog(onSpeak = vm::speakAdHoc, onDismiss = ::closeDialog, spokenLanguage = activeLanguage)
 
         BoardDialog.Settings -> SettingsDialog(
             board = board,
@@ -461,6 +479,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
             recordingTrimEndMillis = recordingTrimEndMillis,
             speech = speech,
             voices = speechVoices,
+            spanishVoices = spanishVoices,
             onOpenGroup = { showDialog(BoardDialog.SettingsGroupDetail(it)) },
             onDismiss = ::closeDialog
         )
@@ -473,6 +492,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
             recordingTrimEndMillis = recordingTrimEndMillis,
             speech = speech,
             voices = speechVoices,
+            spanishVoices = spanishVoices,
             actions = vm,
             onPickBackgroundImage = pickBackgroundImage,
             onBack = { showDialog(BoardDialog.Settings) },

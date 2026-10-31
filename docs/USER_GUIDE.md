@@ -2,8 +2,9 @@
 
 ## Finding your way around
 
-The top bar shows the app's name ("Soundboard"), a row of page tabs, and the
-**☰** menu. In landscape all three share one row to leave more room for tiles.
+The top bar shows the app's name ("Soundboard"), a row of page tabs, the
+**EN / ES** switch (see "Speaking Spanish") and the **☰** menu. In landscape the
+name, tabs and menu share one row to leave more room for tiles.
 
 The board you're using is named in the **☰** menu's first item, **Rename
 board (…)**. On a fresh install that's "Jeremy Draft Care Board", the
@@ -20,6 +21,7 @@ The **☰** menu, top to bottom:
 - **Edit mode:** a switch (see "Editing a tile")
 - **Show mode:** a switch (see "Show mode")
 - **Speak...:** type any phrase and have it read aloud (see "Speaking")
+  — in Spanish when the switch is on **ES** (see "Speaking Spanish")
 - **Settings** (see "Settings")
 - **Page options (…):** for the page you're on (see "Pages")
 - **Backup:**
@@ -110,6 +112,10 @@ In the editor:
 - **What to say:** the words spoken aloud, if they should differ from the
   short name on the tile (e.g. the name "Water", saying "Could I have a
   glass of water, please?"). Leave it blank to speak the name.
+- **Spanish:** what the tile says when the switch is on **ES** (see "Speaking
+  Spanish"). Leave it blank for a tile that has no Spanish. **Hear the
+  Spanish** says it in the Spanish voice, whichever way the switch is. Only
+  shown while Settings → Voice → **Speak Spanish too** is on.
 - **Preview / Play clip:** hear the tile without closing the editor.
 - **Record:** records from the microphone instead of picking a file:
   - The first time, the app asks for microphone permission.
@@ -122,7 +128,7 @@ In the editor:
 - **Color:** eight swatches. The first means "no color of its own".
 - **Override opacity / Override border:** gives this one tile its own
   see-through level or outline, instead of the page's or board's.
-- **Clear tile:** removes the sound, name, speech, emoji and picture, turning it
+- **Clear tile:** removes the sound, name, speech, Spanish, emoji and picture, turning it
   back into a blank **+** tile. Only shown on a tile that has a sound, speaks or
   shows a picture or emoji.
 
@@ -137,6 +143,39 @@ is the exception: it clears the tile straight away.
 tap **Speak** to hear it read aloud. It's for something no tile covers, and
 it doesn't change the board.
 
+## Speaking Spanish
+
+For when you read and speak English but need to say something in Spanish, say to
+a Spanish-speaking caregiver. The board's names and the app's own text stay in
+English; only what the board *says* changes.
+
+- **Give a tile its Spanish.** Open its editor and fill in the **Spanish** field
+  (see "Editing a tile"). The Spanish is saved on the tile, so it works with no
+  internet and is part of a board's backup, and of a saved board.
+- **Switch to Spanish.** Tap **ES** in the top bar; tap **EN** to go back. It is
+  saved on this device (so it's still on when you reopen the app) and works while
+  the board is locked, since it's for everyday use.
+- **In Spanish mode** a tile with Spanish text speaks it in the Spanish voice,
+  even if the tile has an English recording. A tile with no Spanish yet plays
+  exactly as it does in English, and wears a small **no spanish** marker so you
+  can see which ones will still come out in English. **Speak...** also speaks
+  what you type in the Spanish voice, so type it in Spanish.
+- **Show mode in Spanish** puts the Spanish in large text and the tile's English
+  small underneath, so you can show someone the screen as well.
+- **The Spanish voice** is chosen in **Settings → Voice → Spanish voice**,
+  apart from the English voice, with its own **Preview Spanish**. Speed and pitch
+  are shared. Turn **Speak Spanish too** off in the same place to hide the switch
+  and the Spanish fields on a board that doesn't need them.
+
+**If the device has no Spanish voice**, a red bar says so for as long as the switch
+is on **ES**: "This device has no Spanish voice...". The board then speaks its
+English instead, and never reads Spanish in an English voice. Install one in the
+device's text-to-speech settings (on Android: Settings → Accessibility →
+Text-to-speech output, the engine's settings, install voice data; in a browser
+the voices come with the browser or the computer; on an iPhone: Settings →
+Accessibility → Spoken Content → Voices). Only voices that work without internet
+are used on Android, so the board doesn't go quiet offline.
+
 ## When the board can't be heard
 
 A red bar above the board says why taps are silent, for as long as they are:
@@ -147,7 +186,11 @@ A red bar above the board says why taps are silent, for as long as they are:
   Check the phone's text-to-speech settings (Settings → Accessibility →
   Text-to-speech output), and that a voice for your language is downloaded if
   the phone will be used without internet. The bar only shows when the board
-  has tiles that speak, and goes away once speech works again.
+  has tiles that speak, and goes away once speech works again. With the switch
+  on **ES** it also counts tiles that have Spanish, since those speak whatever
+  their recording.
+- **This device has no Spanish voice**: shown with the switch on **ES** (see
+  "Speaking Spanish").
 
 The web version can't read the computer's volume, so it only shows the second
 one, when the browser can't speak at all.
@@ -177,6 +220,9 @@ Closing the text puts you back exactly where you were.
 
 The timer and tap to close can't both be off, so the text can always be
 closed. The **Back** button always closes it too.
+
+With the switch on **ES** a tile that has Spanish shows the Spanish large, with
+its English small underneath (see "Speaking Spanish").
 
 ## Pages
 
@@ -270,7 +316,7 @@ accident. Tapping it locks straight away. While it's locked:
 
 - The **☰** menu has only **Show mode**, **Speak...** and **Hold to unlock**.
   Edit mode, Settings, switching or opening boards, Page options and backups
-  are hidden.
+  are hidden. The **EN / ES** switch stays.
 - Long-pressing a page tab doesn't open Page options, and there's no **+** tab
   for a new page.
 - Blank tiles, and tiles with nothing to play, are hidden, since tapping one
@@ -319,6 +365,9 @@ to return to the list or **Done** to close Settings.
     doesn't go quiet offline.
   - Speed, from Slowest to Fastest, and Pitch: Lower, Normal or Higher
   - **Preview** says a sample sentence the way the board will
+  - **Speak Spanish too:** the **EN / ES** switch and each tile's Spanish field
+    (on the board; see "Speaking Spanish"), and **Spanish voice** with its own
+    **Preview Spanish**, which belong to the device
 - **Screen:**
   - Keep the screen from turning off while the board is open
   - Performance mode: turns off shadows, tap ripples and similar effects
@@ -331,7 +380,9 @@ to return to the list or **Done** to close Settings.
 
 Everything except Voice, Performance mode, Show mode and Recording is saved
 with the board, so switching boards switches these too. Those four belong to
-the device.
+the device. (In Voice, the voices, speed and pitch belong to the device;
+**Speak Spanish too** and each tile's Spanish are on the board. Whether the
+switch is on **ES** is the device's too.)
 
 ## Label text
 
@@ -391,8 +442,8 @@ can, and let whoever imports it record the rest.
 ## Backup
 
 **Export backup** and **Import backup** (in the **☰** menu) save or restore
-the whole board as a single zip file. The backup includes every page, tile,
-setting, sound, tile picture and background picture. Unlike a saved board, it carries its
+the whole board as a single zip file. The backup includes every page, tile
+(with its Spanish), setting, sound, tile picture and background picture. Unlike a saved board, it carries its
 own copy of every sound, so it survives reinstalling the app or moving to a
 new device.
 

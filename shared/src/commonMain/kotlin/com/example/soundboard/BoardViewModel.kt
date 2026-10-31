@@ -21,6 +21,7 @@ import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.RowHeight
+import com.example.soundboard.model.SPANISH
 import com.example.soundboard.model.ShowModeSettings
 import com.example.soundboard.model.SpeechSettings
 import com.example.soundboard.model.ThemeMode
@@ -79,6 +80,28 @@ class BoardViewModel(
     /** The voices Settings can offer. See [Speaker.voices]. */
     val speechVoices: StateFlow<List<SpeechVoice>> get() = speaker.voices
 
+    /** The Spanish voices Settings can offer; null until the device has said, empty if it has none. See [Speaker.spanishVoices]. */
+    val spanishVoices: StateFlow<List<SpeechVoice>?> get() = speaker.spanishVoices
+
+    /** Device-local, not part of [Board] — see [DevicePreferences.secondLanguageActive]. */
+    private val _secondLanguageOn = MutableStateFlow(devicePrefs.secondLanguageActive)
+
+    /** Whether the EN / ES switch is on ES. It only has an effect while the board has a second language ([activeLanguage]). */
+    val secondLanguageOn: StateFlow<Boolean> = _secondLanguageOn.asStateFlow()
+
+    /** Turns the board's second language on (the switch on ES) or off (EN), on this device. Allowed while locked. */
+    fun setSecondLanguageOn(on: Boolean) {
+        devicePrefs.secondLanguageActive = on
+        _secondLanguageOn.value = on
+    }
+
+    /** The language the board is speaking right now besides English: the second language if the switch is on ES, else null. */
+    fun activeLanguage(): String? = _board.value.secondLanguage.takeIf { _secondLanguageOn.value }
+
+    /** True when the board is to speak [language] but the device is known to have no voice for it. */
+    private fun voiceMissingFor(language: String): Boolean =
+        language == SPANISH && speaker.spanishVoices.value?.isEmpty() == true
+
     init {
         speaker.configure(_speech.value)
     }
@@ -132,6 +155,10 @@ class BoardViewModel(
     private val _shownText = MutableStateFlow<String?>(null)
     val shownText: StateFlow<String?> = _shownText.asStateFlow()
 
+    /** The English words under the Spanish ones on the Show mode screen (#331); empty when there is nothing to put under them. */
+    private val _shownSubtext = MutableStateFlow("")
+    val shownSubtext: StateFlow<String> = _shownSubtext.asStateFlow()
+
     /** The tile whose picture or emoji Show mode has on screen with [shownText] (which is empty if it has no words); null if it has none. */
     private val _shownIcon = MutableStateFlow<Tile?>(null)
     val shownIcon: StateFlow<Tile?> = _shownIcon.asStateFlow()
@@ -176,6 +203,15 @@ class BoardViewModel(
     fun play(tile: Tile) {
         if (!tile.isPlayable(_board.value.speakUnrecordedTilesEnabled)) return
         mediaVolume.refresh()
+        // In Spanish mode a tile with Spanish text speaks it, even over an English recording
+        // (#331). With no Spanish voice it plays as in English, and the board says so on screen
+        // (SilentBoardWarning); the Spanish is never spoken in an English voice.
+        val language = activeLanguage()
+        val translation = tile.translationFor(language)
+        if (language != null && translation != null && !voiceMissingFor(language)) {
+            speaker.speak(translation, language)
+            return
+        }
         val name = tile.fileName
         if (name != null) player.play(name, tile.volume) else speaker.speak(tile.speechText)
     }
@@ -190,9 +226,13 @@ class BoardViewModel(
         refreshBackupReminder()
         if (!tile.isPlayable(_board.value.speakUnrecordedTilesEnabled)) return
         val showMode = _showMode.value
-        val text = tile.shownWords
+        // In Spanish mode the Spanish is the big text and the English sits small underneath (#331).
+        val english = tile.shownWords
+        val translation = tile.translationFor(activeLanguage())?.trim()
+        val text = translation ?: english
         if (showMode.enabled && (text.isNotEmpty() || tile.hasIcon)) {
             _shownText.value = text
+            _shownSubtext.value = if (translation != null && english != translation) english else ""
             _shownIcon.value = tile.takeIf { it.hasIcon }
             if (showMode.muteSounds) return
         }
@@ -202,12 +242,29 @@ class BoardViewModel(
     /** Closes the Show mode text screen. Whatever it was playing carries on to the end. */
     fun dismissShownText() {
         _shownText.value = null
+        _shownSubtext.value = ""
         _shownIcon.value = null
     }
 
     /** Speaks arbitrary text not tied to any tile — for a one-off phrase no pad covers. */
     fun speakAdHoc(text: String) {
-        speaker.speak(text)
+        // In Spanish mode what is typed is Spanish (#331); translating it is up to whoever types.
+        val language = activeLanguage()
+        if (language != null) speakIn(text, language) else speaker.speak(text)
+    }
+
+    /** Speaks [text] in the board's second language whatever the switch says, to hear a tile's Spanish while editing it. */
+    fun speakSecondLanguage(text: String) {
+        val language = _board.value.secondLanguage ?: return
+        speakIn(text, language)
+    }
+
+    private fun speakIn(text: String, language: String) {
+        if (voiceMissingFor(language)) {
+            _message.value = NO_SPANISH_VOICE_MESSAGE
+        } else {
+            speaker.speak(text, language)
+        }
     }
 
     // The tile editors below find their tile by id on whichever page holds it (see
@@ -287,6 +344,7 @@ class BoardViewModel(
                 id = current.id,
                 label = edited.label.trim(),
                 emoji = edited.emoji?.trim()?.ifBlank { null },
+                translations = edited.translations.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
                 ttsScript = edited.ttsScript?.trim()?.ifBlank { null },
                 volume = edited.volume.coerceIn(0f, 1f),
                 opacity = edited.opacity?.coerceIn(0f, 1f)
@@ -369,7 +427,7 @@ class BoardViewModel(
     }
 
     fun clearTile(tileId: String) = updateTile(tileId) {
-        it.copy(label = "", fileName = null, speakWhenNoSound = false, emoji = null, imageFileName = null, showLabel = true)
+        it.copy(label = "", fileName = null, speakWhenNoSound = false, emoji = null, imageFileName = null, showLabel = true, translations = emptyMap())
     }
 
     /** Detaches a tile's sound without touching its label or [Tile.speakWhenNoSound]. */
@@ -477,6 +535,15 @@ class BoardViewModel(
     override fun setSpeechPitchPercent(value: Int) = updateSpeech { it.copy(pitchPercent = value) }
 
     override fun previewSpeech() = speaker.speak(SPEECH_PREVIEW)
+
+    override fun setSpanishVoice(voiceId: String?) = updateSpeech { it.copy(spanishVoiceId = voiceId) }
+
+    override fun previewSpanishSpeech() = speakIn(SPANISH_SPEECH_PREVIEW, SPANISH)
+
+    /** Turns the second language on for the board, or off, which hides the switch and the Spanish fields. */
+    override fun setSecondLanguageEnabled(value: Boolean) {
+        commit(_board.value.copy(secondLanguage = if (value) SPANISH else null))
+    }
 
     private fun updateSpeech(transform: (SpeechSettings) -> SpeechSettings) {
         devicePrefs.speech = transform(_speech.value)
@@ -907,6 +974,12 @@ class BoardViewModel(
 
         /** What Settings' Preview button says in the chosen voice. */
         const val SPEECH_PREVIEW = "Hello. This is how the board sounds."
+
+        /** What Settings' Spanish Preview button says in the Spanish voice. */
+        const val SPANISH_SPEECH_PREVIEW = "Hola. As\u00ed suena el tablero."
+
+        /** Shown when something is to be said in Spanish and the device has no Spanish voice. */
+        const val NO_SPANISH_VOICE_MESSAGE = "This device has no Spanish voice. Install one in the text-to-speech settings."
 
         /** Bundled in every build (src/main/assets/); see [BoardRepository.importFromAsset]. */
         private const val JEREMY_BOARD_ASSET = "jeremy-care-board.zip"

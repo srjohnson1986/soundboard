@@ -58,6 +58,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.zIndex
 import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
@@ -65,6 +67,7 @@ import com.example.soundboard.model.Page
 import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
+import com.example.soundboard.model.languageName
 import kotlin.math.roundToInt
 
 /** Horizontal padding on each side of a page's grid (and the pinned row above it). */
@@ -146,7 +149,8 @@ internal fun PinnedRow(
     hideBlankTilesEnabled: Boolean,
     editingLocked: Boolean,
     onTap: (Tile) -> Unit,
-    onEditModeChange: (Boolean) -> Unit
+    onEditModeChange: (Boolean) -> Unit,
+    activeLanguage: String? = null
 ) {
     val haptics = LocalHapticFeedback.current
     val columns = homePage.columns
@@ -177,6 +181,7 @@ internal fun PinnedRow(
                 border = homePage.borderFor(tile, globalTileBorder),
                 performanceModeEnabled = performanceModeEnabled,
                 hidden = !tile.hasSound && hideBlankTilesEnabled && !editMode,
+                activeLanguage = activeLanguage,
                 modifier = Modifier.weight(1f),
                 onTap = { onTap(tile) },
                 // Holding a tile turns Edit mode on or off (#328), as holding one in PageGrid
@@ -235,7 +240,8 @@ internal fun PageGrid(
     onEditModeChange: (Boolean) -> Unit,
     onPreviewMove: (Int, Int) -> Unit,
     onCommitOrder: () -> Unit,
-    onDragActiveChanged: (Boolean) -> Unit
+    onDragActiveChanged: (Boolean) -> Unit,
+    activeLanguage: String? = null
 ) {
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
@@ -413,6 +419,7 @@ internal fun PageGrid(
                         border = page.borderFor(tile, globalTileBorder),
                         performanceModeEnabled = performanceModeEnabled,
                         hidden = !tile.hasSound && hideBlankTilesEnabled && !editMode,
+                        activeLanguage = activeLanguage,
                         modifier = Modifier.weight(1f).then(tileDragModifier(index, tile)),
                         onTap = { tapUnlessHeld(tile) }
                     )
@@ -444,6 +451,7 @@ internal fun PageGrid(
                     border = page.borderFor(tile, globalTileBorder),
                     performanceModeEnabled = performanceModeEnabled,
                     hidden = !tile.hasSound && hideBlankTilesEnabled && !editMode,
+                    activeLanguage = activeLanguage,
                     modifier = Modifier
                         .then(if (isDragged) Modifier else Modifier.animateItem())
                         .then(tileDragModifier(index, tile)),
@@ -465,6 +473,9 @@ private fun TileCard(
     border: TileBorder,
     performanceModeEnabled: Boolean,
     hidden: Boolean = false,
+    // The language the board is speaking besides English, when the switch is on ES (#331): a tile
+    // with something to say and nothing in it gets a "no Spanish" marker, as it still speaks English.
+    activeLanguage: String? = null,
     // A fixed row height, overriding [aspectRatio] — rows are capped by the row height
     // setting, and landscape's page grid keeps them at their portrait height even though
     // its tiles are a different width.
@@ -490,6 +501,9 @@ private fun TileCard(
     // BoardRepository.sanitizeMissingSounds) — flag that distinctly from a
     // plain blank tile so it reads as "still needs recording," not "empty."
     val needsRecording = !tile.hasSound && tile.label.isNotBlank()
+    // The "no Spanish" marker sits along the bottom edge, so the name keeps clear of it.
+    val noTranslation = tile.lacksTranslation(activeLanguage)
+    val markerClearance = if (noTranslation) NO_TRANSLATION_MARKER_CLEARANCE else 0.dp
     val customColor = tile.colorArgb?.let { Color(it) }
     val defaultColor = pageColor.takeIf { filled }
     val containerColor = customColor ?: defaultColor ?: if (filled) {
@@ -533,7 +547,7 @@ private fun TileCard(
         ) {
             if (tile.hasIcon) {
                 Column(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().padding(bottom = markerClearance),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) { TileIcon(tile, contentColor) }
@@ -557,7 +571,7 @@ private fun TileCard(
                     overflow = TextOverflow.Ellipsis,
                     style = labelStyles.forText(tileDisplayText(tile, allCaps)),
                     color = contentColor,
-                    modifier = Modifier.align(Alignment.Center)
+                    modifier = Modifier.align(Alignment.Center).padding(bottom = markerClearance)
                 )
             }
             if (editMode) {
@@ -569,6 +583,17 @@ private fun TileCard(
                         .align(Alignment.TopEnd)
                         .padding(2.dp)
                         .size(16.dp)
+                )
+            }
+            if (noTranslation) {
+                Text(
+                    "no ${languageName(activeLanguage.orEmpty()).lowercase()}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = NO_TRANSLATION_MARKER_SP.sp),
+                    color = contentColor,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(2.dp)
+                        .semantics { contentDescription = "No ${languageName(activeLanguage.orEmpty())}" }
                 )
             }
             if (needsRecording) {
@@ -603,3 +628,8 @@ private fun textColorFor(background: Color): Color {
     val contrastWithWhite = 1.05f / (luminance + 0.05f)
     return if (contrastWithBlack >= contrastWithWhite) Color.Black else Color.White
 }
+
+/** The size of the "no Spanish" marker on a tile: small, so it never competes with the name (#331). */
+private const val NO_TRANSLATION_MARKER_SP = 9
+
+private val NO_TRANSLATION_MARKER_CLEARANCE = 12.dp

@@ -30,7 +30,9 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
+import com.example.soundboard.BoardViewModel
 import com.example.soundboard.audio.SpeechVoice
+import com.example.soundboard.audio.spokenOf
 import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelFont
@@ -317,6 +319,49 @@ class DialogsUiTest : BoardUiTest() {
     }
 
     @Test
+    fun theVoiceGroupPicksASpanishVoiceAndPreviewsItInSpanish() = runUiTest {
+        val app = launchBoard(oneTile())
+        app.speaker.spanishVoices.value = listOf(SpeechVoice("es1", "Spanish (Mexico), voice 1"), SpeechVoice("es2", "Spanish (Spain), voice 1"))
+
+        openSettingsGroup("Voice")
+        pickOption("Spanish voice", "Spanish (Spain), voice 1")
+        onNodeWithText("Preview Spanish").performScrollTo().performClick()
+
+        waitUntil(timeoutMillis = 2_000) { app.speaker.spokenIn.isNotEmpty() }
+        assertEquals(SpeechSettings(spanishVoiceId = "es2"), app.devicePrefs.speech)
+        assertEquals(spokenOf(BoardViewModel.SPANISH_SPEECH_PREVIEW to "es"), app.speaker.spokenIn)
+        onNodeWithText("Back").performClick()
+        onNodeWithText("Spanish: Spanish (Spain), voice 1", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun theVoiceGroupSaysWhenTheDeviceHasNoSpanishVoice() = runUiTest {
+        val app = launchBoard(oneTile())
+        app.speaker.spanishVoices.value = emptyList()
+
+        openSettingsGroup("Voice")
+        onNodeWithText("This device has no Spanish voice that works offline", substring = true).performScrollTo().assertIsDisplayed()
+        onNodeWithText("Preview Spanish").performScrollTo().performClick()
+
+        // It says so, rather than saying nothing or speaking Spanish in an English voice.
+        assertTrue(app.speaker.spokenIn.isEmpty())
+        onNodeWithText(BoardViewModel.NO_SPANISH_VOICE_MESSAGE).assertIsDisplayed()
+    }
+
+    @Test
+    fun theVoiceGroupTurnsSpanishOffAndOn() = runUiTest {
+        val app = launchBoard(oneTile())
+
+        openSettingsGroup("Voice")
+        onNodeWithText("Speak Spanish too").performScrollTo().performClick()
+
+        waitUntil(timeoutMillis = 2_000) { app.vm.board.value.secondLanguage == null }
+        onNodeWithText("Spanish voice").assertDoesNotExist()
+        onNodeWithText("Speak Spanish too").performScrollTo().performClick()
+        waitUntil(timeoutMillis = 2_000) { app.vm.board.value.secondLanguage == "es" }
+    }
+
+    @Test
     fun theVoiceGroupPicksAVoiceSpeedAndPitchAndPreviewsThem() = runUiTest {
         val app = launchBoard(oneTile())
         app.speaker.voices.value = listOf(SpeechVoice("v1", "English (United States), voice 1"), SpeechVoice("v2", "English (United States), voice 2"))
@@ -331,7 +376,7 @@ class DialogsUiTest : BoardUiTest() {
         assertEquals(SpeechSettings(voiceId = "v2", ratePercent = 75, pitchPercent = 125), app.speaker.configured)
         assertEquals(SpeechSettings(voiceId = "v2", ratePercent = 75, pitchPercent = 125), app.devicePrefs.speech)
         onNodeWithText("Back").performClick()
-        onNodeWithText("English (United States), voice 2 · slow speed, higher pitch").performScrollTo().assertIsDisplayed()
+        onNodeWithText("English (United States), voice 2 · slow speed, higher pitch · Spanish: default voice").performScrollTo().assertIsDisplayed()
     }
 
     @Test

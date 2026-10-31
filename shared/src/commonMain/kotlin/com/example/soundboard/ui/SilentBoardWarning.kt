@@ -23,12 +23,13 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Says why taps can't be heard, above the board, for as long as it's so (#248): the media
- * volume is off, or the device's speech isn't working and the board has tiles that speak.
+ * volume is off, the device's speech isn't working and the board has tiles that speak, or the
+ * board is set to Spanish and the device has no Spanish voice (#331).
  * Otherwise a tap on a silent board just does nothing, and whoever set it up can't tell why.
  */
 @Composable
-internal fun SilentBoardWarning(mediaMuted: Boolean, speechUnavailable: Boolean) {
-    if (!mediaMuted && !speechUnavailable) return
+internal fun SilentBoardWarning(mediaMuted: Boolean, speechUnavailable: Boolean, spanishVoiceMissing: Boolean = false) {
+    if (!mediaMuted && !speechUnavailable && !spanishVoiceMissing) return
     Column(modifier = Modifier.fillMaxWidth()) {
         if (mediaMuted) {
             WarningRow(Icons.AutoMirrored.Filled.VolumeOff, "The media volume is off, so the board can't be heard. Turn the volume up.")
@@ -38,6 +39,15 @@ internal fun SilentBoardWarning(mediaMuted: Boolean, speechUnavailable: Boolean)
                 Icons.Filled.VoiceOverOff,
                 "Speech isn't working on this device, so tiles without a recording are silent. " +
                     "Check the text-to-speech settings."
+            )
+        }
+        if (spanishVoiceMissing) {
+            // Spanish mode is on, so tiles are meant to speak Spanish (#331). Rather than say it in an
+            // English voice, the board speaks its English; this is the explanation.
+            WarningRow(
+                Icons.Filled.VoiceOverOff,
+                "This device has no Spanish voice, so the board can't speak Spanish and is speaking English. " +
+                    "Install a Spanish voice in the text-to-speech settings."
             )
         }
     }

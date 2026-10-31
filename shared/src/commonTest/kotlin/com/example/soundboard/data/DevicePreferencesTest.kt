@@ -5,6 +5,7 @@ import com.example.soundboard.model.SpeechSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Each "fresh instance" reads the same store, the way the next launch reads the last one's. */
@@ -63,6 +64,27 @@ class DevicePreferencesTest {
         prefs().speech = SpeechSettings(voiceId = "en-us-x-iob-local", ratePercent = 75, pitchPercent = 125)
 
         assertEquals(SpeechSettings(voiceId = "en-us-x-iob-local", ratePercent = 75, pitchPercent = 125), prefs().speech)
+    }
+
+    @Test
+    fun `the Spanish voice is kept apart from the English one and persists`() {
+        assertNull(prefs().speech.spanishVoiceId)
+
+        prefs().speech = SpeechSettings(voiceId = "en-1", spanishVoiceId = "es-mx-1")
+
+        assertEquals(SpeechSettings(voiceId = "en-1", spanishVoiceId = "es-mx-1"), prefs().speech)
+
+        prefs().speech = prefs().speech.copy(spanishVoiceId = null)
+        assertEquals(SpeechSettings(voiceId = "en-1"), prefs().speech)
+    }
+
+    @Test
+    fun `the EN or ES switch is off by default and persists`() {
+        assertFalse(prefs().secondLanguageActive)
+
+        prefs().secondLanguageActive = true
+
+        assertTrue(prefs().secondLanguageActive)
     }
 
     @Test

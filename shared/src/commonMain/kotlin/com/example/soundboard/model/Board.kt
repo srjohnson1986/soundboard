@@ -374,6 +374,14 @@ data class Board(
     val iconFileNames: Set<String>
         get() = pages.flatMap { it.tiles }.mapNotNull { it.imageFileName }.toSet()
 
+    /**
+     * The tiles on any page that have words to say but nothing in [language] yet: the ones
+     * Settings' "Translate all tiles" fills in (#332). A tile with no words (a recording
+     * with no name) has nothing to translate.
+     */
+    fun untranslatedTiles(language: String): List<Tile> =
+        pages.flatMap { it.tiles }.filter { it.speechText.isNotBlank() && it.translationFor(language) == null }
+
     /** Every page brought in line with its layout rules; see [Page.normalized]. */
     fun normalized(): Board = copy(pages = pages.map { it.normalized() })
 

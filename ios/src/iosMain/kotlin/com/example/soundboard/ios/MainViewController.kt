@@ -43,7 +43,8 @@ fun MainViewController(): UIViewController {
         speaker = IosSpeaker(),
         devicePrefs = DevicePreferences(UserDefaultsKeyValueStore("soundboard.")),
         recentBoardsRepo = RecentBoardsRepository(files),
-        mediaVolume = IosMediaVolume()
+        mediaVolume = IosMediaVolume(),
+        translator = IosTranslator()
     )
     return ComposeUIViewController {
         val board by vm.board.collectAsState()

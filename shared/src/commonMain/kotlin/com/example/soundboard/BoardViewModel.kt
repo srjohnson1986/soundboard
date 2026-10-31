@@ -22,6 +22,10 @@ import com.example.soundboard.model.LabelStyle
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.SPANISH
+import com.example.soundboard.model.languageName
+import com.example.soundboard.translate.Translator
+import com.example.soundboard.translate.TranslatorStatus
+import com.example.soundboard.translate.UnavailableTranslator
 import com.example.soundboard.model.ShowModeSettings
 import com.example.soundboard.model.SpeechSettings
 import com.example.soundboard.model.ThemeMode
@@ -51,7 +55,8 @@ class BoardViewModel(
     private val ioDispatcher: CoroutineDispatcher = defaultIoDispatcher,
     /** Milliseconds since the epoch, for when a board was last used; a parameter so tests can pin it. */
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
-    private val mediaVolume: MediaVolume = UnknownMediaVolume
+    private val mediaVolume: MediaVolume = UnknownMediaVolume,
+    private val translator: Translator = UnavailableTranslator("this build has no translator.")
 ) : ViewModel(), BoardSettingsActions {
 
     private val _board = MutableStateFlow(Board())
@@ -82,6 +87,103 @@ class BoardViewModel(
 
     /** The Spanish voices Settings can offer; null until the device has said, empty if it has none. See [Speaker.spanishVoices]. */
     val spanishVoices: StateFlow<List<SpeechVoice>?> get() = speaker.spanishVoices
+
+    /** Whether the device can translate, for the screen to explain; see [Translator.status]. */
+    val translatorStatus: StateFlow<TranslatorStatus> get() = translator.status
+
+    /** How far "Translate all tiles" has got, or null when it isn't running. */
+    private val _translateProgress = MutableStateFlow<TranslateProgress?>(null)
+    val translateProgress: StateFlow<TranslateProgress?> = _translateProgress.asStateFlow()
+
+    /**
+     * Suggests the Spanish for [english] (the tile editor's Suggest, #332), handing the result to
+     * [onResult], or null if it couldn't ([translatorStatus] says why). It only fills the editor's
+     * Spanish field, for the user to edit; the saved text is what plays.
+     */
+    fun suggestTranslation(english: String, onResult: (String?) -> Unit) {
+        val language = _board.value.secondLanguage
+        if (language == null || english.isBlank()) {
+            onResult(null)
+            return
+        }
+        viewModelScope.launch { onResult(translator.translate(english.trim(), language)?.trim()?.ifBlank { null }) }
+    }
+
+    /**
+     * Translates what the Speak... box holds, for its live Spanish preview. Null if translating
+     * isn't ready (it never starts a download by itself) or fails.
+     */
+    suspend fun translateForPreview(text: String): String? {
+        val language = _board.value.secondLanguage ?: return null
+        if (text.isBlank() || translator.status.value != TranslatorStatus.Ready) return null
+        return translator.translate(text.trim(), language)?.trim()?.ifBlank { null }
+    }
+
+    override fun prepareTranslator() {
+        val language = _board.value.secondLanguage ?: return
+        viewModelScope.launch { translator.prepare(language) }
+    }
+
+    /**
+     * Fills in the Spanish of every tile without any by translating its words, one after another
+     * (translators work one at a time), then saves them all in one edit. A tile that got Spanish
+     * meanwhile is left alone. Reports how many it did, and why it stopped if it did.
+     */
+    override fun translateAllTiles() {
+        val language = _board.value.secondLanguage ?: return
+        if (_translateProgress.value != null) return
+        val targets = _board.value.untranslatedTiles(language)
+        if (targets.isEmpty()) {
+            _message.value = "Every tile already has ${languageName(language)}."
+            return
+        }
+        viewModelScope.launch {
+            val translated = mutableMapOf<String, String>()
+            var failed = 0
+            _translateProgress.value = TranslateProgress(0, targets.size)
+            for ((index, tile) in targets.withIndex()) {
+                val spanish = translator.translate(tile.speechText.trim(), language)?.trim()
+                if (spanish.isNullOrBlank()) {
+                    failed++
+                    // A model that won't download or a translator that's gone fails every tile the same way.
+                    val status = translator.status.value
+                    if (status is TranslatorStatus.Failed || status is TranslatorStatus.Unavailable) break
+                } else {
+                    translated[tile.id] = spanish
+                }
+                _translateProgress.value = TranslateProgress(index + 1, targets.size)
+            }
+            _translateProgress.value = null
+            if (translated.isNotEmpty()) {
+                commit(
+                    _board.value.copy(
+                        pages = _board.value.pages.map { page ->
+                            page.copy(
+                                tiles = page.tiles.map { tile ->
+                                    val spanish = translated[tile.id]
+                                    if (spanish != null && tile.translationFor(language) == null) tile.withTranslation(language, spanish) else tile
+                                }
+                            )
+                        }
+                    )
+                )
+            }
+            val skipped = targets.size - translated.size - failed
+            _message.value = buildString {
+                append(
+                    when (translated.size) {
+                        0 -> "No tiles were translated."
+                        1 -> "Added ${languageName(language)} to 1 tile."
+                        else -> "Added ${languageName(language)} to ${translated.size} tiles."
+                    }
+                )
+                if (failed > 0) append(" $failed couldn't be translated.")
+                if (skipped > 0) append(" Stopped with $skipped left.")
+                (translator.status.value as? TranslatorStatus.Failed)?.let { append(" ${it.message}") }
+                (translator.status.value as? TranslatorStatus.Unavailable)?.let { append(" ${it.reason}") }
+            }
+        }
+    }
 
     /** Device-local, not part of [Board] — see [DevicePreferences.secondLanguageActive]. */
     private val _secondLanguageOn = MutableStateFlow(devicePrefs.secondLanguageActive)
@@ -1016,6 +1118,9 @@ sealed interface OriginalSound {
 
 /** One entry in the title bar's quick-switch dropdown — see [BoardViewModel.recentBoards]. */
 data class RecentBoardItem(val ref: BoardRef, val label: String, val usedAt: Long)
+
+/** How far [BoardViewModel.translateAllTiles] has got: [done] of [total] tiles. */
+data class TranslateProgress(val done: Int, val total: Int)
 
 /** One unused sound file found by [BoardViewModel.refreshStrayClips]. */
 data class StrayClip(

@@ -113,9 +113,11 @@ In the editor:
   short name on the tile (e.g. the name "Water", saying "Could I have a
   glass of water, please?"). Leave it blank to speak the name.
 - **Spanish:** what the tile says when the switch is on **ES** (see "Speaking
-  Spanish"). Leave it blank for a tile that has no Spanish. **Hear the
-  Spanish** says it in the Spanish voice, whichever way the switch is. Only
-  shown while Settings → Voice → **Speak Spanish too** is on.
+  Spanish"). Leave it blank for a tile that has no Spanish. **Suggest** fills it
+  in by translating the tile's **What to say** (or its name) on the device, for
+  you to read and fix; **Hear the Spanish** says it in the Spanish voice,
+  whichever way the switch is. Only shown while Settings → Voice → **Speak
+  Spanish too** is on.
 - **Preview / Play clip:** hear the tile without closing the editor.
 - **Record:** records from the microphone instead of picking a file:
   - The first time, the app asks for microphone permission.
@@ -166,6 +168,33 @@ English; only what the board *says* changes.
   apart from the English voice, with its own **Preview Spanish**. Speed and pitch
   are shared. Turn **Speak Spanish too** off in the same place to hide the switch
   and the Spanish fields on a board that doesn't need them.
+
+**Translating on the device.** Typing the Spanish for every tile is slow, so the
+device can suggest it. Suggestions only ever fill in text you can read and
+change; what the board says is always the Spanish saved on the tile, so playing
+a tile never translates anything, works with no internet, and never changes by
+itself.
+
+- **Suggest**, in the tile editor, fills in that tile's Spanish field.
+- **Settings → Voice → Translate all tiles** fills in every tile that has words
+  and no Spanish, and says how many it did (it never replaces Spanish you
+  already have). Each one can still be edited in its tile.
+- **Speak...** shows the Spanish for what you type, underneath, as you type. With
+  the switch on **ES**, type it in English and the box says the Spanish; without
+  a translator, type the Spanish yourself.
+
+The first translation downloads the Spanish language model (about 30 MB on
+Android), once; after that it works offline. A bar shows the download (Android
+can't say how far along it is, so its bar just moves), and if it fails, a
+message says why and the button tries again. Where translating can't work, the
+buttons stay and say why instead of disappearing:
+
+- **Android:** uses Google's ML Kit.
+- **The web:** uses Chrome's built-in translator, which exists only in Chrome
+  or Edge on a computer (version 138 or later), not in Firefox, Safari or
+  phone browsers.
+- **iPhone and iPad:** not connected yet (see [iOS](IOS.md)); type the Spanish
+  yourself.
 
 **If the device has no Spanish voice**, a red bar says so for as long as the switch
 is on **ES**: "This device has no Spanish voice...". The board then speaks its
@@ -368,6 +397,8 @@ to return to the list or **Done** to close Settings.
   - **Speak Spanish too:** the **EN / ES** switch and each tile's Spanish field
     (on the board; see "Speaking Spanish"), and **Spanish voice** with its own
     **Preview Spanish**, which belong to the device
+  - **Translate all tiles:** fills in the Spanish of every tile that has none,
+    on the device
 - **Screen:**
   - Keep the screen from turning off while the board is open
   - Performance mode: turns off shadows, tap ripples and similar effects

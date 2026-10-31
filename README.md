@@ -14,7 +14,7 @@ codebase, so a feature added once reaches every platform.
 - **Speak...:** type any phrase no tile covers and have it read aloud.
 - **Speak Spanish:** give a tile Spanish text and switch the top bar to **ES**: the
   board then speaks it in a Spanish voice, and Show mode shows the Spanish large with
-  the English under it. The board's names and the app stay in English.
+  the English under it. The board's names and the app stay in English. **Suggest** and **Translate all tiles** fill in the Spanish by translating on the device (offline once its model is downloaded: Android, and Chrome or Edge on a computer), for you to edit.
 - **Voice:** choose the voice speaking tiles use, from those on the device that
   work offline, and its speed and pitch.
 - **Show mode:** a tapped tile's words also fill the screen in large white text

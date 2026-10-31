@@ -143,10 +143,10 @@ class BoardScreenTest {
     }
 
     @Test
-    fun longPressWithoutMovingAGridTilePreviewsItWithoutReordering() {
+    fun longPressWithoutMovingAGridTileTurnsOnEditModeWithoutPlayingOrReordering() {
         // A hold that clears the long-press timeout but never crosses into a drag
-        // (#4) shares the same gesture detector as longPressDragReordersTiles above —
-        // it should preview the tile in place instead of reordering it.
+        // (#328) shares the same gesture detector as longPressDragReordersTiles above —
+        // it should turn Edit mode on and leave the tile where it is, unplayed.
         launchWith(
             Board(
                 pages = listOf(
@@ -169,12 +169,13 @@ class BoardScreenTest {
         }
         composeRule.waitForIdle()
 
-        composeRule.waitUntil(timeoutMillis = 2_000) { player.playedKeys.contains("a.mp3") }
+        assertTrue(player.played.isEmpty())
+        composeRule.onNodeWithText("Tiles won't play", substring = true).assertIsDisplayed()
         assertEquals(listOf("A", "B"), vm.board.value.currentPage.visibleTiles.map { it.label }.filter { it.isNotEmpty() })
     }
 
     @Test
-    fun longPressPreviewIsDisabledInEditMode() {
+    fun longPressWithoutMovingATileInEditModeTurnsItOffWithoutPlaying() {
         launchWith(
             Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Air horn", fileName = "a.mp3")))))
         )
@@ -190,10 +191,11 @@ class BoardScreenTest {
         composeRule.waitForIdle()
 
         assertTrue(player.played.isEmpty())
+        composeRule.onNodeWithText("Tiles won't play", substring = true).assertDoesNotExist()
     }
 
     @Test
-    fun longPressWithoutMovingAStickyHomeRowTilePreviewsItWithoutOpeningTheEditor() {
+    fun longPressWithoutMovingAStickyHomeRowTileTurnsOnEditModeWithoutPlayingOrOpeningTheEditor() {
         launchWith(
             Board(
                 pages = listOf(
@@ -211,7 +213,8 @@ class BoardScreenTest {
         }
         composeRule.waitForIdle()
 
-        composeRule.waitUntil(timeoutMillis = 2_000) { player.playedKeys.contains("hey.mp3") }
+        assertTrue(player.played.isEmpty())
+        composeRule.onNodeWithText("Tiles won't play", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Edit tile").assertDoesNotExist()
     }
 

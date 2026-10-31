@@ -43,6 +43,9 @@ on a macOS runner; advisory, it doesn't block merging):
   editor opens the Photos/Files picker) draws the picture, still there after a backup
   export and import.
 - [ ] Keep screen awake, rotation, the caregiver lock's hold to unlock, and Show mode.
+- [ ] Holding a tile turns Edit mode on or off (the buzz comes as the hold registers),
+  holding and dragging reorders, and the Edit mode bar turns it off; locked, a hold plays
+  like a tap and a drag moves nothing.
 
 Open an issue for anything that doesn't work, or tick items off here in a pull request.
 

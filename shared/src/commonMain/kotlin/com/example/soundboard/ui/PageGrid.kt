@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -142,10 +143,10 @@ internal fun PinnedRow(
     globalTileBorder: TileBorder,
     hapticFeedbackEnabled: Boolean,
     performanceModeEnabled: Boolean,
-    speakUnrecordedTilesEnabled: Boolean,
     hideBlankTilesEnabled: Boolean,
+    editingLocked: Boolean,
     onTap: (Tile) -> Unit,
-    onPreviewSound: (Tile) -> Unit
+    onEditModeChange: (Boolean) -> Unit
 ) {
     val haptics = LocalHapticFeedback.current
     val columns = homePage.columns
@@ -178,17 +179,17 @@ internal fun PinnedRow(
                 hidden = !tile.hasSound && hideBlankTilesEnabled && !editMode,
                 modifier = Modifier.weight(1f),
                 onTap = { onTap(tile) },
-                // Long-press previews what a pad will say without "using" it for real,
-                // same as PageGrid's hold-without-moving (#4) — not offered in edit mode,
-                // where a tap already opens the editor's own Play/Preview button.
-                onLongClick = if (!editMode && tile.isPlayable(speakUnrecordedTilesEnabled)) {
+                // Holding a tile turns Edit mode on or off (#328), as holding one in PageGrid
+                // does; this row has no dragging. Locked, there's no long-click at all, so the
+                // card's ordinary click handles a long hold like a tap.
+                onLongClick = if (editingLocked) null else {
                     {
                         if (hapticFeedbackEnabled) {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
-                        onPreviewSound(tile)
+                        onEditModeChange(!editMode)
                     }
-                } else null
+                }
             )
         }
     }
@@ -215,8 +216,8 @@ internal fun PageGrid(
     isActive: Boolean,
     hapticFeedbackEnabled: Boolean,
     performanceModeEnabled: Boolean,
-    speakUnrecordedTilesEnabled: Boolean,
     hideBlankTilesEnabled: Boolean,
+    editingLocked: Boolean,
     globalTileOpacity: Float,
     globalTileBorder: TileBorder,
     landscapeLayout: LandscapeLayout,
@@ -231,13 +232,18 @@ internal fun PageGrid(
     referenceHeightPx: Int,
     pinFirstRow: Boolean,
     onTap: (Tile) -> Unit,
-    onPreviewSound: (Tile) -> Unit,
+    onEditModeChange: (Boolean) -> Unit,
     onPreviewMove: (Int, Int) -> Unit,
     onCommitOrder: () -> Unit,
     onDragActiveChanged: (Boolean) -> Unit
 ) {
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
+    // The drag gesture reads these as they are when it fires, not as they were when it began:
+    // Edit mode must not be one of its keys, or turning it on at the start of a hold would
+    // restart the gesture and cancel the drag in progress (#328).
+    val currentEditMode by rememberUpdatedState(editMode)
+    val currentOnEditModeChange by rememberUpdatedState(onEditModeChange)
     var gridSizePx by remember { mutableStateOf(IntSize.Zero) }
     val gridWidthPx = gridSizePx.width
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
@@ -274,6 +280,14 @@ internal fun PageGrid(
     // one plain grid; with a single row there's nothing below it to scroll.
     val showPinnedRowSeparately = pinFirstRow && shownTiles.size > pinnedCount
 
+    // Lifting a finger after a hold that never moved isn't consumed, so the card's own click
+    // fires too, just before the drag gesture sees the same release and ends (#328). While a
+    // hold is in progress that click is part of the hold: it must not play the tile, or open
+    // the editor now that Edit mode is on.
+    fun tapUnlessHeld(tile: Tile) {
+        if (draggedIndex == null) onTap(tile)
+    }
+
     fun tileDragModifier(index: Int, tile: Tile): Modifier {
         val isDragged = index == draggedIndex
         return Modifier
@@ -289,37 +303,54 @@ internal fun PageGrid(
                 }
             }
             .zIndex(if (isDragged) 1f else 0f)
-            .pointerInput(tile.id, columns, isActive, hapticFeedbackEnabled) {
-                if (!isActive) return@pointerInput
+            .pointerInput(tile.id, columns, isActive, hapticFeedbackEnabled, editingLocked) {
+                // Locked, a board can't be rearranged or put into Edit mode (#328): with no
+                // gesture here a long hold is just a slow tap, which the card's own click
+                // handles (it plays if released on the tile, and cancels if the finger slid off).
+                if (!isActive || editingLocked) return@pointerInput
+                // Whether a hold is under way, whether Edit mode was already on when it began, and
+                // whether the finger then travelled further than a touch (shake while holding isn't a drag).
+                var holding = false
+                var editModeAtStart = false
+                var travel = Offset.Zero
+                var moved = false
+                // A hold that never moved wasn't a reorder: it toggles Edit mode, and never plays
+                // the tile (#328). From the normal board Edit mode is already on, from when the
+                // hold began; from Edit mode, letting go turns it off. Called when the hold ends,
+                // which for one that never moved is a *cancel*, not an end: the card's own click
+                // consumes the release first, and the drag detector reads that as a cancellation.
+                fun finishHold() {
+                    if (holding && !moved && editModeAtStart) currentOnEditModeChange(false)
+                    holding = false
+                    draggedIndex = null
+                    dragOffset = Offset.Zero
+                    onDragActiveChanged(false)
+                }
                 detectDragGesturesAfterLongPress(
                     onDragStart = {
                         if (hapticFeedbackEnabled) {
                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
+                        holding = true
+                        editModeAtStart = currentEditMode
+                        travel = Offset.Zero
+                        moved = false
+                        // Holding a tile from the normal board turns Edit mode on at once,
+                        // so the buzz, the lift and the pencils arrive together (#328).
+                        if (!editModeAtStart) currentOnEditModeChange(true)
                         draggedIndex = index
                         dragOffset = Offset.Zero
                         onDragActiveChanged(true)
                     },
                     onDragEnd = {
-                        // A hold that never moved the tile to a different index wasn't a
-                        // reorder at all — treat it as a request to preview what the tile
-                        // says/plays without "using" it for real (#4), same as PinnedRow's
-                        // dedicated onLongClick (which has no competing drag gesture to share it with).
-                        if (!editMode && draggedIndex == index && tile.isPlayable(speakUnrecordedTilesEnabled)) {
-                            onPreviewSound(tile)
-                        }
-                        draggedIndex = null
-                        dragOffset = Offset.Zero
-                        onDragActiveChanged(false)
+                        finishHold()
                         onCommitOrder()
                     },
-                    onDragCancel = {
-                        draggedIndex = null
-                        dragOffset = Offset.Zero
-                        onDragActiveChanged(false)
-                    },
+                    onDragCancel = ::finishHold,
                     onDrag = { change, amount ->
                         change.consume()
+                        travel += amount
+                        if (travel.getDistance() > viewConfiguration.touchSlop) moved = true
                         dragOffset += amount
                         val current = draggedIndex ?: return@detectDragGesturesAfterLongPress
                         if (cellStepXPx <= 0f || cellStepYPx <= 0f) return@detectDragGesturesAfterLongPress
@@ -383,7 +414,7 @@ internal fun PageGrid(
                         performanceModeEnabled = performanceModeEnabled,
                         hidden = !tile.hasSound && hideBlankTilesEnabled && !editMode,
                         modifier = Modifier.weight(1f).then(tileDragModifier(index, tile)),
-                        onTap = { onTap(tile) }
+                        onTap = { tapUnlessHeld(tile) }
                     )
                 }
             }
@@ -416,7 +447,7 @@ internal fun PageGrid(
                     modifier = Modifier
                         .then(if (isDragged) Modifier else Modifier.animateItem())
                         .then(tileDragModifier(index, tile)),
-                    onTap = { onTap(tile) }
+                    onTap = { tapUnlessHeld(tile) }
                 )
             }
         }

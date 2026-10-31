@@ -783,13 +783,31 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   neutral "add a sound here" look regardless of the page's accent.
 - **Tap vs. edit are different gestures on purpose.** A tile's `Card` uses
   `combinedClickable(onClick = onTap)` with no `onLongClick` — long-press is
-  reserved entirely for drag-reorder (`detectDragGesturesAfterLongPress` in a
+  reserved entirely for hold and drag (`detectDragGesturesAfterLongPress` in a
   separate `pointerInput`). The corner pencil isn't a separate tap target
   anymore (a permanent nested `clickable` there used to crowd small tiles);
-  `BoardScreen` holds a top-level `editMode` boolean toggled from the `☰`
-  menu, `TileCard` renders the pencil purely as a visual indicator whenever
-  `editMode` is true, and `onTap` checks `!tile.isPlayable(...) || editMode`
-  to decide whether a tap on the whole card edits or plays.
+  `BoardScreen` holds a top-level `editMode` boolean, toggled from the `☰`
+  menu, by holding a tile, or by the `EditModeBanner` (below), `TileCard` renders the
+  pencil purely as a visual indicator whenever `editMode` is true, and `onTap`
+  checks `!tile.isPlayable(...) || editMode` to decide whether a tap on the
+  whole card edits or plays.
+- **Holding a tile toggles Edit mode (#328).** `onDragStart` turns Edit mode on if it was
+  off, so the buzz, the lift and the pencils arrive together; a hold that ends without
+  the finger travelling past the touch slop turns it off if it was on when the hold began
+  (so from the normal board it stays on, from Edit mode it goes off), and a hold that
+  moves reorders and leaves it as it is. The gesture reads `editMode` and its callback
+  through `rememberUpdatedState`, never as a `pointerInput` key: a key would restart the
+  gesture and cancel the drag in progress the moment Edit mode turned on. Two traps in
+  the detector: a hold that never moved ends in `onDragCancel`, not `onDragEnd`, because
+  the card's own click consumes the release first (so both call the same `finishHold`),
+  and that click would otherwise play the tile or, in Edit mode, open the editor, so
+  `tapUnlessHeld` drops a click while `draggedIndex` is set. `PinnedRow` has no dragging
+  and uses `combinedClickable`'s `onLongClick` to toggle instead. Locked, neither is
+  attached (`editingLocked` is a key of the drag `pointerInput`, and `onLongClick` is
+  null), so a long hold is an ordinary click: it plays if released on the tile and
+  cancels if the finger slid off, and a drag moves nothing. `EditModeBanner` (beside
+  `SilentBoardWarning`, never while locked) says tiles won't play and turns Edit mode
+  off when tapped. Saving or cancelling the tile editor doesn't touch `editMode`.
 - **A labeled-but-empty tile is visually distinct from a plain blank one.**
   `TileCard`'s `needsRecording = !tile.hasSound && tile.label.isNotBlank()`
   renders a small 🔇 glyph in the opposite corner from the edit-mode pencil.
@@ -839,8 +857,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   color (light in dark mode), producing light text on a light custom tile.
   `textColorFor()` sidesteps that by never depending on the current theme at
   all.
-- **Show mode is an overlay, not a screen.** Board taps and long-press
-  previews call `vm.activate(tile)`, which sets `shownText` (the tile's
+- **Show mode is an overlay, not a screen.** Board taps call `vm.activate(tile)`, which sets `shownText` (the tile's
   `speechText`) when Show mode is on and calls `play()` unless it mutes sounds;
   the tile editor's own Play button still calls `play()` directly, so it never
   opens the text screen. A tile with a picture or emoji also sets `shownIcon`,
@@ -899,10 +916,11 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | `BoardScreen`'s flows: a tap playing or editing, the tile editor's Save/Cancel and Restore original sound, edit mode, Switch board, Save board as, Settings groups (Recording included), Show mode, the page tab row and page options, the sticky home row, idle-timeout auto-return; tile label sizes (no word split, #209), bold/caps, and the landscape grid in a landscape window | `shared/src/commonTest/.../ui/BoardScreenUiTest.kt`, `LabelAndLayoutUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
 | What each dialog does (#242): Speak; Open board (with its replace-this-board confirm), Clean up unused clips and Rename board; every Settings group, and the list's summary of each; Page options (rename, move, the home page, delete with and without a confirm), Grid size and Page appearance; the color swatches, picked by name and reporting which is selected (#245) | `shared/src/commonTest/.../ui/DialogsUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
 | The bars above the board: why taps can't be heard, a muted media volume or speech not working, shown only while so and the speech one only for a board that speaks (#248); the backup reminder and its Later (#249) | `shared/src/commonTest/.../ui/BoardBannersUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
+| Holding a tile (#328): it turns Edit mode on or off and never plays, holding and dragging reorders and leaves Edit mode on, the sticky row does the same without dragging, Save and Cancel leave Edit mode on, locked a hold is a tap and a drag moves nothing; the Edit mode bar, its tap, and its absence while locked | `shared/src/commonTest/.../ui/EditModeHoldUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
 | The caregiver lock (#251, #257): its menu items, the locked menu, no way into editing from the board, a short hold vs a full one, the screen-reader Unlock action, relocking when idle, the backup reminder waiting | `shared/src/commonTest/.../ui/CaregiverLockUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
 | Tile pictures drawn on a tile and on Show mode's screen, and a missing picture falling back to the name (the same tests can't run in the browser: a picture decodes asynchronously, and its idle wait holds the one thread, #279) | `shared/src/androidHostTest/.../ui/PictureTileUiTest.kt` | Compose UI test on the JVM (Robolectric) |
 | Screenshots of the board (portrait, landscape, the sticky row on another page, dark theme, each label font), the tile editor, Settings and Show mode, against the reference images in `shared/screenshots` | `shared/src/androidHostTest/.../ui/ScreenshotTest.kt` | Roborazzi on the JVM (Robolectric's native graphics) |
-| What needs a device: drag-to-reorder, long-press previews, swiping between pages, scrolling under the sticky row | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
+| What needs a device: drag-to-reorder, holding a tile for Edit mode, swiping between pages, scrolling under the sticky row | `androidTest/.../ui/BoardScreenTest.kt` | Compose UI test, real device/emulator |
 | Android audio (#220): `trimAudioEnd` on AAC files made on the device (trimmed by the amount asked, a too-short clip kept whole, a broken file left alone); `AudioRecorder` recording, trimming and cancelling on the real `MediaRecorder`; `SoundPlayer` loading and playing through SoundPool and MediaPlayer, exclusively; `TtsSpeaker` speaking and stopping | `androidTest/.../audio/AudioTrimTest.kt`, `AudioRecorderTest.kt`, `SoundPlayerTest.kt`, `TtsSpeakerTest.kt` (test files from `TestAudioFiles.kt`) | Instrumented, real device/emulator. The recorder and speech tests skip on a device without a microphone or speech engine |
 | Landscape grid, row height cap, drag steps, label size/font, large font scale — real rotation and real layout | `androidTest/.../ui/LayoutAndLabelTest.kt` | Compose UI test, real device/emulator |
 
@@ -1015,10 +1033,11 @@ counted.
   persistence test that passes suspiciously easily is worth double-checking
   by asserting the write actually happened, not just that no exception was
   thrown.
-- **Long-press in `BoardScreenTest` opens nothing** — long-press drives
-  drag-to-reorder, not the edit dialog (see the UI layer section above); to
-  open the edit dialog on a filled tile in a test, toggle "Edit mode" from
-  the `☰` menu first, same as a real user would.
+- **Long-press in `BoardScreenTest` opens no dialog** — it drives drag-to-reorder and
+  turns Edit mode on or off, not the edit dialog (see the UI layer section above); to
+  open the edit dialog on a filled tile in a test, tap it once Edit mode is on, same as
+  a real user would. `EditModeHoldUiTest` drives a hold with the clock stopped:
+  finger down, `advanceTimeBy` past the long-press timeout, finger up.
 - **Testing drag-to-reorder itself needs raw pointer events, not `adb shell
   input`.** `adb`'s synthetic `swipe` interpolates movement from the very
   first frame, tripping touch-slop cancellation before the long-press timeout

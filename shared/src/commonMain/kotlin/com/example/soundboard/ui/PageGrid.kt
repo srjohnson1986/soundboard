@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MicOff
@@ -34,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -41,6 +43,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -76,6 +79,7 @@ import com.example.soundboard.model.languageName
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 
 /** Horizontal padding on each side of a page's grid (and the pinned row above it). */
@@ -259,10 +263,19 @@ internal fun PageGrid(
     onPreviewMove: (Int, Int) -> Unit,
     onCommitOrder: () -> Unit,
     onDragActiveChanged: (Boolean) -> Unit,
+    // Called as the grid scrolls, which counts as use of the board (the Edit mode timeout waits for it).
+    onScrolled: () -> Unit = {},
     activeLanguage: String? = null
 ) {
     val density = LocalDensity.current
     val haptics = LocalHapticFeedback.current
+    val gridState = rememberLazyGridState()
+    val currentOnScrolled by rememberUpdatedState(onScrolled)
+    LaunchedEffect(gridState) {
+        snapshotFlow { Triple(gridState.isScrollInProgress, gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset) }
+            .drop(1)
+            .collect { currentOnScrolled() }
+    }
     // The drag gesture reads these as they are when it fires, not as they were when it began:
     // Edit mode must not be one of its keys, or turning it on at the start of a hold would
     // restart the gesture and cancel the drag in progress (#328).
@@ -497,6 +510,7 @@ internal fun PageGrid(
         val scrollingTiles = if (showPinnedRowSeparately) shownTiles.drop(pinnedCount) else shownTiles
         val scrollingStartIndex = if (showPinnedRowSeparately) pinnedCount else 0
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Fixed(columns),
             modifier = Modifier
                 .fillMaxSize()

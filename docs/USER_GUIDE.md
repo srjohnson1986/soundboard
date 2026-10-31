@@ -85,6 +85,17 @@ turn off the **Edit mode** switch in the **☰** menu. Saving or cancelling in t
 mode on, so you can go straight on to the next tile. The bar isn't shown while
 the board is locked, since locking ends Edit mode.
 
+Edit mode also **turns itself off after 10 seconds of nothing happening**, so a
+stray hold can't leave the board quiet. The bar says so ("Turns off after 10
+seconds idle"). It only counts while you aren't editing or moving anything: the
+wait pauses while the tile editor, Settings or any other dialog is open, or a
+tile is being held or dragged, and it starts over whenever you tap, switch or
+swipe between pages, or scroll the tiles. When it runs out, Edit mode goes off
+just as if you'd turned it off: the bar and pencils go away and tiles play. Pick
+a different time, or turn this off, in **Settings → Tapping & speech → Turn off
+Edit mode after** (Off, 10 s, 30 s, 1 min or 5 min). The setting belongs to the
+board, so it comes along in backups.
+
 In the editor:
 
 - **Name:** the label shown on the tile.
@@ -424,6 +435,7 @@ to return to the list or **Done** to close Settings.
   - Speak a tile's name when it has no recording
   - Hide blank tiles outside Edit mode
   - How long to hold a page tab to open Page options
+  - How long Edit mode may sit idle before it turns itself off (see "Editing a tile")
   - Haptic feedback (the small buzz)
 - **Voice:** how tiles that speak (rather than play a recording) sound, and
   **Speak...** too:

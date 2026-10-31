@@ -39,6 +39,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -126,7 +127,9 @@ abstract class BoardUiTest : UiTest() {
         phrasebook: Phrasebook = Phrasebook.Empty,
         translator: Translator? = null,
         // How long a tile held in Edit mode stays lifted before leaving it; null is the app's own.
-        leaveEditModeAfterMillis: Long? = null
+        leaveEditModeAfterMillis: Long? = null,
+        // How long one second of the Edit mode timeout lasts; shortened because the test clock steps frame by frame.
+        editModeSecond: Duration = 1.seconds
     ): TestBoardApp {
         val app = TestBoardApp(board, builtIns, dispatcher, withIcons, phrasebook, translator)
         check(app.vm.board.value.pages.first().id == board.pages.first().id) { "the board didn't load" }
@@ -137,7 +140,8 @@ abstract class BoardUiTest : UiTest() {
                 LocalDialogUsesPlatformWidth provides platformWidthDialogs,
                 LocalRelockAfterIdle provides relockAfterIdle,
                 LocalIdleMinute provides idleMinute,
-                LocalLeaveEditModeAfterMillis provides leaveEditModeAfterMillis
+                LocalLeaveEditModeAfterMillis provides leaveEditModeAfterMillis,
+                LocalEditModeSecond provides editModeSecond
             ) {
                 SoundboardTheme(themeMode = shown.themeMode) { BoardScreen(vm = app.vm) }
             }

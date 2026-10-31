@@ -181,6 +181,15 @@ private fun longPressDurationLabel(millis: Int) = when (millis) {
     else -> "Longer"
 }
 
+/** Choices offered for how long Edit mode may sit idle before it turns itself off (#344); 0 means "Off". */
+private val EDIT_MODE_TIMEOUT_OPTIONS_SECONDS = listOf(0, 10, 30, 60, 300)
+
+private fun editModeTimeoutLabel(seconds: Int) = when (seconds) {
+    0 -> "Off"
+    in 1..59 -> "$seconds s"
+    else -> "${seconds / 60} min"
+}
+
 /**
  * The groups Settings is split into, in the order the list shows them. Each opens its own
  * dialog ([SettingsGroupDialog]) so no one screen is a long scroll of unrelated controls.
@@ -233,7 +242,9 @@ private fun settingsSummary(
         "New pages ${board.defaultPageRows}×${board.defaultPageColumns} · ${rowHeightLabel(board.rowHeight).lowercase()} rows · " +
             landscapeLayoutLabel(board.landscapeLayout).lowercase() + " in landscape"
     SettingsGroup.TAPPING_AND_SPEECH ->
-        "Long-press: ${longPressDurationLabel(board.longPressDurationMillis).lowercase()} · haptics ${onOff(board.hapticFeedbackEnabled)}"
+        "Long-press: ${longPressDurationLabel(board.longPressDurationMillis).lowercase()} · " +
+            "Edit mode ${if (board.editModeTimeoutSeconds == 0) "stays on" else "off after ${editModeTimeoutLabel(board.editModeTimeoutSeconds)}"} · " +
+            "haptics ${onOff(board.hapticFeedbackEnabled)}"
     SettingsGroup.VOICE -> buildString {
         append(voices.firstOrNull { it.id == speech.voiceId }?.name ?: "Default voice")
         append(" · ${speechRateLabel(speech.ratePercent).lowercase()} speed")
@@ -504,6 +515,18 @@ private fun TappingAndSpeechSettings(board: Board, actions: BoardSettingsActions
         onSelect = actions::setLongPressDurationMillis
     )
     HelperText("How long to hold a page tab before its Page options open.")
+    SectionDivider()
+    OptionDropdown(
+        label = "Turn off Edit mode after",
+        selected = board.editModeTimeoutSeconds,
+        options = EDIT_MODE_TIMEOUT_OPTIONS_SECONDS,
+        optionLabel = ::editModeTimeoutLabel,
+        onSelect = actions::setEditModeTimeoutSeconds
+    )
+    HelperText(
+        "Edit mode turns itself off after this long with nothing being edited or moved, so a " +
+            "stray hold doesn't leave tiles unable to play. It waits while a dialog is open."
+    )
     SectionDivider()
     SwitchRow("Haptic feedback", board.hapticFeedbackEnabled, actions::setHapticFeedbackEnabled)
 }

@@ -916,6 +916,11 @@ class BoardViewModel(
         commit(_board.value.copy(longPressDurationMillis = value))
     }
 
+    /** Seconds of inactivity before Edit mode turns itself off; 0 disables it (#344). */
+    override fun setEditModeTimeoutSeconds(value: Int) {
+        commit(_board.value.copy(editModeTimeoutSeconds = value))
+    }
+
     override fun setThemeMode(mode: ThemeMode) {
         commit(_board.value.copy(themeMode = mode))
     }

@@ -2,6 +2,7 @@ package com.example.soundboard.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -27,7 +28,7 @@ import androidx.compose.ui.unit.dp
  * [BoardScreen] never shows it while the board is locked.
  */
 @Composable
-internal fun EditModeBanner(onTurnOff: () -> Unit) {
+internal fun EditModeBanner(timeoutSeconds: Int, onTurnOff: () -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.tertiaryContainer,
         contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -43,10 +44,28 @@ internal fun EditModeBanner(onTurnOff: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(Icons.Filled.Edit, contentDescription = null)
-            Text(
-                "Tiles won't play while Edit mode is on. Tap here, or hold a tile, to turn it off.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Column {
+                Text(
+                    "Tiles won't play while Edit mode is on. Tap here, or hold a tile, to turn it off.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                // When it will go off by itself (#344); nothing to say when that's turned off.
+                if (timeoutSeconds > 0) {
+                    Text(
+                        "Turns off after ${editModeTimeoutPhrase(timeoutSeconds)} idle",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
         }
     }
+}
+
+/** [seconds] as the banner says it: "10 seconds", "1 minute", "5 minutes". */
+internal fun editModeTimeoutPhrase(seconds: Int): String = when {
+    seconds == 1 -> "1 second"
+    seconds < 60 -> "$seconds seconds"
+    seconds == 60 -> "1 minute"
+    seconds % 60 == 0 -> "${seconds / 60} minutes"
+    else -> "$seconds seconds"
 }

@@ -1119,6 +1119,18 @@ class BoardViewModelTest {
     }
 
     @Test
+    fun `setEditModeTimeoutSeconds persists across a fresh view model`() = runTest(dispatcher) {
+        val vm = newViewModel()
+        assertEquals(10, vm.board.value.editModeTimeoutSeconds)
+
+        vm.setEditModeTimeoutSeconds(60)
+
+        assertEquals(60, vm.board.value.editModeTimeoutSeconds)
+        val second = newViewModel()
+        assertEquals(60, second.board.value.editModeTimeoutSeconds)
+    }
+
+    @Test
     fun `setThemeMode persists across a fresh view model`() = runTest(dispatcher) {
         val vm = newViewModel()
 

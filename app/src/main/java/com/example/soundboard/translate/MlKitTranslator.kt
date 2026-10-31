@@ -9,6 +9,7 @@ import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,6 +62,8 @@ class MlKitTranslator : Translator {
         val client = client(from, target) ?: return@withLock null
         try {
             client.translate(text).await().also { _status.value = TranslatorStatus.Ready }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             _status.value = TranslatorStatus.Failed(describe(e))
             null
@@ -76,6 +79,11 @@ class MlKitTranslator : Translator {
             client.downloadModelIfNeeded(DownloadConditions.Builder().build()).await()
             _status.value = TranslatorStatus.Ready
             true
+        } catch (e: CancellationException) {
+            // Cancel on the banner while the model downloads (#342): not a failure, so it can be asked for again.
+            // ML Kit carries on downloading in the background, and the next call then finds the model here.
+            _status.value = TranslatorStatus.NeedsDownload(MODEL_MEGABYTES)
+            throw e
         } catch (e: Exception) {
             _status.value = TranslatorStatus.Failed(describe(e))
             false

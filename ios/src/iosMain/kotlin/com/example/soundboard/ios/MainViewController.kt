@@ -17,6 +17,7 @@ import com.example.soundboard.data.UserDefaultsKeyValueStore
 import com.example.soundboard.ui.BoardScreen
 import com.example.soundboard.ui.IosHost
 import com.example.soundboard.ui.theme.SoundboardTheme
+import com.example.soundboard.translate.Phrasebook
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSFileManager
@@ -44,7 +45,8 @@ fun MainViewController(): UIViewController {
         devicePrefs = DevicePreferences(UserDefaultsKeyValueStore("soundboard.")),
         recentBoardsRepo = RecentBoardsRepository(files),
         mediaVolume = IosMediaVolume(),
-        translator = IosTranslator()
+        translator = IosTranslator(),
+        phrasebookSource = Phrasebook::bundledSpanish
     )
     return ComposeUIViewController {
         val board by vm.board.collectAsState()

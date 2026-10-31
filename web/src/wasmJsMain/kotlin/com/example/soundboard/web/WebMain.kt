@@ -16,6 +16,7 @@ import com.example.soundboard.data.WebBundledBoards
 import com.example.soundboard.data.requestPersistentStorage
 import com.example.soundboard.ui.BoardScreen
 import com.example.soundboard.ui.theme.SoundboardTheme
+import com.example.soundboard.translate.Phrasebook
 import kotlinx.coroutines.MainScope
 
 /** The built-in boards web/build.gradle.kts copies next to the app. */
@@ -33,7 +34,8 @@ fun main() {
         speaker = WebSpeaker(),
         devicePrefs = DevicePreferences(LocalStorageKeyValueStore("soundboard.")),
         recentBoardsRepo = RecentBoardsRepository(files),
-        translator = ChromeTranslator()
+        translator = ChromeTranslator(),
+        phrasebookSource = Phrasebook::bundledSpanish
     )
     removeLoadingMessage()
     ComposeViewport {

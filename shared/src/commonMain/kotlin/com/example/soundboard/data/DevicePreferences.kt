@@ -76,6 +76,14 @@ class DevicePreferences(private val prefs: KeyValueStore) {
         set(value) = prefs.putBoolean(KEY_SECOND_LANGUAGE_ACTIVE, value)
 
     /**
+     * Whether the note about this device not being able to translate Spanish has been shown (#342).
+     * Said once, since nothing about it changes; per device because the device is what can't translate.
+     */
+    var translatorUnavailableNoteSeen: Boolean
+        get() = prefs.getBoolean(KEY_TRANSLATOR_UNAVAILABLE_NOTE_SEEN, false)
+        set(value) = prefs.putBoolean(KEY_TRANSLATOR_UNAVAILABLE_NOTE_SEEN, value)
+
+    /**
      * When the board first changed after its last backup, in epoch milliseconds; null while
      * everything on it is in a backup (#249). Per device, like the recordings it protects.
      */
@@ -116,6 +124,7 @@ class DevicePreferences(private val prefs: KeyValueStore) {
         private const val KEY_SPEECH_VOICE_ID = "speech_voice_id"
         private const val KEY_SPEECH_SPANISH_VOICE_ID = "speech_spanish_voice_id"
         private const val KEY_SECOND_LANGUAGE_ACTIVE = "second_language_active"
+        private const val KEY_TRANSLATOR_UNAVAILABLE_NOTE_SEEN = "translator_unavailable_note_seen"
         private const val KEY_UNBACKED_CHANGES_SINCE = "unbacked_changes_since"
         private const val KEY_EDITING_LOCK_ENABLED = "editing_lock_enabled"
         private const val KEY_BACKUP_REMINDER_SNOOZED_UNTIL = "backup_reminder_snoozed_until"

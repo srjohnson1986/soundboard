@@ -13,6 +13,26 @@ recorded anything. They show up in the **☰** menu's **Open board...** picker,
 labeled "Built-in," alongside whatever you've saved yourself: Jeremy's,
 Sarah's and the TTS board in every build, Steve's in debug builds only.
 
+## Keeping the Spanish phrasebook in step
+
+Every phrase on these boards (what each tile says: its "What to say" text, else its name)
+has its Spanish in the app's bundled phrasebook,
+`shared/src/commonMain/composeResources/files/phrasebook-es.json`, so a built-in board
+gets Spanish the moment the switch is on **ES**, on every platform, with no translator
+(`docs/ARCHITECTURE.md`, "Filling in Spanish automatically"). The file is generated, from
+the zips here, by a script:
+
+```bash
+python3 scripts/build-phrasebook.py          # rewrite the phrasebook
+python3 scripts/build-phrasebook.py --check  # fail if it is out of date
+```
+
+**When a preset gains or changes a phrase, run it.** It stops and names any phrase that has
+no Spanish yet; add one to `SPANISH` in `scripts/build-phrasebook.py` (short and natural, as
+you would say it to a caregiver; keep it free of gendered endings where a plain phrase
+does as well) and run it again, then commit the regenerated JSON with the preset. It keeps
+entries no board says any more, since a person's own tile may, and lists them.
+
 ## Keeping the bundled copies in sync
 
 This folder holds the source copy of every built-in board. The app ships

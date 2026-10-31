@@ -13,6 +13,7 @@ import com.example.soundboard.data.RecentBoardsRepository
 import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.appFileStore
 import com.example.soundboard.translate.MlKitTranslator
+import com.example.soundboard.translate.Phrasebook
 
 /** Builds [BoardViewModel] with the real Android storage, audio and speech behind it. */
 class BoardViewModelFactory(private val app: Application) : ViewModelProvider.Factory {
@@ -27,7 +28,8 @@ class BoardViewModelFactory(private val app: Application) : ViewModelProvider.Fa
             DevicePreferences(app),
             RecentBoardsRepository(app),
             mediaVolume = AndroidMediaVolume(app),
-            translator = MlKitTranslator()
+            translator = MlKitTranslator(),
+            phrasebookSource = Phrasebook::bundledSpanish
         ) as T
     }
 }

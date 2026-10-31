@@ -2,6 +2,7 @@ package com.example.soundboard.web
 
 import com.example.soundboard.translate.Translator
 import com.example.soundboard.translate.TranslatorStatus
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.js.Promise
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
@@ -74,9 +75,16 @@ class ChromeTranslator(private val scope: CoroutineScope = MainScope()) : Transl
         if (!translatorSupported()) return false
         if (_status.value == TranslatorStatus.Ready) return true
         _status.value = TranslatorStatus.Downloading(percent = null)
-        val result = createTranslator(from, target) {
-            _status.value = TranslatorStatus.Downloading(percent = (downloadProgress() * 100).toInt().coerceIn(0, 100))
-        }.await<JsString>().toString()
+        val result = try {
+            createTranslator(from, target) {
+                _status.value = TranslatorStatus.Downloading(percent = (downloadProgress() * 100).toInt().coerceIn(0, 100))
+            }.await<JsString>().toString()
+        } catch (e: CancellationException) {
+            // Cancel on the banner while the model downloads (#342): not a failure, so it can be asked for again.
+            // The browser carries on with the download (the API has no way to stop it here), and the next call finds the model.
+            _status.value = TranslatorStatus.NeedsDownload(approximateMegabytes = null)
+            throw e
+        }
         return if (result == "ok") {
             _status.value = TranslatorStatus.Ready
             true

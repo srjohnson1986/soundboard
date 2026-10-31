@@ -107,6 +107,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
     val shownSubtext by vm.shownSubtext.collectAsStateWithLifecycle()
     val translatorStatus by vm.translatorStatus.collectAsStateWithLifecycle()
     val translateProgress by vm.translateProgress.collectAsStateWithLifecycle()
+    val spanishNote by vm.spanishNote.collectAsStateWithLifecycle()
     // The language the board is speaking besides English right now; null in English or on a board without one.
     val activeLanguage = board.secondLanguage.takeIf { secondLanguageOn }
     var openDialog by remember { mutableStateOf<BoardDialog?>(null) }
@@ -354,6 +355,17 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                 // Not while locked: whoever set the lock is the one to act on it.
                 if (backupReminderDue && !editingLocked) {
                     BackupReminder(onBackUp = { exportBackup(BACKUP_FILE_NAME) }, onLater = vm::snoozeBackupReminder)
+                }
+                // Spanish being filled in (#342). Shown locked too: the ES switch is available locked, and this is its answer.
+                board.secondLanguage?.let { language ->
+                    SpanishFillBanner(
+                        language = language,
+                        progress = translateProgress,
+                        translatorStatus = translatorStatus,
+                        note = spanishNote,
+                        onCancel = vm::cancelSpanishFill,
+                        onDismissNote = vm::dismissSpanishNote
+                    )
                 }
                 val homePage = board.homePage
                 if (board.stickyHomeRowEnabled && homePage != null && board.currentPageIndex != board.homePageIndex) {

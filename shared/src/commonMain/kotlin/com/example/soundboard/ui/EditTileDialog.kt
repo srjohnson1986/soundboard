@@ -219,10 +219,23 @@ internal fun EditTileDialog(
                     val translation = draft.translations[secondLanguage].orEmpty()
                     OutlinedTextField(
                         value = translation,
-                        onValueChange = { draft = draft.copy(translations = draft.withTranslationKeepingSpaces(secondLanguage, it)) },
+                        // Typing here makes it the person's own text, which nothing refreshes or replaces (#342).
+                        onValueChange = {
+                            draft = draft.copy(
+                                translations = draft.withTranslationKeepingSpaces(secondLanguage, it),
+                                autoTranslated = draft.autoTranslated - secondLanguage
+                            )
+                        },
                         label = { Text(languageName) },
                         placeholder = { Text("What it says when ES is on") },
-                        supportingText = { Text("Spoken in the $languageName voice, even if the tile has a recording.") },
+                        supportingText = {
+                            Column {
+                                if (draft.isAutoTranslated(secondLanguage)) {
+                                    Text("Filled in automatically")
+                                }
+                                Text("Spoken in the $languageName voice, even if the tile has a recording.")
+                            }
+                        },
                         minLines = 2,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -236,7 +249,7 @@ internal fun EditTileDialog(
                                 onSuggestTranslation(english) { suggestion ->
                                     suggesting = false
                                     if (suggestion != null) {
-                                        draft = draft.copy(translations = draft.translations + (secondLanguage to suggestion))
+                                        draft = draft.withAutoTranslation(secondLanguage, suggestion)
                                     }
                                 }
                             },

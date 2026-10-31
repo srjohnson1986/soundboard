@@ -47,6 +47,11 @@ work on iOS picks up, go back to running it on every pull request: restore the
   framework is used through SwiftUI's `.translationTask` on a view, with a system sheet for the first
   model download, so it needs Swift in `ios/app/` and a bridge to `Translator`; Apple's `TranslationSession`
   has no plain call to make from Kotlin.)
+- [ ] Spanish fills itself in (#342): open the TTS board and tap **ES**; every tile's Spanish
+  appears from the bundled phrasebook (`phrasebook-es.json`, read as a Compose resource from the
+  app bundle) with the translator unavailable, so none shows **no spanish**, and a tile of your own
+  that says "Thank you" gets "Gracias" on Save. A tile of your own with words the phrasebook
+  doesn't know keeps the marker, and the bar says once that translating isn't available here.
 - [ ] With **no** Spanish voice installed, **ES** shows the red "This device has no
   Spanish voice" bar and tiles speak English; **Preview Spanish** and **Speak...** say so
   rather than speaking Spanish in an English voice.

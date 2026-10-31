@@ -103,15 +103,32 @@ data class Tile(
      * the tile, so playing it works offline and never translates anything live. A language with no
      * entry (or a blank one) has no translation. Empty for a tile from before this existed.
      */
-    val translations: Map<String, String> = emptyMap()
+    val translations: Map<String, String> = emptyMap(),
+    /**
+     * The languages in [translations] that were filled in automatically (#342), from the bundled
+     * phrasebook or the translator, rather than typed by a person. Auto text is refreshed when the
+     * tile's English changes; anything typed is never touched automatically, so a language leaves
+     * this set the moment its text is edited by hand. Empty for a tile from before this existed.
+     */
+    val autoTranslated: Set<String> = emptySet()
 ) {
     /** The tile's words in [language] ("es"), or null if [language] is null or it has none. */
     fun translationFor(language: String?): String? =
         language?.let { translations[it] }?.takeIf { it.isNotBlank() }
 
-    /** This tile with its [language] text set to [text]; blank text removes it, so a blank is never stored. */
+    /**
+     * This tile with its [language] text set to [text], as typed by a person; blank text removes it,
+     * so a blank is never stored. Typed text is never replaced automatically ([autoTranslated]).
+     */
     fun withTranslation(language: String, text: String): Tile =
-        copy(translations = if (text.isBlank()) translations - language else translations + (language to text))
+        copy(translations = if (text.isBlank()) translations - language else translations + (language to text), autoTranslated = autoTranslated - language)
+
+    /** This tile with its [language] text set to [text] that was filled in automatically (#342), so it may be refreshed later. */
+    fun withAutoTranslation(language: String, text: String): Tile =
+        if (text.isBlank()) withTranslation(language, text) else copy(translations = translations + (language to text), autoTranslated = autoTranslated + language)
+
+    /** Whether the [language] text was filled in automatically and is still as it was filled in. */
+    fun isAutoTranslated(language: String?): Boolean = language != null && language in autoTranslated && translationFor(language) != null
 
     /**
      * Whether the tile has something to say but nothing in [language], so in that language's mode

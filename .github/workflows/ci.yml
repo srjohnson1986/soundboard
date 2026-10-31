@@ -210,6 +210,10 @@ jobs:
       - name: Check the docs
         run: python3 scripts/check-docs.py
 
+      # The Spanish phrasebook is made from presets/*.zip (#342): a preset that changed without it fails here.
+      - name: Check the Spanish phrasebook is current
+        run: python3 scripts/build-phrasebook.py --check
+
   # The required check. It passes when the docs check passed and the three build jobs did
   # too, or were skipped because only docs changed; it runs even then (always()), so the
   # check always reports (#183).

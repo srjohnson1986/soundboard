@@ -30,6 +30,8 @@ import com.example.soundboard.data.RecentBoardsRepository
 import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.ZipEntryData
 import com.example.soundboard.model.Board
+import com.example.soundboard.translate.Phrasebook
+import com.example.soundboard.translate.Translator
 import com.example.soundboard.translate.TranslatorStatus
 import com.example.soundboard.ui.theme.SoundboardTheme
 import kotlin.math.abs
@@ -53,7 +55,10 @@ class TestBoardApp(
     board: Board,
     builtIns: Map<String, BuiltInBoard> = emptyMap(),
     dispatcher: CoroutineDispatcher,
-    withIcons: Boolean = true
+    withIcons: Boolean = true,
+    phrasebook: Phrasebook = Phrasebook.Empty,
+    /** Stands in for the app's fake translator in the view model, to hold translations back, say. */
+    translatorOverride: Translator? = null
 ) {
     val files = InMemoryFileStore()
     val zip = FakeZipCodec()
@@ -83,7 +88,8 @@ class TestBoardApp(
         ioDispatcher = dispatcher,
         now = { 42L },
         mediaVolume = mediaVolume,
-        translator = translator
+        translator = translatorOverride ?: translator,
+        phrasebookSource = { phrasebook }
     )
 }
 
@@ -117,10 +123,12 @@ abstract class BoardUiTest : UiTest() {
         relockAfterIdle: Duration = EditingLock.RELOCK_AFTER_IDLE,
         idleMinute: Duration = 1.minutes,
         withIcons: Boolean = true,
+        phrasebook: Phrasebook = Phrasebook.Empty,
+        translator: Translator? = null,
         // How long a tile held in Edit mode stays lifted before leaving it; null is the app's own.
         leaveEditModeAfterMillis: Long? = null
     ): TestBoardApp {
-        val app = TestBoardApp(board, builtIns, dispatcher, withIcons)
+        val app = TestBoardApp(board, builtIns, dispatcher, withIcons, phrasebook, translator)
         check(app.vm.board.value.pages.first().id == board.pages.first().id) { "the board didn't load" }
         val platformWidthDialogs = dialogsUsePlatformWidth()
         setContent {

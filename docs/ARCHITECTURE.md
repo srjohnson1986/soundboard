@@ -24,6 +24,7 @@ anything that needs a platform goes behind one of the small interfaces in
 | `BundledBoards` | The built-in board zips packaged with the build | `AssetBundledBoards`, on APK assets (same file) | `WebBundledBoards`, fetched from next to the page | `IosBundledBoards`, from the app bundle |
 | `KeyValueStore` | Small device-local settings (`DevicePreferences`) | `SharedPreferencesStore` (same file) | `LocalStorageKeyValueStore` | `UserDefaultsKeyValueStore` |
 | `Translator` (`shared/.../translate/`) | Translates a tile's words to Spanish on the device, to suggest text (#332) | `MlKitTranslator` (`app/`), Google's ML Kit | `ChromeTranslator` (`web/`), Chrome's Translator API; other browsers say why they can't | `IosTranslator` (`ios/`), an honest "unavailable" stand-in |
+| `Phrasebook` (`shared/.../translate/`) | The bundled English to Spanish phrasebook (#342), `composeResources/files/phrasebook-es.json`, looked up before any translator | Read with `Res.readBytes`, from the APK's assets | The same call, fetched from next to the page | The same call, from the app bundle |
 
 Web storage is private to the site and survives reloads, but the browser may clear
 it under storage pressure unless it grants persistent storage (`WebMain` asks); a
@@ -126,7 +127,8 @@ data class Tile(
     val fileName: String? = null,   // null = empty tile
     val volume: Float = 1f,
     val colorArgb: Int? = null,     // null = use the theme default
-    val translations: Map<String, String> = emptyMap()  // language tag ("es") -> what the tile says in it (#331)
+    val translations: Map<String, String> = emptyMap(),  // language tag ("es") -> what the tile says in it (#331)
+    val autoTranslated: Set<String> = emptySet()         // the languages in translations that were filled in automatically (#342)
 )
 
 data class Page(
@@ -554,6 +556,61 @@ Spanish a tile gained meanwhile, and says how many it did and why it stopped.
 `NeedsDownload` it offers a button. After a pause in typing it shows the Spanish; with the switch on
 ES, Speak says that translation in the Spanish voice (and is off until there is one). Without a
 working translator, ES mode speaks what was typed as Spanish, as in #331.
+
+## Filling in Spanish automatically (#342)
+
+Switching to ES should leave nothing to do, so Spanish fills itself in, in two layers, and never
+replaces what a person typed.
+
+**The phrasebook** (`Phrasebook`, `shared/.../translate/Phrasebook.kt`) is
+`composeResources/files/phrasebook-es.json`: a JSON object from English to Spanish for every phrase on
+the built-in boards (what a tile *says*, its `speechText`). `scripts/build-phrasebook.py` makes it from
+the zips in `presets/` and the hand-written Spanish in its `SPANISH` table (it stops and names a phrase with none, and
+`--check` fails if the file is stale, which CI's `docs` job runs; presets/README.md says when to regenerate it). Phrases are matched by
+`Phrasebook.normalize` (the script has the same function): trimmed, lower case, inner whitespace collapsed,
+curly apostrophes straight, trailing `.`, `!` and `?` dropped, so "Thank you" and "Thank you." are one entry.
+`BoardViewModel` takes `phrasebookSource` (each platform's entry point passes `Phrasebook::bundledSpanish`,
+which reads the file with `Res.readBytes`, so it is the same code and file on Android, the web and iOS; a
+file that can't be read is an empty phrasebook) and reads it once, when a tile first needs Spanish. A lookup
+is instant, offline and needs no translator, which is why a built-in board is done the moment ES is on, on
+iOS and in Firefox too.
+
+**The fill** (`BoardViewModel.startFill`/`runFill`) takes the tiles `Board.untranslatedTiles` finds (words, no
+Spanish), fills those the phrasebook knows in **one** `commit`, then sends the rest through the `Translator`
+one at a time, saving every `FILL_BATCH_SIZE` (10) results, never one save per tile. It runs on:
+
+- **Switching to ES** (`setSecondLanguageOn`, and turning the board's second language on while ES shows),
+  which also lets the translator download its model (`allowDownload`): on Android the first switch fetches the ML Kit
+  model, and it does so even when the phrasebook covered every tile, so a tile typed later gets its Spanish too;
+- **Opening or restoring a board, and starting the app, while ES is on**, which fills from the phrasebook and the
+  translator if it is already `Ready` but never starts a download (a browser wants a tap for that, and a download
+  shouldn't happen as a side effect of opening a board);
+- **Saving a tile whose words changed** (`saveTile`/`fillSavedTile`), whichever way the switch is, when the board
+  has a second language: the phrasebook, or the translator only if `Ready`;
+- **Settings → Translate all tiles** (`translateAllTiles`), the manual retry: the same fill, with downloading allowed,
+  reporting in the snackbar instead of the banner.
+
+A newer fill replaces one still going, and switching to EN stops it. A translation is applied only where the
+tile still has no Spanish and still says what it said when the fill began (`applyAutoTranslations`), so Spanish
+typed while the translator works, or an English edit, is never overwritten with a stale result. The translator
+is given a few seconds to finish `Checking` before the fill decides (`settledTranslatorStatus`).
+
+**Never overwriting typed Spanish.** `Tile.autoTranslated` is the set of languages in `translations` that a fill (or
+Suggest) wrote; it is empty by default, so old boards and backups load unchanged (a test loads one). Typed
+text isn't in it, and `Tile.withTranslation` (as typed) takes a language out. The editor does the same when its
+Spanish field is edited, shows "Filled in automatically" under an auto-filled field, and Suggest puts the language in.
+`saveTile` drops a language from the set whose text is empty, and when a tile's words changed: auto Spanish
+is removed (old Spanish saying something else would be worse than the marker) and refilled as above; Spanish a person
+typed is untouched. `clearTile` empties the set.
+
+**Progress and the notes** use the same `translateProgress` as the Settings button, plus `spanishNote`. The board's
+`SpanishFillBanner` (`ui/SpanishFillBanner.kt`, styled like `BackupReminder` and above the tiles, shown locked too
+since the ES switch works locked) shows "Adding Spanish... 12 of 40" and, while the model downloads,
+`TranslatorStatusNote`'s bar and text, with **Cancel** (`cancelSpanishFill`: keeps what was done and says
+Translate all tiles will finish it; `MlKitTranslator` treats the cancelled download as `NeedsDownload`, not a failure).
+When tiles are left without Spanish a note explains why: translating `Unavailable` is said **once** per device
+(`DevicePreferences.translatorUnavailableNoteSeen`: nothing about it changes) and points to the editor's Spanish field,
+`Failed` is said each time with its message and Translate all tiles to try again. No leftover tiles, no note.
 
 ## Audio recording
 
@@ -1044,6 +1101,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | `BoardRepository` — save/load, missing-sound sanitizing, the legacy-schema and `homePageIndex` migrations, additive-field defaults, corrupt `board.json`, backup round-trips, the zip path guard, stray clips, bundled boards and original sounds; `SavedBoardRepository`, `RecentBoardsRepository` and `DevicePreferences` — all against in-memory storage (#241) | `shared/src/commonTest/.../data/BoardRepositoryTest.kt`, `SavedBoardRepositoryTest.kt`, `RecentBoardsRepositoryTest.kt`, `DevicePreferencesTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | The `FileStore` contract every implementation must meet (in-memory, `FileSystemStore`, and `OpfsFileStore` in Chrome); the golden backup zip (`GoldenBackup.kt`, made outside the app) that both `JavaZipCodec` and `FflateZipCodec` must read identically, so backups move between Android and the web; `JavaZipCodec` reading every zip in `presets/`; `LocalStorageKeyValueStore` and `SharedPreferencesStore`; picking and saving through the Storage Access Framework (`UriPickedFile`, `UriSaveTarget`) | `shared/src/commonTest/.../data/FileStoreContractTest.kt`, `GoldenBackup.kt`, `shared/src/androidHostTest/.../data/AndroidStorageTest.kt`, `shared/src/wasmJsTest/.../data/WebStorageTest.kt` | JVM, and WebAssembly in headless Chrome |
 | Translating on the device (#332): Suggest (including the first-use download, a failed download and trying again), Translate all tiles (only tiles without Spanish, how many, stopping on a failure), the Speak... preview and what each control shows while the translator is unavailable, downloading or failed; the status texts | `shared/src/commonTest/.../TranslatorViewModelTest.kt`, `ui/TranslatorUiTest.kt` (with `FakeTranslator`) | JVM (Robolectric) and WebAssembly in headless Chrome |
+| Spanish filling itself in (#342): the phrasebook's lookup (case, spaces, trailing punctuation, curly apostrophes), the bundled file itself, switching to ES filling from the phrasebook with the translator unavailable, the translator doing the rest and downloading its model, the progress and Cancel, the note when nothing can translate (once), a failed download; typed Spanish surviving a fill and an English edit, automatic Spanish refreshed or removed on an English edit; saving never downloading; opening, restoring a backup and starting with ES on; saves in batches; an old `board.json` without `autoTranslated`; the banner, its note and the editor's "Filled in automatically" | `shared/src/commonTest/.../AutoSpanishViewModelTest.kt`, `shared/src/androidHostTest/.../translate/BundledPhrasebookTest.kt` (the real file, on the JVM only: the browser tests don't serve resources), `ui/SpanishFillUiTest.kt` (with `FakeTranslator` and `GateTranslator`, which holds each translation until released) | JVM (Robolectric) and WebAssembly in headless Chrome |
 | Speaking Spanish (#331): Spanish mode picks a tile's Spanish, falls back to English, speaks over an English recording in the Spanish voice, and never in the wrong voice; Show mode's two lines; the Speak... box; the Spanish voice setting. The EN / ES switch (also while locked), the no-spanish marker, the editor's Spanish field, Show mode, the no-Spanish-voice bar and the Voice settings. An old `board.json` with no translations, and backups and saved boards carrying them | `shared/src/commonTest/.../SecondLanguageViewModelTest.kt`, `ui/SecondLanguageUiTest.kt`, `ui/DialogsUiTest.kt`, `data/BoardRepositoryTest.kt`, `data/DevicePreferencesTest.kt` | JVM (Robolectric) and WebAssembly in headless Chrome |
 | `BoardViewModel`, incl. the fresh-install board on each platform, editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, restoring an original sound, and saveBoardAs/openBoard — on in-memory storage with stand-in built-in boards (#241) | `shared/src/commonTest/.../BoardViewModelTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | Every built-in board the app ships, imported through the APK's assets, `java.util.zip` and the files directory | `test/.../data/ShippedBoardsTest.kt` | Robolectric |

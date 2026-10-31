@@ -3,7 +3,9 @@ package com.example.soundboard.audio
 import com.example.soundboard.model.SpeechSettings
 import com.example.soundboard.translate.Translator
 import com.example.soundboard.translate.TranslatorStatus
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /** Records calls instead of touching real audio. Loads and plays are treated as instant. */
 class FakePlayer : Player {
@@ -163,5 +165,31 @@ class FakeTranslator(initial: TranslatorStatus = TranslatorStatus.Ready) : Trans
             return null
         }
         return translations[text] ?: "[$target] $text"
+    }
+}
+
+/**
+ * A [Translator] that holds each translation until the test releases it with its Spanish, to see
+ * the board and the progress while it is working.
+ */
+class GateTranslator(initial: TranslatorStatus = TranslatorStatus.Ready) : Translator {
+    override val status: StateFlow<TranslatorStatus> = MutableStateFlow(initial)
+    private val waiting = ArrayDeque<CompletableDeferred<String>>()
+    private val released = ArrayDeque<String>()
+
+    override suspend fun prepare(target: String) = Unit
+
+    override suspend fun translate(text: String, target: String, from: String): String? {
+        val early = released.removeFirstOrNull()
+        if (early != null) return early
+        val gate = CompletableDeferred<String>()
+        waiting.addLast(gate)
+        return gate.await()
+    }
+
+    /** Lets the translation being held (or the next one) finish with [spanish]. */
+    fun release(spanish: String) {
+        val gate = waiting.removeFirstOrNull()
+        if (gate != null) gate.complete(spanish) else released.addLast(spanish)
     }
 }

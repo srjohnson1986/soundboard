@@ -23,6 +23,7 @@ import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.RowHeight
 import com.example.soundboard.model.SPANISH
 import com.example.soundboard.model.languageName
+import com.example.soundboard.translate.Phrasebook
 import com.example.soundboard.translate.Translator
 import com.example.soundboard.translate.TranslatorStatus
 import com.example.soundboard.translate.UnavailableTranslator
@@ -35,14 +36,17 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 class BoardViewModel(
     private val boardRepo: BoardRepository,
@@ -56,7 +60,13 @@ class BoardViewModel(
     /** Milliseconds since the epoch, for when a board was last used; a parameter so tests can pin it. */
     private val now: () -> Long = { Clock.System.now().toEpochMilliseconds() },
     private val mediaVolume: MediaVolume = UnknownMediaVolume,
-    private val translator: Translator = UnavailableTranslator("this build has no translator.")
+    private val translator: Translator = UnavailableTranslator("this build has no translator."),
+    /**
+     * Where the bundled English to Spanish phrasebook comes from (#342): read once, the first time a
+     * tile needs Spanish. Each platform passes [Phrasebook.bundledSpanish]; the default knows nothing,
+     * so a test (or a build without the file) falls through to [translator].
+     */
+    private val phrasebookSource: suspend () -> Phrasebook = { Phrasebook.Empty }
 ) : ViewModel(), BoardSettingsActions {
 
     private val _board = MutableStateFlow(Board())
@@ -91,14 +101,35 @@ class BoardViewModel(
     /** Whether the device can translate, for the screen to explain; see [Translator.status]. */
     val translatorStatus: StateFlow<TranslatorStatus> get() = translator.status
 
-    /** How far "Translate all tiles" has got, or null when it isn't running. */
+    /**
+     * How far filling in Spanish has got (#342, #332): [TranslateProgress.done] of [TranslateProgress.total]
+     * tiles, or null when it isn't running. The board's banner and Settings' "Translate all tiles"
+     * both read it. A [TranslateProgress.total] of 0 means only the translator's language model is
+     * being got ready.
+     */
     private val _translateProgress = MutableStateFlow<TranslateProgress?>(null)
     val translateProgress: StateFlow<TranslateProgress?> = _translateProgress.asStateFlow()
 
     /**
+     * A note about Spanish that couldn't be filled in automatically, for the board's banner to show
+     * until it is dismissed (#342): why some tiles still say "no Spanish", and what to do about it.
+     */
+    private val _spanishNote = MutableStateFlow<String?>(null)
+    val spanishNote: StateFlow<String?> = _spanishNote.asStateFlow()
+
+    /** The bundled phrasebook, read the first time it is needed. */
+    private var phrasebook: Phrasebook? = null
+
+    private suspend fun phrasebook(): Phrasebook = phrasebook ?: phrasebookSource().also { phrasebook = it }
+
+    /** The automatic fill that is running, so a newer one (or a switch back to English) can replace it. */
+    private var fillJob: Job? = null
+
+    /**
      * Suggests the Spanish for [english] (the tile editor's Suggest, #332), handing the result to
      * [onResult], or null if it couldn't ([translatorStatus] says why). It only fills the editor's
-     * Spanish field, for the user to edit; the saved text is what plays.
+     * Spanish field, for the user to edit; the saved text is what plays. The bundled phrasebook
+     * answers first, as it does when Spanish is filled in automatically.
      */
     fun suggestTranslation(english: String, onResult: (String?) -> Unit) {
         val language = _board.value.secondLanguage
@@ -106,7 +137,10 @@ class BoardViewModel(
             onResult(null)
             return
         }
-        viewModelScope.launch { onResult(translator.translate(english.trim(), language)?.trim()?.ifBlank { null }) }
+        viewModelScope.launch {
+            val spanish = phrasebook().lookup(english, language) ?: translator.translate(english.trim(), language)
+            onResult(spanish?.trim()?.ifBlank { null })
+        }
     }
 
     /**
@@ -125,64 +159,202 @@ class BoardViewModel(
     }
 
     /**
-     * Fills in the Spanish of every tile without any by translating its words, one after another
-     * (translators work one at a time), then saves them all in one edit. A tile that got Spanish
-     * meanwhile is left alone. Reports how many it did, and why it stopped if it did.
+     * Settings' "Translate all tiles", the manual retry for the automatic fill (#332, #342): fills in
+     * the Spanish of every tile without any, from the phrasebook and then the translator, downloading
+     * its model if it must, and says how many it did and why it stopped if it did.
      */
     override fun translateAllTiles() {
+        if (_board.value.secondLanguage == null || _translateProgress.value != null) return
+        startFill(allowDownload = true, manual = true)
+    }
+
+    /** "Cancel" on the banner while Spanish is being added (it keeps what was filled in so far). */
+    fun cancelSpanishFill() {
+        if (fillJob?.isActive != true) return
+        fillJob?.cancel()
         val language = _board.value.secondLanguage ?: return
-        if (_translateProgress.value != null) return
+        val left = _board.value.untranslatedTiles(language).size
+        if (left > 0) {
+            _spanishNote.value = "${tilesStill(left)} no ${languageName(language)} yet. " +
+                "Settings > Voice > Translate all tiles adds ${languageName(language)} when you want it."
+        }
+    }
+
+    /** "OK" on the banner's note. */
+    fun dismissSpanishNote() {
+        _spanishNote.value = null
+    }
+
+    /**
+     * Fills in Spanish for the tiles that have none (#342): the bundled phrasebook first (instant,
+     * offline), then the translator for whatever it didn't know. Typed Spanish is never touched, and
+     * what is filled in is marked [Tile.autoTranslated] so it can be refreshed when the English
+     * changes. It runs on switching the board to ES, on opening or restoring a board while ES is on,
+     * and from Settings; it replaces an earlier run still going.
+     *
+     * [allowDownload] says the translator may fetch its language model (the switch to ES and
+     * Settings, which a person just asked for), which opening a board doesn't do. [manual] is Settings:
+     * it says what it did in the snackbar instead of the banner.
+     */
+    private fun startFill(allowDownload: Boolean, manual: Boolean = false) {
+        val language = _board.value.secondLanguage ?: return
+        if (!manual && activeLanguage() == null) return
+        fillJob?.cancel()
+        _spanishNote.value = null
+        fillJob = viewModelScope.launch { runFill(language, allowDownload, manual) }
+    }
+
+    private suspend fun runFill(language: String, allowDownload: Boolean, manual: Boolean) {
         val targets = _board.value.untranslatedTiles(language)
-        if (targets.isEmpty()) {
+        if (targets.isEmpty() && manual) {
             _message.value = "Every tile already has ${languageName(language)}."
             return
         }
-        viewModelScope.launch {
-            val translated = mutableMapOf<String, String>()
-            var failed = 0
-            _translateProgress.value = TranslateProgress(0, targets.size)
-            for ((index, tile) in targets.withIndex()) {
-                val spanish = translator.translate(tile.speechText.trim(), language)?.trim()
-                if (spanish.isNullOrBlank()) {
-                    failed++
-                    // A model that won't download or a translator that's gone fails every tile the same way.
-                    val status = translator.status.value
-                    if (status is TranslatorStatus.Failed || status is TranslatorStatus.Unavailable) break
-                } else {
-                    translated[tile.id] = spanish
-                }
-                _translateProgress.value = TranslateProgress(index + 1, targets.size)
-            }
-            _translateProgress.value = null
-            if (translated.isNotEmpty()) {
-                commit(
-                    _board.value.copy(
-                        pages = _board.value.pages.map { page ->
-                            page.copy(
-                                tiles = page.tiles.map { tile ->
-                                    val spanish = translated[tile.id]
-                                    if (spanish != null && tile.translationFor(language) == null) tile.withTranslation(language, spanish) else tile
+        // What each tile said when this started: a translation is only kept if it still says so.
+        val sources = targets.associate { it.id to it.speechText.trim() }
+
+        val book = phrasebook()
+        val fromBook = targets.mapNotNull { tile -> book.lookup(sources.getValue(tile.id), language)?.let { tile.id to it } }.toMap()
+        applyAutoTranslations(language, fromBook, sources)
+        val remaining = targets.filter { it.id !in fromBook }
+
+        var translated = 0
+        var failed = 0
+        var stopped: TranslatorStatus? = null
+        var finished = false
+        try {
+            val status = if (remaining.isNotEmpty() || (allowDownload && !manual)) settledTranslatorStatus() else null
+            when {
+                status == null -> Unit
+                status is TranslatorStatus.Unavailable -> stopped = status
+                // Not for now: still checking, or its model would have to be downloaded and nobody asked.
+                status == TranslatorStatus.Checking || (status != TranslatorStatus.Ready && !allowDownload) -> Unit
+                // The phrasebook knew every tile and the model is here: nothing for the translator to do.
+                remaining.isEmpty() && status == TranslatorStatus.Ready -> Unit
+                else -> {
+                    // Nothing to count when it is only the model being got ready.
+                    _translateProgress.value = if (remaining.isEmpty()) TranslateProgress(0, 0) else TranslateProgress(fromBook.size, targets.size)
+                    if (remaining.isEmpty()) {
+                        // Switching to ES gets the translator ready even if the phrasebook knew every
+                        // tile, so a tile typed later gets its Spanish too.
+                        translator.prepare(language)
+                    }
+                    val pending = mutableMapOf<String, String>()
+                    try {
+                        for (tile in remaining) {
+                            val spanish = translator.translate(sources.getValue(tile.id), language)?.trim()
+                            if (spanish.isNullOrBlank()) {
+                                failed++
+                                // A model that won't download or a translator that's gone fails every tile the same way.
+                                val now = translator.status.value
+                                if (now is TranslatorStatus.Failed || now is TranslatorStatus.Unavailable) {
+                                    stopped = now
+                                    break
                                 }
-                            )
+                            } else {
+                                pending[tile.id] = spanish
+                                translated++
+                            }
+                            _translateProgress.value = TranslateProgress(fromBook.size + translated + failed, targets.size)
+                            // In batches, so a long fill isn't one save per tile and isn't lost if the app is closed.
+                            if (pending.size >= FILL_BATCH_SIZE) {
+                                applyAutoTranslations(language, pending, sources)
+                                pending.clear()
+                            }
                         }
-                    )
-                )
+                    } finally {
+                        // Also when cancelled: what was translated is kept.
+                        applyAutoTranslations(language, pending, sources)
+                    }
+                }
             }
-            val skipped = targets.size - translated.size - failed
-            _message.value = buildString {
-                append(
-                    when (translated.size) {
-                        0 -> "No tiles were translated."
-                        1 -> "Added ${languageName(language)} to 1 tile."
-                        else -> "Added ${languageName(language)} to ${translated.size} tiles."
+            finished = true
+        } finally {
+            _translateProgress.value = null
+        }
+        if (!finished) return
+
+        val filled = fromBook.size + translated
+        val left = _board.value.untranslatedTiles(language).size
+        if (manual) {
+            reportTranslateAll(language, filled, failed, targets.size - filled - failed, stopped)
+        } else if (left > 0) {
+            noteLeftovers(language, left, stopped)
+        }
+    }
+
+    /** What Settings' "Translate all tiles" says when it's done. */
+    private fun reportTranslateAll(language: String, filled: Int, failed: Int, skipped: Int, stopped: TranslatorStatus?) {
+        _message.value = buildString {
+            append(
+                when (filled) {
+                    0 -> "No tiles were translated."
+                    1 -> "Added ${languageName(language)} to 1 tile."
+                    else -> "Added ${languageName(language)} to $filled tiles."
+                }
+            )
+            if (failed > 0) append(" $failed couldn't be translated.")
+            if (skipped > 0) append(" Stopped with $skipped left.")
+            (stopped as? TranslatorStatus.Failed)?.let { append(" ${it.message}") }
+            (stopped as? TranslatorStatus.Unavailable)?.let { append(" ${it.reason}") }
+        }
+    }
+
+    /**
+     * Says on the banner why [left] tiles still say "no Spanish" after an automatic fill, when the
+     * translator was the reason: unavailable here (said once, since nothing about it will change) or
+     * failed (said each time, since trying again may work).
+     */
+    private fun noteLeftovers(language: String, left: Int, stopped: TranslatorStatus?) {
+        val name = languageName(language)
+        _spanishNote.value = when (stopped) {
+            is TranslatorStatus.Unavailable -> {
+                if (devicePrefs.translatorUnavailableNoteSeen) return
+                devicePrefs.translatorUnavailableNoteSeen = true
+                "${tilesStill(left)} no $name yet. Translating isn't available here: ${stopped.reason.trimEnd('.')}. " +
+                    "To add $name to a tile, open its editor and type it in the $name field."
+            }
+            is TranslatorStatus.Failed ->
+                "Couldn't add $name to ${tilesCount(left)}. ${stopped.message} " +
+                    "Settings > Voice > Translate all tiles tries again."
+            else -> return
+        }
+    }
+
+    private fun tilesCount(count: Int) = if (count == 1) "1 tile" else "$count tiles"
+
+    private fun tilesStill(count: Int) = if (count == 1) "1 tile has" else "$count tiles have"
+
+    /** The translator's status once it has said what it can do, giving it a few seconds to finish checking. */
+    private suspend fun settledTranslatorStatus(): TranslatorStatus =
+        withTimeoutOrNull(TRANSLATOR_CHECK_TIMEOUT_MILLIS) { translator.status.first { it != TranslatorStatus.Checking } }
+            ?: translator.status.value
+
+    /**
+     * Puts [translations] (tile id to Spanish) on their tiles in one edit, marked as automatic, where
+     * the tile still has no Spanish and still says what it said when [sources] was taken: typed
+     * Spanish is never replaced, and a tile whose English changed meanwhile is left for the next fill.
+     */
+    private fun applyAutoTranslations(language: String, translations: Map<String, String>, sources: Map<String, String>) {
+        if (translations.isEmpty()) return
+        var changed = false
+        val board = _board.value
+        val next = board.copy(
+            pages = board.pages.map { page ->
+                page.copy(
+                    tiles = page.tiles.map { tile ->
+                        val spanish = translations[tile.id]
+                        if (spanish != null && tile.translationFor(language) == null && tile.speechText.trim() == sources[tile.id]) {
+                            changed = true
+                            tile.withAutoTranslation(language, spanish)
+                        } else {
+                            tile
+                        }
                     }
                 )
-                if (failed > 0) append(" $failed couldn't be translated.")
-                if (skipped > 0) append(" Stopped with $skipped left.")
-                (translator.status.value as? TranslatorStatus.Failed)?.let { append(" ${it.message}") }
-                (translator.status.value as? TranslatorStatus.Unavailable)?.let { append(" ${it.reason}") }
             }
-        }
+        )
+        if (changed) commit(next)
     }
 
     /** Device-local, not part of [Board] — see [DevicePreferences.secondLanguageActive]. */
@@ -195,6 +367,13 @@ class BoardViewModel(
     fun setSecondLanguageOn(on: Boolean) {
         devicePrefs.secondLanguageActive = on
         _secondLanguageOn.value = on
+        if (on) {
+            // Nothing for the person to do (#342): every tile without Spanish gets it now.
+            startFill(allowDownload = true)
+        } else {
+            fillJob?.cancel()
+            _spanishNote.value = null
+        }
     }
 
     /** The language the board is speaking right now besides English: the second language if the switch is on ES, else null. */
@@ -281,26 +460,6 @@ class BoardViewModel(
 
     /** Where the active recording is writing to; only meaningful while [isRecording] is true. */
     private var pendingRecordingPath: String? = null
-
-    init {
-        viewModelScope.launch {
-            withContext(ioDispatcher) {
-                if (!boardRepo.hasSavedBoard()) {
-                    FALLBACK_BOARD_ASSETS.firstOrNull(boardRepo::hasAsset)?.let { boardRepo.importFromAsset(it) }
-                }
-            }
-            val loaded = withContext(ioDispatcher) { boardRepo.load() }
-            // Only overrides where the pager starts, not what's saved to disk — a plain
-            // switchTo(), same as any other in-session page switch, see BoardViewModel.switchPage.
-            val initial = if (loaded.openOnHomePage) {
-                loaded.homePageIndex?.let { loaded.withCurrentPage(it) } ?: loaded
-            } else {
-                loaded
-            }
-            _board.value = initial
-            withContext(ioDispatcher) { loadSounds(initial) }
-        }
-    }
 
     fun play(tile: Tile) {
         if (!tile.isPlayable(_board.value.speakUnrecordedTilesEnabled)) return
@@ -441,18 +600,42 @@ class BoardViewModel(
      * Pending sounds the draft didn't keep are unloaded here and pruned with the commit.
      */
     fun saveTile(tileId: String, edited: Tile) {
+        val language = _board.value.secondLanguage
+        var refillFor: String? = null
         updateTile(tileId) { current ->
-            edited.copy(
+            val translations = edited.translations.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() }
+            val saved = edited.copy(
                 id = current.id,
                 label = edited.label.trim(),
                 emoji = edited.emoji?.trim()?.ifBlank { null },
-                translations = edited.translations.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
+                translations = translations,
+                // Only text that is there can be automatic; typing in the editor already took a language out.
+                autoTranslated = edited.autoTranslated.filter { it in translations }.toSet(),
                 ttsScript = edited.ttsScript?.trim()?.ifBlank { null },
                 volume = edited.volume.coerceIn(0f, 1f),
                 opacity = edited.opacity?.coerceIn(0f, 1f)
             )
+            val english = saved.speechText.trim()
+            if (language == null || english == current.speechText.trim()) return@updateTile saved
+            // The words changed (#342). Automatic Spanish no longer says what they do, so it goes and is
+            // refreshed below; Spanish a person typed is never touched.
+            val stale = saved.isAutoTranslated(language)
+            val cleared = if (stale) saved.copy(translations = saved.translations - language, autoTranslated = saved.autoTranslated - language) else saved
+            if (english.isNotEmpty() && cleared.translationFor(language) == null) refillFor = english
+            cleared
         }
         endTileEdit(keep = setOfNotNull(edited.fileName), keepIcons = setOfNotNull(edited.imageFileName))
+        refillFor?.let { english -> if (language != null) viewModelScope.launch { fillSavedTile(tileId, language, english) } }
+    }
+
+    /**
+     * Gives a tile just saved with new words its Spanish (#342): from the phrasebook, else from the
+     * translator if it is already ready. A save never starts a model download.
+     */
+    private suspend fun fillSavedTile(tileId: String, language: String, english: String) {
+        val spanish = phrasebook().lookup(english, language)
+            ?: if (translator.status.value == TranslatorStatus.Ready) translator.translate(english, language) else null
+        spanish?.trim()?.ifBlank { null }?.let { applyAutoTranslations(language, mapOf(tileId to it), mapOf(tileId to english)) }
     }
 
     /**
@@ -529,7 +712,7 @@ class BoardViewModel(
     }
 
     fun clearTile(tileId: String) = updateTile(tileId) {
-        it.copy(label = "", fileName = null, speakWhenNoSound = false, emoji = null, imageFileName = null, showLabel = true, translations = emptyMap())
+        it.copy(label = "", fileName = null, speakWhenNoSound = false, emoji = null, imageFileName = null, showLabel = true, translations = emptyMap(), autoTranslated = emptySet())
     }
 
     /** Detaches a tile's sound without touching its label or [Tile.speakWhenNoSound]. */
@@ -645,6 +828,7 @@ class BoardViewModel(
     /** Turns the second language on for the board, or off, which hides the switch and the Spanish fields. */
     override fun setSecondLanguageEnabled(value: Boolean) {
         commit(_board.value.copy(secondLanguage = if (value) SPANISH else null))
+        if (value) startFill(allowDownload = true) else fillJob?.cancel()
     }
 
     private fun updateSpeech(transform: (SpeechSettings) -> SpeechSettings) {
@@ -927,6 +1111,7 @@ class BoardViewModel(
                     withContext(ioDispatcher) { loadSounds(loaded) }
                     recordRecentlyUsed(RecentBoardEntry(kind = RecentBoardKind.SAVED, id = ref.id, label = loaded.name, usedAt = now()))
                     _message.value = "Loaded \"${loaded.name}\""
+                    startFill(allowDownload = false)
                 }
                 is BoardRef.BuiltIn -> {
                     val ok = withContext(ioDispatcher) { boardRepo.importFromAsset(ref.assetName) }
@@ -977,6 +1162,8 @@ class BoardViewModel(
             // Nothing on a board just opened or restored needs backing up yet.
             markBackedUp()
             _message.value = successMessage
+            // Opened or restored while ES is on: fill in its Spanish as switching to ES does.
+            startFill(allowDownload = false)
         } else {
             _message.value = failureMessage
         }
@@ -1067,12 +1254,42 @@ class BoardViewModel(
         super.onCleared()
     }
 
+    // Last in the class, so every property the first fill touches (commit's, say) exists by the time it runs
+    // (a test's dispatcher runs this at once, before construction has finished).
+    init {
+        viewModelScope.launch {
+            withContext(ioDispatcher) {
+                if (!boardRepo.hasSavedBoard()) {
+                    FALLBACK_BOARD_ASSETS.firstOrNull(boardRepo::hasAsset)?.let { boardRepo.importFromAsset(it) }
+                }
+            }
+            val loaded = withContext(ioDispatcher) { boardRepo.load() }
+            // Only overrides where the pager starts, not what's saved to disk — a plain
+            // switchTo(), same as any other in-session page switch, see BoardViewModel.switchPage.
+            val initial = if (loaded.openOnHomePage) {
+                loaded.homePageIndex?.let { loaded.withCurrentPage(it) } ?: loaded
+            } else {
+                loaded
+            }
+            _board.value = initial
+            withContext(ioDispatcher) { loadSounds(initial) }
+            // A board left on ES: anything still without Spanish gets it.
+            startFill(allowDownload = false)
+        }
+    }
+
     companion object {
         /** How long changes can go without a backup before the board reminds about one (#249). */
         val BACKUP_REMINDER_AFTER = 7.days
 
         /** How long "Later" puts the reminder away for. */
         val BACKUP_REMINDER_SNOOZE = 7.days
+
+        /** How many translated tiles an automatic fill saves at once (#342), so it is never one save per tile. */
+        const val FILL_BATCH_SIZE = 10
+
+        /** How long a fill waits for the translator to finish checking what the device can do. */
+        const val TRANSLATOR_CHECK_TIMEOUT_MILLIS = 12_000L
 
         /** What Settings' Preview button says in the chosen voice. */
         const val SPEECH_PREVIEW = "Hello. This is how the board sounds."

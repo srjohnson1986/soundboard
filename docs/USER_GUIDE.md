@@ -118,9 +118,11 @@ In the editor:
   short name on the tile (e.g. the name "Water", saying "Could I have a
   glass of water, please?"). Leave it blank to speak the name.
 - **Spanish:** what the tile says when the switch is on **ES** (see "Speaking
-  Spanish"). Leave it blank for a tile that has no Spanish. **Suggest** fills it
-  in by translating the tile's **What to say** (or its name) on the device, for
-  you to read and fix; **Hear the Spanish** says it in the Spanish voice,
+  Spanish"). It fills itself in, and then says **Filled in automatically**
+  under the field; change the words in it and it becomes yours, and is never
+  replaced again. Leave it blank for a tile that has no Spanish. **Suggest**
+  fills it in again by translating the tile's **What to say** (or its name),
+  for you to read and fix; **Hear the Spanish** says it in the Spanish voice,
   whichever way the switch is. Only shown while Settings → Voice → **Speak
   Spanish too** is on.
 - **Preview / Play clip:** hear the tile without closing the editor.
@@ -156,9 +158,11 @@ For when you read and speak English but need to say something in Spanish, say to
 a Spanish-speaking caregiver. The board's names and the app's own text stay in
 English; only what the board *says* changes.
 
-- **Give a tile its Spanish.** Open its editor and fill in the **Spanish** field
-  (see "Editing a tile"). The Spanish is saved on the tile, so it works with no
-  internet and is part of a board's backup, and of a saved board.
+- **Give a tile its Spanish.** You don't have to: tap **ES** and the Spanish
+  fills itself in (see "When you switch to ES"). To say it your own way, open the
+  tile's editor and change the **Spanish** field (see "Editing a tile"). The
+  Spanish is saved on the tile, so it works with no internet and is part of a
+  board's backup, and of a saved board.
 - **Switch to Spanish.** Tap **ES** in the top bar; tap **EN** to go back. It is
   saved on this device (so it's still on when you reopen the app) and works while
   the board is locked, since it's for everyday use.
@@ -174,22 +178,51 @@ English; only what the board *says* changes.
   are shared. Turn **Speak Spanish too** off in the same place to hide the switch
   and the Spanish fields on a board that doesn't need them.
 
-**Translating on the device.** Typing the Spanish for every tile is slow, so the
-device can suggest it. Suggestions only ever fill in text you can read and
-change; what the board says is always the Spanish saved on the tile, so playing
+**When you switch to ES**, every tile that has words and no Spanish gets some, so
+there is nothing for you to do. A small bar above the tiles says how it is going
+("Adding Spanish... 12 of 40") and the board stays usable meanwhile: a tile that
+hasn't its Spanish yet speaks English until it arrives.
+
+1. **The built-in phrasebook** comes first. It has the Spanish, written by hand,
+   for every phrase on the built-in boards ("Thank you", "I need the bathroom",
+   "Call 911"...), and looks tiles up by what they say, ignoring capitals and a
+   full stop, question mark or exclamation mark at the end. It is part of the
+   app, so it needs no internet and works on every device and browser.
+2. **The translator** does the rest (see below), with no button to press. On
+   Android the first switch to **ES** downloads the Spanish language model, about 30 MB
+   on any connection; the bar shows it, with a **Cancel**. Cancel keeps what was
+   done, and **Settings → Voice → Translate all tiles** picks it up later.
+3. **Where nothing can translate** (an iPhone or iPad, Firefox, Safari, a phone
+   browser), the tiles the phrasebook didn't know keep their **no spanish**
+   marker, and the bar says so once, in a note you close with **OK**. Type their
+   Spanish in the tile's editor.
+
+It also runs when you **save a tile** whose words changed (the phrasebook, or the
+translator if it is already ready; saving never starts a download), and when you
+**open or restore a board** while ES is on (the phrasebook, and the translator if
+it is ready; opening a board never starts a download).
+
+**Spanish you typed is never replaced.** Spanish the app filled in is refreshed when
+you change the tile's English (if it can't be, it goes, so the tile never says
+something its words no longer mean). Spanish you edit by hand is yours from then
+on, and nothing fills over it again.
+
+**Translating on the device.** The translator only ever fills in text you can read
+and change; what the board says is always the Spanish saved on the tile, so playing
 a tile never translates anything, works with no internet, and never changes by
 itself.
 
 - **Suggest**, in the tile editor, fills in that tile's Spanish field.
-- **Settings → Voice → Translate all tiles** fills in every tile that has words
-  and no Spanish, and says how many it did (it never replaces Spanish you
-  already have). Each one can still be edited in its tile.
+- **Settings → Voice → Translate all tiles** is the manual retry for the above:
+  it fills in every tile that has words and no Spanish, and says how many it did
+  (it never replaces Spanish you already have). Each one can still be edited in
+  its tile.
 - **Speak...** shows the Spanish for what you type, underneath, as you type. With
   the switch on **ES**, type it in English and the box says the Spanish; without
   a translator, type the Spanish yourself.
 
-The first translation downloads the Spanish language model (about 30 MB on
-Android), once; after that it works offline. A bar shows the download (Android
+The Spanish language model (about 30 MB on Android) is downloaded once; after that
+it works offline. A bar shows the download (Android
 can't say how far along it is, so its bar just moves), and if it fails, a
 message says why and the button tries again. Where translating can't work, the
 buttons stay and say why instead of disappearing:
@@ -402,8 +435,9 @@ to return to the list or **Done** to close Settings.
   - **Speak Spanish too:** the **EN / ES** switch and each tile's Spanish field
     (on the board; see "Speaking Spanish"), and **Spanish voice** with its own
     **Preview Spanish**, which belong to the device
-  - **Translate all tiles:** fills in the Spanish of every tile that has none,
-    on the device
+  - **Translate all tiles:** fills in the Spanish of every tile that has none (the
+    phrasebook, then the translator), the manual retry for what happens when you
+    switch to **ES**
 - **Screen:**
   - Keep the screen from turning off while the board is open
   - Performance mode: turns off shadows, tap ripples and similar effects

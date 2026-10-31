@@ -7,6 +7,7 @@ import com.example.soundboard.audio.Player
 import com.example.soundboard.audio.Recorder
 import com.example.soundboard.audio.Speaker
 import com.example.soundboard.audio.SpeechVoice
+import com.example.soundboard.model.SPANISH
 import com.example.soundboard.model.SpeechSettings
 import platform.AVFAudio.AVAudioPlayer
 import platform.AVFAudio.AVAudioRecorder
@@ -190,29 +191,41 @@ class IosSpeaker : Speaker {
 
     override val available: StateFlow<Boolean?> = MutableStateFlow(AVSpeechSynthesisVoice.speechVoices().isNotEmpty())
 
-    override val voices: StateFlow<List<SpeechVoice>> = MutableStateFlow(
-        run {
-            val language = NSLocale.currentLocale.languageCode ?: "en"
-            AVSpeechSynthesisVoice.speechVoices()
-                .map { it as AVSpeechSynthesisVoice }
-                .filter { it.language.startsWith(language) }
-                .map { SpeechVoice(it.identifier, "${it.name} (${it.language})") }
-                .sortedBy { it.name }
-        }
-    )
+    override val voices: StateFlow<List<SpeechVoice>> = MutableStateFlow(voicesFor(NSLocale.currentLocale.languageCode ?: "en"))
+
+    // iOS knows its voices from the start, so this is never "not known yet". A device can have no
+    // Spanish voice (they are downloaded in Settings > Accessibility > Spoken Content > Voices).
+    override val spanishVoices: StateFlow<List<SpeechVoice>?> = MutableStateFlow(voicesFor(SPANISH))
+
+    private fun voicesFor(language: String): List<SpeechVoice> =
+        AVSpeechSynthesisVoice.speechVoices()
+            .map { it as AVSpeechSynthesisVoice }
+            .filter { it.language.startsWith(language) }
+            .map { SpeechVoice(it.identifier, "${it.name} (${it.language})") }
+            .sortedBy { it.name }
 
     override fun configure(settings: SpeechSettings) {
         this.settings = settings
     }
 
-    override fun speak(text: String) {
+    override fun speak(text: String, language: String?) {
         if (text.isBlank()) return
+        // A language with no voice here is not spoken in the device's own: the caller has already
+        // checked spanishVoices and told the user.
+        val voice = if (language == null) {
+            settings.voiceId?.let { AVSpeechSynthesisVoice.voiceWithIdentifier(it) }
+        } else {
+            val chosen = settings.spanishVoiceId.takeIf { language == SPANISH }
+                ?.let { AVSpeechSynthesisVoice.voiceWithIdentifier(it) }
+                ?.takeIf { it.language.startsWith(language) }
+            chosen ?: voicesFor(language).firstOrNull()?.let { AVSpeechSynthesisVoice.voiceWithIdentifier(it.id) } ?: return
+        }
         synthesizer.stopSpeakingAtBoundary(AVSpeechBoundary.AVSpeechBoundaryImmediate)
         val utterance = AVSpeechUtterance.speechUtteranceWithString(text)
         utterance.rate = (AVSpeechUtteranceDefaultSpeechRate * settings.ratePercent / 100f)
             .coerceIn(AVSpeechUtteranceMinimumSpeechRate, AVSpeechUtteranceMaximumSpeechRate)
         utterance.pitchMultiplier = (settings.pitchPercent / 100f).coerceIn(0.5f, 2f)
-        utterance.voice = settings.voiceId?.let { AVSpeechSynthesisVoice.voiceWithIdentifier(it) }
+        utterance.voice = voice
         synthesizer.speakUtterance(utterance)
     }
 

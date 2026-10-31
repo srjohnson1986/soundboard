@@ -33,6 +33,16 @@ work on iOS picks up, go back to running it on every pull request: restore the
   (the tap on Stop shouldn't be the last thing it plays; a very short recording is kept
   whole).
 - [ ] Settings → Voice lists the device's voices, and Speed, Pitch and Preview work.
+- [ ] Speaking Spanish (#331): with a Spanish voice installed (Settings → Accessibility →
+  Spoken Content → Voices → Spanish), Settings → Voice → **Spanish voice** lists it and
+  **Preview Spanish** speaks it in Spanish; a tile with Spanish text, with the top bar's
+  **ES** on, speaks it in Spanish even when the tile has a recording; **Show mode** shows
+  the Spanish large with the English small under it; the choice survives closing the app.
+  `IosSpeaker` takes the voice named by `spanishVoiceId`, else the first voice whose
+  language starts with `es`.
+- [ ] With **no** Spanish voice installed, **ES** shows the red "This device has no
+  Spanish voice" bar and tiles speak English; **Preview Spanish** and **Speak...** say so
+  rather than speaking Spanish in an English voice.
 - [ ] Sounds play with the ring/silent switch on silent (they should: see
   `configureAudioSession()`).
 - [ ] With the media volume all the way down, the red "can't be heard" bar shows, and it

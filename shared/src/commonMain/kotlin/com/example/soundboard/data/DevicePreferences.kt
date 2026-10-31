@@ -56,13 +56,24 @@ class DevicePreferences(private val prefs: KeyValueStore) {
         get() = SpeechSettings(
             voiceId = prefs.getString(KEY_SPEECH_VOICE_ID),
             ratePercent = prefs.getInt(KEY_SPEECH_RATE_PERCENT, 100).coerceIn(SpeechSettings.PERCENT_RANGE),
-            pitchPercent = prefs.getInt(KEY_SPEECH_PITCH_PERCENT, 100).coerceIn(SpeechSettings.PERCENT_RANGE)
+            pitchPercent = prefs.getInt(KEY_SPEECH_PITCH_PERCENT, 100).coerceIn(SpeechSettings.PERCENT_RANGE),
+            spanishVoiceId = prefs.getString(KEY_SPEECH_SPANISH_VOICE_ID)
         )
         set(value) {
             prefs.putString(KEY_SPEECH_VOICE_ID, value.voiceId)
+            prefs.putString(KEY_SPEECH_SPANISH_VOICE_ID, value.spanishVoiceId)
             prefs.putInt(KEY_SPEECH_RATE_PERCENT, value.ratePercent.coerceIn(SpeechSettings.PERCENT_RANGE))
             prefs.putInt(KEY_SPEECH_PITCH_PERCENT, value.pitchPercent.coerceIn(SpeechSettings.PERCENT_RANGE))
         }
+
+    /**
+     * Whether the EN / ES switch is on ES (#331): the board speaks each tile's Spanish text, in the
+     * Spanish voice. Per device, like Show mode: it is about who this device is talking to now, and
+     * it must not flip when a different board is opened.
+     */
+    var secondLanguageActive: Boolean
+        get() = prefs.getBoolean(KEY_SECOND_LANGUAGE_ACTIVE, false)
+        set(value) = prefs.putBoolean(KEY_SECOND_LANGUAGE_ACTIVE, value)
 
     /**
      * When the board first changed after its last backup, in epoch milliseconds; null while
@@ -103,6 +114,8 @@ class DevicePreferences(private val prefs: KeyValueStore) {
         private const val KEY_SHOW_MODE_MUTE_SOUNDS = "show_mode_mute_sounds"
         private const val KEY_SHOW_MODE_FLIPPED = "show_mode_flipped"
         private const val KEY_SPEECH_VOICE_ID = "speech_voice_id"
+        private const val KEY_SPEECH_SPANISH_VOICE_ID = "speech_spanish_voice_id"
+        private const val KEY_SECOND_LANGUAGE_ACTIVE = "second_language_active"
         private const val KEY_UNBACKED_CHANGES_SINCE = "unbacked_changes_since"
         private const val KEY_EDITING_LOCK_ENABLED = "editing_lock_enabled"
         private const val KEY_BACKUP_REMINDER_SNOOZED_UNTIL = "backup_reminder_snoozed_until"

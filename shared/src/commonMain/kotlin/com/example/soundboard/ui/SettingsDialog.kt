@@ -202,7 +202,8 @@ private fun settingsSummary(
     showMode: ShowModeSettings,
     recordingTrimEndMillis: Int,
     speech: SpeechSettings,
-    voices: List<SpeechVoice>
+    voices: List<SpeechVoice>,
+    spanishVoices: List<SpeechVoice>?
 ): String = when (group) {
     SettingsGroup.HOME_PAGE ->
         if (board.homePageIndex == null) {
@@ -234,6 +235,17 @@ private fun settingsSummary(
         append(voices.firstOrNull { it.id == speech.voiceId }?.name ?: "Default voice")
         append(" · ${speechRateLabel(speech.ratePercent).lowercase()} speed")
         if (speech.pitchPercent != 100) append(", ${speechPitchLabel(speech.pitchPercent).lowercase()} pitch")
+        if (board.secondLanguage != null) {
+            // Spanish is spoken in a voice of its own, so say whether this device has one.
+            append(" · Spanish: ")
+            append(
+                when {
+                    spanishVoices == null -> "checking"
+                    spanishVoices.isEmpty() -> "no voice"
+                    else -> spanishVoices.firstOrNull { it.id == speech.spanishVoiceId }?.name ?: "default voice"
+                }
+            )
+        }
     }
     SettingsGroup.SCREEN ->
         "${if (board.keepScreenAwake) "Stays awake" else "Can sleep"} · performance mode ${onOff(performanceModeEnabled)}"
@@ -279,6 +291,7 @@ internal fun SettingsDialog(
     recordingTrimEndMillis: Int,
     speech: SpeechSettings,
     voices: List<SpeechVoice>,
+    spanishVoices: List<SpeechVoice>?,
     onOpenGroup: (SettingsGroup) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -292,7 +305,7 @@ internal fun SettingsDialog(
                         text = {
                             Column(modifier = Modifier.padding(vertical = 4.dp)) {
                                 Text(group.title)
-                                HelperText(settingsSummary(group, board, performanceModeEnabled, showMode, recordingTrimEndMillis, speech, voices))
+                                HelperText(settingsSummary(group, board, performanceModeEnabled, showMode, recordingTrimEndMillis, speech, voices, spanishVoices))
                             }
                         },
                         leadingIcon = { Icon(group.icon, contentDescription = null) },
@@ -318,6 +331,7 @@ internal fun SettingsGroupDialog(
     recordingTrimEndMillis: Int,
     speech: SpeechSettings,
     voices: List<SpeechVoice>,
+    spanishVoices: List<SpeechVoice>?,
     actions: BoardSettingsActions,
     onPickBackgroundImage: () -> Unit,
     onBack: () -> Unit,
@@ -336,7 +350,7 @@ internal fun SettingsGroupDialog(
                     SettingsGroup.TILE_LABELS -> LabelStyleControls(board.labelStyle, actions::setLabelStyle)
                     SettingsGroup.GRID_LAYOUT -> GridLayoutSettings(board, actions)
                     SettingsGroup.TAPPING_AND_SPEECH -> TappingAndSpeechSettings(board, actions)
-                    SettingsGroup.VOICE -> VoiceSettings(speech, voices, actions)
+                    SettingsGroup.VOICE -> VoiceSettings(board, speech, voices, spanishVoices, actions)
                     SettingsGroup.SCREEN -> ScreenSettings(board, performanceModeEnabled, actions)
                     SettingsGroup.SHOW_MODE -> ShowModeSettingsControls(showMode, actions)
                     SettingsGroup.RECORDING -> RecordingSettings(recordingTrimEndMillis, actions)
@@ -507,7 +521,13 @@ private fun speechPitchLabel(percent: Int) = when (percent) {
 
 /** The voice, speed and pitch speaking tiles use on this device (#250), with a sample to hear. */
 @Composable
-private fun VoiceSettings(speech: SpeechSettings, voices: List<SpeechVoice>, actions: BoardSettingsActions) {
+private fun VoiceSettings(
+    board: Board,
+    speech: SpeechSettings,
+    voices: List<SpeechVoice>,
+    spanishVoices: List<SpeechVoice>?,
+    actions: BoardSettingsActions
+) {
     // A voice this device no longer has (e.g. uninstalled) speaks in the default, so show that.
     OptionDropdown(
         label = "Voice",
@@ -541,6 +561,38 @@ private fun VoiceSettings(speech: SpeechSettings, voices: List<SpeechVoice>, act
         "For tiles that speak rather than play a recording, and for Speak... in the menu. " +
             "Applies to this device only."
     )
+    SectionDivider()
+    SwitchRow(
+        label = "Speak Spanish too",
+        checked = board.secondLanguage != null,
+        onCheckedChange = actions::setSecondLanguageEnabled,
+        supportingText = "Adds the EN / ES switch to the top bar and a Spanish field to each tile. " +
+            "The board's names and the app stay in English."
+    )
+    if (board.secondLanguage != null) SpanishVoiceSettings(speech, spanishVoices, actions)
+}
+
+/** The Spanish voice (#331): chosen apart from the English one, since a voice belongs to one language. */
+@Composable
+private fun SpanishVoiceSettings(speech: SpeechSettings, spanishVoices: List<SpeechVoice>?, actions: BoardSettingsActions) {
+    val voices = spanishVoices.orEmpty()
+    OptionDropdown(
+        label = "Spanish voice",
+        selected = speech.spanishVoiceId?.takeIf { id -> voices.any { it.id == id } },
+        options = listOf(null) + voices.map { it.id },
+        optionLabel = { id -> voices.firstOrNull { it.id == id }?.name ?: "Device default" },
+        onSelect = actions::setSpanishVoice
+    )
+    when {
+        spanishVoices == null -> HelperText("Checking which Spanish voices this device has...")
+        spanishVoices.isEmpty() -> HelperText(
+            "This device has no Spanish voice that works offline, so the board can't speak Spanish. " +
+                "Install one in the device's text-to-speech settings."
+        )
+    }
+    OutlinedButton(onClick = actions::previewSpanishSpeech, modifier = Modifier.fillMaxWidth()) {
+        Text("Preview Spanish")
+    }
 }
 
 @Composable

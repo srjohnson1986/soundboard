@@ -40,6 +40,7 @@ import com.example.soundboard.data.PickedFile
 import com.example.soundboard.model.EmojiNames
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
+import com.example.soundboard.model.languageName
 import kotlinx.coroutines.delay
 
 /** Fixed accent for the Preview/Play clip icon in [EditTileDialog]; not theme-derived since Material3 has no "success" role. */
@@ -56,6 +57,8 @@ internal fun EditTileDialog(
     tile: Tile,
     isRecording: Boolean,
     speakUnrecordedTilesEnabled: Boolean,
+    secondLanguage: String?,
+    onPlaySecondLanguage: (String) -> Unit,
     onPickSound: (PickedFile, onPicked: (String) -> Unit) -> Unit,
     onPickImage: (PickedFile, onPicked: (String) -> Unit) -> Unit,
     onClear: () -> Unit,
@@ -205,6 +208,28 @@ internal fun EditTileDialog(
                     minLines = 2,
                     modifier = Modifier.fillMaxWidth()
                 )
+                // What the tile says when the board is switched to Spanish (#331); a recording is
+                // not translated, so it is spoken over the English recording.
+                if (secondLanguage != null) {
+                    val languageName = languageName(secondLanguage)
+                    val translation = draft.translations[secondLanguage].orEmpty()
+                    OutlinedTextField(
+                        value = translation,
+                        onValueChange = { draft = draft.copy(translations = draft.withTranslationKeepingSpaces(secondLanguage, it)) },
+                        label = { Text(languageName) },
+                        placeholder = { Text("What it says when ES is on") },
+                        supportingText = { Text("Spoken in the $languageName voice, even if the tile has a recording.") },
+                        minLines = 2,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    TextButton(
+                        onClick = { onPlaySecondLanguage(translation) },
+                        enabled = translation.isNotBlank() && !isRecording,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Hear the $languageName")
+                    }
+                }
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -303,6 +328,14 @@ internal fun EditTileDialog(
         }
     )
 }
+
+/**
+ * This tile's draft translations with [language]'s text set to [text] as typed. A blank value is kept
+ * while the dialog is open (a field that dropped a typed space would be impossible to type into), and
+ * [com.example.soundboard.BoardViewModel.saveTile] drops blanks and trims.
+ */
+private fun Tile.withTranslationKeepingSpaces(language: String, text: String): Map<String, String> =
+    if (text.isEmpty()) translations - language else translations + (language to text)
 
 /** Longest emoji entry accepted; a single emoji can be several joined characters (a family, a flag), so this is generous. */
 private const val EMOJI_MAX_LENGTH = 16

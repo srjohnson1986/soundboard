@@ -53,6 +53,7 @@ internal fun ShowTextOverlay(
     text: String,
     icon: Tile?,
     showMode: ShowModeSettings,
+    subtext: String = "",
     labelStyle: LabelStyle,
     onDismiss: () -> Unit
 ) {
@@ -83,7 +84,12 @@ internal fun ShowTextOverlay(
         // With a picture or emoji, it gets the top part of the screen and the words what's left;
         // on its own it gets the lot.
         val hasText = text.isNotEmpty()
-        val heightPx = if (icon != null && hasText) (constraints.maxHeight * TEXT_SHARE_WITH_ICON).toInt() else constraints.maxHeight
+        val hasSubtext = hasText && subtext.isNotEmpty()
+        val wordsHeightPx = if (icon != null && hasText) (constraints.maxHeight * TEXT_SHARE_WITH_ICON).toInt() else constraints.maxHeight
+        // The small line under the words (the English, in Spanish mode) takes a slice of that,
+        // so the big words are sized to what is left.
+        val subtextHeightPx = if (hasSubtext) (wordsHeightPx * SUBTEXT_SHARE).toInt() else 0
+        val heightPx = wordsHeightPx - subtextHeightPx
         val base = baseLabelTextStyle(labelStyle).copy(color = Color.White, textAlign = TextAlign.Center)
         val measurer = rememberTextMeasurer()
         val style = remember(text, widthPx, heightPx, base) {
@@ -91,6 +97,16 @@ internal fun ShowTextOverlay(
                 measurer.fitsScreen(text, base.copy(fontSize = sp.sp), widthPx, heightPx)
             }
             base.copy(fontSize = size.sp)
+        }
+        val subtextStyle = remember(subtext, widthPx, subtextHeightPx, base) {
+            if (!hasSubtext) {
+                base
+            } else {
+                val size = largestFittingSize(MIN_SUBTEXT_SIZE_SP, MAX_SUBTEXT_SIZE_SP) { sp ->
+                    measurer.fitsScreen(subtext, base.copy(fontSize = sp.sp, color = SubtextColor), widthPx, subtextHeightPx)
+                }
+                base.copy(fontSize = size.sp, color = SubtextColor)
+            }
         }
         // Only a script too long to fit even at the smallest size needs this; taps still
         // reach the tap-to-close handler, since scrolling only claims drags.
@@ -113,9 +129,27 @@ internal fun ShowTextOverlay(
                         .verticalScroll(rememberScrollState())
                 )
             }
+            if (hasSubtext) {
+                BasicText(
+                    text = subtext,
+                    style = subtextStyle,
+                    modifier = Modifier.padding(top = 8.dp).testTag(SHOW_SUBTEXT_TAG)
+                )
+            }
         }
     }
 }
+
+/** The small line under Show mode's words, which in Spanish mode is the tile's English (#331). */
+const val SHOW_SUBTEXT_TAG = "show_text_subtext"
+
+/** Dimmer than the words, so it reads as the smaller, second line. */
+private val SubtextColor = Color(0xFFBDBDBD)
+
+/** The share of the words' height that the small line under them gets. */
+private const val SUBTEXT_SHARE = 0.2f
+private const val MIN_SUBTEXT_SIZE_SP = 14
+private const val MAX_SUBTEXT_SIZE_SP = 56
 
 /** The share of the screen's height the words get when there's a picture or emoji above them. */
 private const val TEXT_SHARE_WITH_ICON = 0.3f

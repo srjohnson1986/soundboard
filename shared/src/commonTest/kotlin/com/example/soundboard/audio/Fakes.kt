@@ -72,8 +72,14 @@ class FakeRecorder : Recorder {
 /** Records calls instead of touching a real TTS engine. */
 class FakeSpeaker : Speaker {
     val spoken = mutableListOf<String>()
+
+    /** Each thing spoken with the language it was asked for in (null: the device's own). */
+    val spokenIn = mutableListOf<Pair<String, String?>>()
     override val available = MutableStateFlow<Boolean?>(true)
     override val voices = MutableStateFlow<List<SpeechVoice>>(emptyList())
+
+    /** A device with one Spanish voice; a test sets it to null (not known yet) or empty (none). */
+    override val spanishVoices = MutableStateFlow<List<SpeechVoice>?>(listOf(SpeechVoice("es-1", "Spanish voice 1")))
 
     /** The settings it was last told to speak with. */
     var configured: SpeechSettings? = null
@@ -85,8 +91,9 @@ class FakeSpeaker : Speaker {
     var stopped = false
     var shutdown = false
 
-    override fun speak(text: String) {
+    override fun speak(text: String, language: String?) {
         spoken += text
+        spokenIn += text to language
     }
 
     override fun stop() {
@@ -108,3 +115,6 @@ class FakeMediaVolume : MediaVolume {
         refreshes++
     }
 }
+
+/** What a [FakeSpeaker] is expected to have said, each with its language (null: the device's own); `listOf(text to null)` would infer the wrong type. */
+fun spokenOf(vararg said: Pair<String, String?>): List<Pair<String, String?>> = said.toList()

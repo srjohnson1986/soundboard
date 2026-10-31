@@ -1142,6 +1142,31 @@ that is left into a failure of that one test. Code that must not follow the syst
 animation scale, like the hold to unlock (`HoldToUnlockItem`, timed in frames), can't use
 an animation for its timing.
 
+**The browser tests' npm packages** (#347). The Wasm test bundles are built by webpack, from
+`build/wasm/node_modules`, which Gradle fills with `kotlinWasmNpmInstall` (`@js-joda/core`,
+pulled in by kotlinx-datetime, and `fflate`, which `shared/build.gradle.kts` asks for; the
+versions are pinned in `kotlin-js-store/wasm/yarn.lock`). On 2026-10-31 the `web` job began
+failing on most runs with `Module not found: Error: Can't resolve '@js-joda/core'`, after
+which headless Chrome never reported and Karma gave up ("Disconnected ... no message in
+120000 ms") ten minutes later. It looks like #279 from the log's end, but the page never
+loads at all. The install had run in the failing jobs (same task list, same restored caches
+as in a passing job, no `UP-TO-DATE` or `FROM-CACHE` on it), and the lockfile lists both
+packages, so it was not a poisoned cache or a skipped install; why the packages were then
+missing was not found (yarn's output is quiet, and the runner is gone afterwards). So CI now
+does two things about it:
+
+- The `web` job installs the packages in a step of their own, checks that
+  `@js-joda/core` and `fflate` are in `build/wasm/node_modules`, and if not deletes
+  `node_modules` and installs again (up to three times). A bad install fails, or is fixed,
+  within a minute with a message that says so, rather than as ten minutes of timeouts.
+- If the tests still fail, the job prints and uploads a `wasm-npm-diagnostics` artifact:
+  a listing of `build/wasm`, the generated `package.json` files, the yarn lockfile and
+  `.yarn-integrity`. If the packages go missing again after the install passed its check,
+  that is where to look (and the retry is then the wrong fix).
+
+The Gradle caches are not the cause and nothing here clears them; if a job ever does fail
+this way, `gh run view <id> --log` shows whether `kotlinWasmNpmInstall` ran.
+
 **Screenshot tests** (#221) compare what Robolectric draws with the reference images in
 `shared/screenshots`, as part of every host test run (`roborazzi.test.verify=true` in
 `gradle.properties`; the images are an input of the test task, so changing one reruns it).

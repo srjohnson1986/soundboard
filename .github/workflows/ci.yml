@@ -117,8 +117,53 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
+      # The browser tests bundle the app with webpack, which needs the npm packages Gradle installs
+      # under build/wasm/node_modules (@js-joda/core from kotlinx-datetime, fflate for zips).
+      # On some runs the install reported success but the packages weren't there (#347): webpack
+      # then failed with "Can't resolve '@js-joda/core'" and headless Chrome sat silent for ten
+      # minutes before Karma gave up. So the install is its own step, checked, and repeated from
+      # scratch if the packages are missing, which fails in seconds and says why.
+      - name: Install the npm packages the browser tests need
+        run: |
+          for attempt in 1 2 3; do
+            ./gradlew kotlinWasmNpmInstall --stacktrace
+            if [ -f build/wasm/node_modules/@js-joda/core/package.json ] && [ -f build/wasm/node_modules/fflate/package.json ]; then
+              exit 0
+            fi
+            echo "::warning::kotlinWasmNpmInstall left build/wasm/node_modules without @js-joda/core or fflate (attempt $attempt of 3)"
+            rm -rf build/wasm/node_modules
+          done
+          echo "::error::The npm packages are still missing after 3 installs (#347)"
+          exit 1
+
       - name: Shared and web app tests (JVM + Wasm)
         run: ./gradlew :shared:allTests :web:allTests --continue --stacktrace
+
+      # If the packages go missing anyway, this shows what the install left (#347).
+      - name: Record what the npm install left behind
+        if: failure()
+        run: |
+          {
+            echo "== build/wasm"; ls -la build/wasm || true
+            echo "== node_modules (top level, count)"; ls build/wasm/node_modules 2>/dev/null | wc -l
+            echo "== @js-joda and fflate"; ls -la build/wasm/node_modules/@js-joda build/wasm/node_modules/fflate 2>&1 || true
+            echo "== packages"; ls -la build/wasm/packages || true
+            echo "== disk"; df -h . || true
+          } > build/wasm-npm-diagnostics.txt 2>&1 || true
+          cat build/wasm-npm-diagnostics.txt
+
+      - name: Upload the npm diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: wasm-npm-diagnostics
+          path: |
+            build/wasm-npm-diagnostics.txt
+            build/wasm/package.json
+            build/wasm/yarn.lock
+            build/wasm/packages/*/package.json
+            build/wasm/node_modules/.yarn-integrity
+          if-no-files-found: ignore
 
       # The production bundle takes a while to optimize, and the tests above already build the
       # web app, so it's only built on master, where it's kept as an artifact. Releases build

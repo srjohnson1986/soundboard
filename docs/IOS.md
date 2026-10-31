@@ -40,6 +40,13 @@ work on iOS picks up, go back to running it on every pull request: restore the
   the Spanish large with the English small under it; the choice survives closing the app.
   `IosSpeaker` takes the voice named by `spanishVoiceId`, else the first voice whose
   language starts with `es`.
+- [ ] Translating (#332) is a stand-in on iOS: `IosTranslator` is `UnavailableTranslator`, so
+  **Suggest**, **Translate all tiles** and the **Speak...** preview should be there but disabled,
+  each saying "Translating isn't available here: Apple's Translation framework isn't connected to
+  this app yet..."; typing the Spanish by hand still works. (To build it for real: Apple's Translation
+  framework is used through SwiftUI's `.translationTask` on a view, with a system sheet for the first
+  model download, so it needs Swift in `ios/app/` and a bridge to `Translator`; Apple's `TranslationSession`
+  has no plain call to make from Kotlin.)
 - [ ] With **no** Spanish voice installed, **ES** shows the red "This device has no
   Spanish voice" bar and tiles speak English; **Preview Spanish** and **Speak...** say so
   rather than speaking Spanish in an English voice.

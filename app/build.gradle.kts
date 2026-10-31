@@ -103,6 +103,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
     implementation("androidx.core:core-ktx:1.19.1")
+    // On-device translation (#332): the Spanish model downloads once (about 30 MB), then works offline.
+    implementation("com.google.mlkit:translate:17.0.3")
     implementation(project(":shared"))
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 

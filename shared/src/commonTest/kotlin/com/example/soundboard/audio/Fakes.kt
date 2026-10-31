@@ -1,6 +1,8 @@
 package com.example.soundboard.audio
 
 import com.example.soundboard.model.SpeechSettings
+import com.example.soundboard.translate.Translator
+import com.example.soundboard.translate.TranslatorStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Records calls instead of touching real audio. Loads and plays are treated as instant. */
@@ -118,3 +120,48 @@ class FakeMediaVolume : MediaVolume {
 
 /** What a [FakeSpeaker] is expected to have said, each with its language (null: the device's own); `listOf(text to null)` would infer the wrong type. */
 fun spokenOf(vararg said: Pair<String, String?>): List<Pair<String, String?>> = said.toList()
+
+/**
+ * A [Translator] a test scripts: [status] to start from, what each text translates to, and whether
+ * a translation or the download fails. Translations are `"[es] <text>"` unless [translations] has the text.
+ */
+class FakeTranslator(initial: TranslatorStatus = TranslatorStatus.Ready) : Translator {
+    override val status = MutableStateFlow<TranslatorStatus>(initial)
+    val translations = mutableMapOf<String, String>()
+
+    /** Everything it was asked to translate, in order. */
+    val translated = mutableListOf<String>()
+    var prepared = 0
+        private set
+
+    /** Set to make every translation fail with this message. */
+    var failWith: String? = null
+
+    /** Set to make [prepare] (and a translation that needs the model) fail with this message. */
+    var downloadFails: String? = null
+
+    override suspend fun prepare(target: String) {
+        ensureModel()
+    }
+
+    private fun ensureModel(): Boolean {
+        if (status.value == TranslatorStatus.Ready) return true
+        prepared++
+        downloadFails?.let {
+            status.value = TranslatorStatus.Failed(it)
+            return false
+        }
+        status.value = TranslatorStatus.Ready
+        return true
+    }
+
+    override suspend fun translate(text: String, target: String, from: String): String? {
+        if (status.value is TranslatorStatus.Unavailable || !ensureModel()) return null
+        translated += text
+        failWith?.let {
+            status.value = TranslatorStatus.Failed(it)
+            return null
+        }
+        return translations[text] ?: "[$target] $text"
+    }
+}

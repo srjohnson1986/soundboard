@@ -42,7 +42,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.soundboard.BoardSettingsActions
+import com.example.soundboard.TranslateProgress
 import com.example.soundboard.audio.SpeechVoice
+import com.example.soundboard.model.languageName
+import com.example.soundboard.translate.TranslatorStatus
 import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LabelFont
@@ -332,6 +335,8 @@ internal fun SettingsGroupDialog(
     speech: SpeechSettings,
     voices: List<SpeechVoice>,
     spanishVoices: List<SpeechVoice>?,
+    translatorStatus: TranslatorStatus,
+    translateProgress: TranslateProgress?,
     actions: BoardSettingsActions,
     onPickBackgroundImage: () -> Unit,
     onBack: () -> Unit,
@@ -350,7 +355,7 @@ internal fun SettingsGroupDialog(
                     SettingsGroup.TILE_LABELS -> LabelStyleControls(board.labelStyle, actions::setLabelStyle)
                     SettingsGroup.GRID_LAYOUT -> GridLayoutSettings(board, actions)
                     SettingsGroup.TAPPING_AND_SPEECH -> TappingAndSpeechSettings(board, actions)
-                    SettingsGroup.VOICE -> VoiceSettings(board, speech, voices, spanishVoices, actions)
+                    SettingsGroup.VOICE -> VoiceSettings(board, speech, voices, spanishVoices, translatorStatus, translateProgress, actions)
                     SettingsGroup.SCREEN -> ScreenSettings(board, performanceModeEnabled, actions)
                     SettingsGroup.SHOW_MODE -> ShowModeSettingsControls(showMode, actions)
                     SettingsGroup.RECORDING -> RecordingSettings(recordingTrimEndMillis, actions)
@@ -526,6 +531,8 @@ private fun VoiceSettings(
     speech: SpeechSettings,
     voices: List<SpeechVoice>,
     spanishVoices: List<SpeechVoice>?,
+    translatorStatus: TranslatorStatus,
+    translateProgress: TranslateProgress?,
     actions: BoardSettingsActions
 ) {
     // A voice this device no longer has (e.g. uninstalled) speaks in the default, so show that.
@@ -569,7 +576,51 @@ private fun VoiceSettings(
         supportingText = "Adds the EN / ES switch to the top bar and a Spanish field to each tile. " +
             "The board's names and the app stay in English."
     )
-    if (board.secondLanguage != null) SpanishVoiceSettings(speech, spanishVoices, actions)
+    if (board.secondLanguage != null) {
+        SpanishVoiceSettings(speech, spanishVoices, actions)
+        SectionDivider()
+        TranslateAllSettings(board, board.secondLanguage, translatorStatus, translateProgress, actions)
+    }
+}
+
+/**
+ * "Translate all tiles" (#332): fills in the Spanish of every tile that has none, on the device. It
+ * suggests; each can still be edited in its tile, and what plays is the saved text. Where
+ * translating isn't available the button is there and says why.
+ */
+@Composable
+private fun TranslateAllSettings(
+    board: Board,
+    language: String,
+    translatorStatus: TranslatorStatus,
+    progress: TranslateProgress?,
+    actions: BoardSettingsActions
+) {
+    val missing = board.untranslatedTiles(language).size
+    val name = languageName(language)
+    OutlinedButton(
+        onClick = actions::translateAllTiles,
+        enabled = translatorStatus.canTranslate && translatorStatus !is TranslatorStatus.Downloading && progress == null && missing > 0,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(if (progress != null) "Translating ${progress.done} of ${progress.total}..." else "Translate all tiles")
+    }
+    HelperText(
+        if (missing == 0) {
+            "Every tile with words already has $name."
+        } else {
+            "Fills in $name for the $missing ${if (missing == 1) "tile that has" else "tiles that have"} none, translating the " +
+                "words on the device. You can edit each one in its tile."
+        }
+    )
+    if (translatorStatus.needsModel || translatorStatus is TranslatorStatus.Failed) {
+        if (translatorStatus is TranslatorStatus.NeedsDownload || translatorStatus is TranslatorStatus.Failed) {
+            OutlinedButton(onClick = actions::prepareTranslator, modifier = Modifier.fillMaxWidth()) {
+                Text(if (translatorStatus is TranslatorStatus.Failed) "Try again" else "Download the $name model")
+            }
+        }
+    }
+    TranslatorStatusNote(translatorStatus)
 }
 
 /** The Spanish voice (#331): chosen apart from the English one, since a voice belongs to one language. */

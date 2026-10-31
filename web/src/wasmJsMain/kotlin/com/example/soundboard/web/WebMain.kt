@@ -32,7 +32,8 @@ fun main() {
         savedBoardRepo = SavedBoardRepository(files),
         speaker = WebSpeaker(),
         devicePrefs = DevicePreferences(LocalStorageKeyValueStore("soundboard.")),
-        recentBoardsRepo = RecentBoardsRepository(files)
+        recentBoardsRepo = RecentBoardsRepository(files),
+        translator = ChromeTranslator()
     )
     removeLoadingMessage()
     ComposeViewport {

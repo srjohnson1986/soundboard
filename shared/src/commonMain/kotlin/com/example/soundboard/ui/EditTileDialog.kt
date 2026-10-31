@@ -41,6 +41,7 @@ import com.example.soundboard.model.EmojiNames
 import com.example.soundboard.model.Tile
 import com.example.soundboard.model.TileBorder
 import com.example.soundboard.model.languageName
+import com.example.soundboard.translate.TranslatorStatus
 import kotlinx.coroutines.delay
 
 /** Fixed accent for the Preview/Play clip icon in [EditTileDialog]; not theme-derived since Material3 has no "success" role. */
@@ -59,6 +60,8 @@ internal fun EditTileDialog(
     speakUnrecordedTilesEnabled: Boolean,
     secondLanguage: String?,
     onPlaySecondLanguage: (String) -> Unit,
+    translatorStatus: TranslatorStatus,
+    onSuggestTranslation: (english: String, onResult: (String?) -> Unit) -> Unit,
     onPickSound: (PickedFile, onPicked: (String) -> Unit) -> Unit,
     onPickImage: (PickedFile, onPicked: (String) -> Unit) -> Unit,
     onClear: () -> Unit,
@@ -73,6 +76,7 @@ internal fun EditTileDialog(
     var micPermissionDenied by remember(tile.id) { mutableStateOf(false) }
     var recordingSeconds by remember(tile.id) { mutableIntStateOf(0) }
     var restoreMessage by remember(tile.id) { mutableStateOf<String?>(null) }
+    var suggesting by remember(tile.id) { mutableStateOf(false) }
     // The name this dialog suggested from the emoji, so a later emoji can replace it but typed words never are.
     var suggestedName by remember(tile.id) { mutableStateOf<String?>(null) }
 
@@ -222,12 +226,37 @@ internal fun EditTileDialog(
                         minLines = 2,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    TextButton(
-                        onClick = { onPlaySecondLanguage(translation) },
-                        enabled = translation.isNotBlank() && !isRecording,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Hear the $languageName")
+                    // Suggest (#332): fills the field above with a translation of the tile's words, to read and
+                    // edit. What's saved, and so what is spoken, is the text in the field, never a live translation.
+                    val english = draft.speechText.trim()
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = {
+                                suggesting = true
+                                onSuggestTranslation(english) { suggestion ->
+                                    suggesting = false
+                                    if (suggestion != null) {
+                                        draft = draft.copy(translations = draft.translations + (secondLanguage to suggestion))
+                                    }
+                                }
+                            },
+                            enabled = translatorStatus.canTranslate && translatorStatus !is TranslatorStatus.Downloading &&
+                                english.isNotEmpty() && !suggesting && !isRecording,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(if (suggesting) "Translating..." else "Suggest")
+                        }
+                        TextButton(
+                            onClick = { onPlaySecondLanguage(translation) },
+                            enabled = translation.isNotBlank() && !isRecording,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Hear the $languageName")
+                        }
+                    }
+                    TranslatorStatusNote(translatorStatus)
+                    if (translatorStatus.canTranslate && english.isEmpty()) {
+                        HelperText("Give the tile a name or What to say first, then Suggest translates it for you to edit.")
                     }
                 }
                 Row(

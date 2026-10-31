@@ -23,6 +23,7 @@ anything that needs a platform goes behind one of the small interfaces in
 | `PickedFile` / `SaveTarget` | A file the user picked to open / somewhere they picked to save | `UriPickedFile` / `UriSaveTarget`, on content URIs (`shared/src/androidMain/.../data/AndroidStorage.kt`) | `BrowserPickedFile` / `DownloadSaveTarget`: a file chooser, and a download | `IosPickedFile` / `IosSaveTarget`: the Files picker, which also asks where a saved file goes |
 | `BundledBoards` | The built-in board zips packaged with the build | `AssetBundledBoards`, on APK assets (same file) | `WebBundledBoards`, fetched from next to the page | `IosBundledBoards`, from the app bundle |
 | `KeyValueStore` | Small device-local settings (`DevicePreferences`) | `SharedPreferencesStore` (same file) | `LocalStorageKeyValueStore` | `UserDefaultsKeyValueStore` |
+| `Translator` (`shared/.../translate/`) | Translates a tile's words to Spanish on the device, to suggest text (#332) | `MlKitTranslator` (`app/`), Google's ML Kit | `ChromeTranslator` (`web/`), Chrome's Translator API; other browsers say why they can't | `IosTranslator` (`ios/`), an honest "unavailable" stand-in |
 
 Web storage is private to the site and survives reloads, but the browser may clear
 it under storage pressure unless it grants persistent storage (`WebMain` asks); a
@@ -512,6 +513,48 @@ mode speaks what is typed in the Spanish voice (`speakAdHoc`), or puts the "no S
 message in the snackbar. The tile editor's Spanish field edits the draft like any other, and
 **Hear the Spanish** calls `speakSecondLanguage`, which ignores the switch.
 
+## Translating on the device (#332)
+
+`Translator` (`shared/.../translate/Translator.kt`) is a platform capability like `Speaker`: an
+interface in `shared` and an implementation on each platform. It only ever **suggests**. The
+view model uses it to fill in a tile's Spanish text (`suggestTranslation` for the editor's
+Suggest, `translateAllTiles` for Settings, `translateForPreview` for the Speak... box), and the
+result is ordinary text on the tile, saved through `commit()` like anything typed. Playing a
+tile never calls the translator, so it works offline and can't change under anyone.
+
+**Its `status` is the whole UI contract.** `TranslatorStatus` is `Checking`, `Ready`,
+`NeedsDownload`, `Downloading(percent?)`, `Unavailable(reason)` or `Failed(message)`, each with
+`explanation` text, and the screens (`TranslatorStatusNote`) show it wherever a control
+depends on it, so an unavailable translator leaves a disabled button and a reason, not a hole.
+`prepare()` downloads the model; `translate()` does too if it must, then translates, and
+returns null on failure with `status` saying why. `Failed` allows trying again.
+
+- **Android** (`MlKitTranslator`): ML Kit's on-device translation, `com.google.mlkit:translate`,
+  English to Spanish. English is built in, so only the Spanish model (about 30 MB) is downloaded,
+  once, on whatever connection there is, since someone asked. ML Kit reports no download progress, so
+  `Downloading` has no percentage and the bar moves instead of filling. The model's presence is
+  checked at start (`RemoteModelManager`), so `Ready` is known before anyone asks. One call at a time, behind a mutex.
+- **Web** (`ChromeTranslator`): Chrome's `Translator` API (Chrome and Edge on a computer, 138+; not
+  Firefox, Safari, phones or workers). Without it the status is `Unavailable` with that reason. Chrome
+  reports every pair as "downloadable" until a page has created a translator for it, so
+  `NeedsDownload` can mean the model is already here; creating the translator then finishes at once.
+  Creating one that must download needs a tap, which the button that asks is. Download progress comes
+  from the `downloadprogress` monitor event.
+- **iOS** (`IosTranslator`): `UnavailableTranslator` with a reason. Apple's Translation framework is a
+  SwiftUI feature (`.translationTask`, with a system sheet for the first download), hard to drive from
+  Kotlin and impossible to try without a Mac. See docs/IOS.md.
+
+**Translate all tiles** (`translateAllTiles`) translates the tiles that have words (`ttsScript`, else the
+name) and no Spanish one at a time, since translators work one at a time, with `translateProgress` for
+the button. It stops at the first failure that leaves the translator `Failed` or `Unavailable`
+rather than failing every tile alike, then saves all it did in one commit, never replacing
+Spanish a tile gained meanwhile, and says how many it did and why it stopped.
+
+**The Speak... preview** only translates while `Ready` and never starts a download by itself: with
+`NeedsDownload` it offers a button. After a pause in typing it shows the Spanish; with the switch on
+ES, Speak says that translation in the Spanish voice (and is off until there is one). Without a
+working translator, ES mode speaks what was typed as Spanish, as in #331.
+
 ## Audio recording
 
 `Recorder.start()`/`stop()` suspend, since a browser only grants the microphone
@@ -993,11 +1036,13 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | `Board` page management (`withPageAdded`/`withPageRemoved`/`withPageRenamed`/`withCurrentPage`/`withHomePage`), `updatingTile`/`findTile`, `soundFileNames`, `Tile.isPlayable`, and `hasAnySound` | `shared/src/commonTest/.../model/BoardTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | `BoardRepository` — save/load, missing-sound sanitizing, the legacy-schema and `homePageIndex` migrations, additive-field defaults, corrupt `board.json`, backup round-trips, the zip path guard, stray clips, bundled boards and original sounds; `SavedBoardRepository`, `RecentBoardsRepository` and `DevicePreferences` — all against in-memory storage (#241) | `shared/src/commonTest/.../data/BoardRepositoryTest.kt`, `SavedBoardRepositoryTest.kt`, `RecentBoardsRepositoryTest.kt`, `DevicePreferencesTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | The `FileStore` contract every implementation must meet (in-memory, `FileSystemStore`, and `OpfsFileStore` in Chrome); the golden backup zip (`GoldenBackup.kt`, made outside the app) that both `JavaZipCodec` and `FflateZipCodec` must read identically, so backups move between Android and the web; `JavaZipCodec` reading every zip in `presets/`; `LocalStorageKeyValueStore` and `SharedPreferencesStore`; picking and saving through the Storage Access Framework (`UriPickedFile`, `UriSaveTarget`) | `shared/src/commonTest/.../data/FileStoreContractTest.kt`, `GoldenBackup.kt`, `shared/src/androidHostTest/.../data/AndroidStorageTest.kt`, `shared/src/wasmJsTest/.../data/WebStorageTest.kt` | JVM, and WebAssembly in headless Chrome |
+| Translating on the device (#332): Suggest (including the first-use download, a failed download and trying again), Translate all tiles (only tiles without Spanish, how many, stopping on a failure), the Speak... preview and what each control shows while the translator is unavailable, downloading or failed; the status texts | `shared/src/commonTest/.../TranslatorViewModelTest.kt`, `ui/TranslatorUiTest.kt` (with `FakeTranslator`) | JVM (Robolectric) and WebAssembly in headless Chrome |
 | Speaking Spanish (#331): Spanish mode picks a tile's Spanish, falls back to English, speaks over an English recording in the Spanish voice, and never in the wrong voice; Show mode's two lines; the Speak... box; the Spanish voice setting. The EN / ES switch (also while locked), the no-spanish marker, the editor's Spanish field, Show mode, the no-Spanish-voice bar and the Voice settings. An old `board.json` with no translations, and backups and saved boards carrying them | `shared/src/commonTest/.../SecondLanguageViewModelTest.kt`, `ui/SecondLanguageUiTest.kt`, `ui/DialogsUiTest.kt`, `data/BoardRepositoryTest.kt`, `data/DevicePreferencesTest.kt` | JVM (Robolectric) and WebAssembly in headless Chrome |
 | `BoardViewModel`, incl. the fresh-install board on each platform, editing a home-row tile from another page, cross-page/saved-board orphan pruning, record/stop/cancel, restoring an original sound, and saveBoardAs/openBoard — on in-memory storage with stand-in built-in boards (#241) | `shared/src/commonTest/.../BoardViewModelTest.kt` | JVM and WebAssembly in headless Chrome (`kotlin.test`) |
 | Every built-in board the app ships, imported through the APK's assets, `java.util.zip` and the files directory | `test/.../data/ShippedBoardsTest.kt` | Robolectric |
 | `BoardViewModel` on a real thread pool and real files: back-to-back commits leave the latest board on disk (#144) | `test/.../BoardViewModelThreadingTest.kt` | Robolectric, `MainDispatcherRule` |
 | The production web bundle from a `/soundboard/` subpath, online and then offline: a tap speaks, the manifest and icons, the service worker, no console errors | `web/smoke/smoke.mjs` | Headless Chrome (Puppeteer), on master and before publishing |
+| `ChromeTranslator` (#332) against a stand-in for Chrome's Translator API installed on the page: no API (Chrome or Edge on a computer is named), a model to download with its progress events reaching the status, a model already there, a pair the browser can't do, a failed download, and a browser that never answers (cut off after 10 s, a real wait). Headless Chrome has no language model, and the plumbing is the same whichever is behind the API | `web/src/wasmJsTest/.../web/WebTranslatorTest.kt` | WebAssembly in headless Chrome |
 | The web app's recording and playback: `WebRecorder` records from headless Chrome's fake microphone into OPFS, `WebAudioPlayer` decodes the result, a cancelled recording saves nothing; the trim (`trimmedWav`) cuts exactly the amount asked from a known buffer and keeps a too-short one whole, and a real recording stopped with a trim is at most the time recorded minus the trim (#230) | `web/src/wasmJsTest/.../web/WebAudioTest.kt` (fake mic: `web/karma.config.d/fake-media.js`) | WebAssembly in headless Chrome |
 | `BoardScreen`'s flows: a tap playing or editing, the tile editor's Save/Cancel and Restore original sound, edit mode, Switch board, Save board as, Settings groups (Recording included), Show mode, the page tab row and page options, the sticky home row, idle-timeout auto-return; tile label sizes (no word split, #209), bold/caps, and the landscape grid in a landscape window | `shared/src/commonTest/.../ui/BoardScreenUiTest.kt`, `LabelAndLayoutUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
 | What each dialog does (#242): Speak; Open board (with its replace-this-board confirm), Clean up unused clips and Rename board; every Settings group, and the list's summary of each; Page options (rename, move, the home page, delete with and without a confirm), Grid size and Page appearance; the color swatches, picked by name and reporting which is selected (#245) | `shared/src/commonTest/.../ui/DialogsUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
@@ -1115,6 +1160,8 @@ counted.
   another module's tests. Keep both in step if an audio interface changes. `FakeSpeaker` records
   each utterance with its language (`spokenIn`; `spokenOf(...)` builds the expected list) and has
   one Spanish voice, which a test replaces with null (not known yet) or empty (none).
+  `FakeTranslator` (commonTest only, since no other module's tests use it) is scripted with a status,
+  canned translations, and a failing download or translation; `TestBoardApp`'s starts `Unavailable`.
 - **`Dispatchers.Main`** is an `UnconfinedTestDispatcher` in view model tests, since
   `viewModelScope` has no `Main` dispatcher off a device: the shared tests set it in
   `@BeforeTest`, and the app's use `MainDispatcherRule` (`@get:Rule`).

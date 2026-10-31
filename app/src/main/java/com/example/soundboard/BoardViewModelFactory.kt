@@ -12,6 +12,7 @@ import com.example.soundboard.data.DevicePreferences
 import com.example.soundboard.data.RecentBoardsRepository
 import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.appFileStore
+import com.example.soundboard.translate.MlKitTranslator
 
 /** Builds [BoardViewModel] with the real Android storage, audio and speech behind it. */
 class BoardViewModelFactory(private val app: Application) : ViewModelProvider.Factory {
@@ -25,7 +26,8 @@ class BoardViewModelFactory(private val app: Application) : ViewModelProvider.Fa
             TtsSpeaker(app),
             DevicePreferences(app),
             RecentBoardsRepository(app),
-            mediaVolume = AndroidMediaVolume(app)
+            mediaVolume = AndroidMediaVolume(app),
+            translator = MlKitTranslator()
         ) as T
     }
 }

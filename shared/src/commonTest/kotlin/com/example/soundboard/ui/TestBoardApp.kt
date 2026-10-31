@@ -18,6 +18,7 @@ import com.example.soundboard.audio.FakeMediaVolume
 import com.example.soundboard.audio.FakePlayer
 import com.example.soundboard.audio.FakeRecorder
 import com.example.soundboard.audio.FakeSpeaker
+import com.example.soundboard.audio.FakeTranslator
 import com.example.soundboard.data.BoardJson
 import com.example.soundboard.data.BoardRepository
 import com.example.soundboard.data.DevicePreferences
@@ -29,6 +30,7 @@ import com.example.soundboard.data.RecentBoardsRepository
 import com.example.soundboard.data.SavedBoardRepository
 import com.example.soundboard.data.ZipEntryData
 import com.example.soundboard.model.Board
+import com.example.soundboard.translate.TranslatorStatus
 import com.example.soundboard.ui.theme.SoundboardTheme
 import kotlin.math.abs
 import kotlin.test.AfterTest
@@ -59,6 +61,7 @@ class TestBoardApp(
     val recorder = FakeRecorder()
     val speaker = FakeSpeaker()
     val mediaVolume = FakeMediaVolume()
+    val translator = FakeTranslator(TranslatorStatus.Unavailable("the test board has no translator."))
     val devicePrefs = DevicePreferences(MapKeyValueStore())
 
     init {
@@ -79,7 +82,8 @@ class TestBoardApp(
         recentBoardsRepo = RecentBoardsRepository(files),
         ioDispatcher = dispatcher,
         now = { 42L },
-        mediaVolume = mediaVolume
+        mediaVolume = mediaVolume,
+        translator = translator
     )
 }
 

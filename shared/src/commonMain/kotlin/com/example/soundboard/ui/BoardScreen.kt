@@ -35,6 +35,7 @@ import com.example.soundboard.BoardViewModel
 import com.example.soundboard.model.Board
 import com.example.soundboard.model.LandscapeLayout
 import com.example.soundboard.model.SPANISH
+import com.example.soundboard.translate.TranslatorStatus
 import com.example.soundboard.model.TileBorder
 import org.jetbrains.compose.resources.decodeToImageBitmap
 import kotlin.time.Clock
@@ -104,6 +105,8 @@ private fun BoardScreenContent(vm: BoardViewModel) {
     val spanishVoices by vm.spanishVoices.collectAsStateWithLifecycle()
     val secondLanguageOn by vm.secondLanguageOn.collectAsStateWithLifecycle()
     val shownSubtext by vm.shownSubtext.collectAsStateWithLifecycle()
+    val translatorStatus by vm.translatorStatus.collectAsStateWithLifecycle()
+    val translateProgress by vm.translateProgress.collectAsStateWithLifecycle()
     // The language the board is speaking besides English right now; null in English or on a board without one.
     val activeLanguage = board.secondLanguage.takeIf { secondLanguageOn }
     var openDialog by remember { mutableStateOf<BoardDialog?>(null) }
@@ -452,6 +455,8 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                 speakUnrecordedTilesEnabled = board.speakUnrecordedTilesEnabled,
                 secondLanguage = board.secondLanguage,
                 onPlaySecondLanguage = vm::speakSecondLanguage,
+                translatorStatus = translatorStatus,
+                onSuggestTranslation = vm::suggestTranslation,
                 onPickSound = vm::importSound,
                 onPickImage = vm::importTileImage,
                 onClear = { vm.clearTile(editing.id) },
@@ -470,7 +475,15 @@ private fun BoardScreenContent(vm: BoardViewModel) {
             )
         }
 
-        BoardDialog.Speak -> SpeakDialog(onSpeak = vm::speakAdHoc, onDismiss = ::closeDialog, spokenLanguage = activeLanguage)
+        BoardDialog.Speak -> SpeakDialog(
+            onSpeak = vm::speakAdHoc,
+            onDismiss = ::closeDialog,
+            spokenLanguage = activeLanguage,
+            secondLanguage = board.secondLanguage,
+            translatorStatus = translatorStatus,
+            onTranslate = vm::translateForPreview,
+            onPrepareTranslator = vm::prepareTranslator
+        )
 
         BoardDialog.Settings -> SettingsDialog(
             board = board,
@@ -493,6 +506,8 @@ private fun BoardScreenContent(vm: BoardViewModel) {
             speech = speech,
             voices = speechVoices,
             spanishVoices = spanishVoices,
+            translatorStatus = translatorStatus,
+            translateProgress = translateProgress,
             actions = vm,
             onPickBackgroundImage = pickBackgroundImage,
             onBack = { showDialog(BoardDialog.Settings) },

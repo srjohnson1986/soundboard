@@ -52,4 +52,10 @@ interface BoardSettingsActions {
 
     /** Says a sample sentence in the Spanish voice. */
     fun previewSpanishSpeech()
+
+    /** Fills in the Spanish of every tile that has none, by translating its words on the device (#332). */
+    fun translateAllTiles()
+
+    /** Downloads the language model translating needs, if it isn't here yet. */
+    fun prepareTranslator()
 }

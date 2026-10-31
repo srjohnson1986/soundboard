@@ -22,6 +22,7 @@ The font files themselves are in `shared/src/commonMain/composeResources/font/`.
 | Compose Multiplatform (runtime, foundation, UI, Material 3, resources, Material icons) | Apache-2.0 |
 | AndroidX (Activity, Core, Lifecycle, Compose) | Apache-2.0 |
 | [fflate](https://github.com/101arrowz/fflate) (the web version's zip reader and writer) | MIT |
+| [ML Kit Translate](https://developers.google.com/ml-kit/language/translation) (Android's on-device translation; it downloads its Spanish language model on first use) | Google's [ML Kit terms](https://developers.google.com/ml-kit/terms) |
 
 ## Tools that don't ship
 

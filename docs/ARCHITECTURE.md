@@ -921,9 +921,16 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   whole card edits or plays.
 - **Holding a tile toggles Edit mode (#328).** `onDragStart` turns Edit mode on if it was
   off, so the buzz, the lift and the pencils arrive together; a hold that ends without
-  the finger travelling past the touch slop turns it off if it was on when the hold began
-  (so from the normal board it stays on, from Edit mode it goes off), and a hold that
-  moves reorders and leaves it as it is. The gesture reads `editMode` and its callback
+  the finger travelling past the touch slop never toggles it by itself: from the normal
+  board it stays on, and a hold that moves reorders and leaves it as it is. Leaving Edit
+  mode is a second stage (#343): when the hold began in Edit mode, `onDragStart` also
+  launches a coroutine that fills `leaveProgress` (the ring on the held tile, drawn like
+  Hold to unlock's) over the system long-press time again, timed with `withFrameNanos`
+  rather than an animation, and at the end turns Edit mode off while the finger is still
+  down, drops the tile, and sets `tapSuppressed` so the release doesn't play it. Moving
+  past the touch slop, or the hold ending, cancels that coroutine; letting go early does
+  nothing. The tests shorten or lengthen the time with `LocalLeaveEditModeAfterMillis`.
+  The gesture reads `editMode` and its callback
   through `rememberUpdatedState`, never as a `pointerInput` key: a key would restart the
   gesture and cancel the drag in progress the moment Edit mode turned on. Two traps in
   the detector: a hold that never moved ends in `onDragCancel`, not `onDragEnd`, because
@@ -1047,7 +1054,7 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
 | `BoardScreen`'s flows: a tap playing or editing, the tile editor's Save/Cancel and Restore original sound, edit mode, Switch board, Save board as, Settings groups (Recording included), Show mode, the page tab row and page options, the sticky home row, idle-timeout auto-return; tile label sizes (no word split, #209), bold/caps, and the landscape grid in a landscape window | `shared/src/commonTest/.../ui/BoardScreenUiTest.kt`, `LabelAndLayoutUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
 | What each dialog does (#242): Speak; Open board (with its replace-this-board confirm), Clean up unused clips and Rename board; every Settings group, and the list's summary of each; Page options (rename, move, the home page, delete with and without a confirm), Grid size and Page appearance; the color swatches, picked by name and reporting which is selected (#245) | `shared/src/commonTest/.../ui/DialogsUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
 | The bars above the board: why taps can't be heard, a muted media volume or speech not working, shown only while so and the speech one only for a board that speaks (#248); the backup reminder and its Later (#249) | `shared/src/commonTest/.../ui/BoardBannersUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
-| Holding a tile (#328): it turns Edit mode on or off and never plays, holding and dragging reorders and leaves Edit mode on, the sticky row does the same without dragging, Save and Cancel leave Edit mode on, locked a hold is a tap and a drag moves nothing; the Edit mode bar, its tap, and its absence while locked | `shared/src/commonTest/.../ui/EditModeHoldUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
+| Holding a tile (#328, #343): it turns Edit mode on, and in Edit mode a still hold lifts it and then, on a second timer with a filling ring, turns Edit mode off while the finger is down (letting go or moving first doesn't); it never plays, holding and dragging reorders and leaves Edit mode on, the sticky row does the same without dragging, Save and Cancel leave Edit mode on, locked a hold is a tap and a drag moves nothing; the Edit mode bar, its tap, and its absence while locked | `shared/src/commonTest/.../ui/EditModeHoldUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
 | The caregiver lock (#251, #257): its menu items, the locked menu, no way into editing from the board, a short hold vs a full one, the screen-reader Unlock action, relocking when idle, the backup reminder waiting | `shared/src/commonTest/.../ui/CaregiverLockUiTest.kt` | Compose UI test on the JVM (Robolectric) and WebAssembly in headless Chrome |
 | Tile pictures drawn on a tile and on Show mode's screen, and a missing picture falling back to the name (the same tests can't run in the browser: a picture decodes asynchronously, and its idle wait holds the one thread, #279) | `shared/src/androidHostTest/.../ui/PictureTileUiTest.kt` | Compose UI test on the JVM (Robolectric) |
 | Screenshots of the board (portrait, landscape, the sticky row on another page, dark theme, each label font), the tile editor, Settings and Show mode, against the reference images in `shared/screenshots` | `shared/src/androidHostTest/.../ui/ScreenshotTest.kt` | Roborazzi on the JVM (Robolectric's native graphics) |

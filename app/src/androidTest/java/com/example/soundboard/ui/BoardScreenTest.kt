@@ -175,7 +175,9 @@ class BoardScreenTest {
     }
 
     @Test
-    fun longPressWithoutMovingATileInEditModeTurnsItOffWithoutPlaying() {
+    fun longPressWithoutMovingATileInEditModeForTwiceAsLongTurnsItOffWithoutPlaying() {
+        // Two stages (#343): the first long-press time lifts the tile, and holding still for
+        // the same time again turns Edit mode off, with the finger still down.
         launchWith(
             Board(pages = listOf(Page(rows = 1, columns = 1, tiles = listOf(Tile(id = "a", label = "Air horn", fileName = "a.mp3")))))
         )
@@ -185,7 +187,7 @@ class BoardScreenTest {
 
         composeRule.onNodeWithText("Air horn").performTouchInput {
             down(center)
-            advanceEventTime(600)
+            advanceEventTime(1500)
             up()
         }
         composeRule.waitForIdle()

@@ -15,6 +15,7 @@ interface BoardSettingsActions {
     fun setOpenOnHomePage(value: Boolean)
     fun setIdleTimeoutMinutes(value: Int)
     fun setLongPressDurationMillis(value: Int)
+    fun setEditModeTimeoutSeconds(value: Int)
     fun setThemeMode(mode: ThemeMode)
     fun setKeepScreenAwake(value: Boolean)
     fun setHapticFeedbackEnabled(value: Boolean)

@@ -1000,6 +1000,17 @@ being rebuilt in each dialog. A few things worth knowing if you're touching it:
   cancels if the finger slid off, and a drag moves nothing. `EditModeBanner` (beside
   `SilentBoardWarning`, never while locked) says tiles won't play and turns Edit mode
   off when tapped. Saving or cancelling the tile editor doesn't touch `editMode`.
+- **Edit mode times out (#344).** `BoardScreen` has a `LaunchedEffect` keyed on `editMode`,
+  `lastInteractionAt`, `openDialog != null`, `isDragActive` and `Board.editModeTimeoutSeconds`
+  (default 10; 0 is off; it's on `Board` so it travels in backups). It returns at once if
+  Edit mode is off, a dialog is open, a hold or drag is under way (`isDragActive`, which
+  also covers #343's second-stage ring) or the setting is 0; otherwise it waits and sets
+  `editMode = false`. It sets the flag directly rather than through `setEditMode`, so the
+  timeout isn't itself counted as use that restarts the other idle timers. Anything that
+  restarts it goes through `recordInteraction()`: taps, tab taps, the `☰` menu's Edit mode
+  switch, a swipe (`pagerState.isScrollInProgress`) and a scroll of a page's grid (the
+  `onScrolled` callback of `PageGrid`). The tests shorten a "second" with
+  `LocalEditModeSecond`, as `LocalIdleMinute` does for the auto-return minute.
 - **A labeled-but-empty tile is visually distinct from a plain blank one.**
   `TileCard`'s `needsRecording = !tile.hasSound && tile.label.isNotBlank()`
   renders a small 🔇 glyph in the opposite corner from the edit-mode pencil.

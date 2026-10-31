@@ -187,7 +187,7 @@ class DialogsUiTest : BoardUiTest() {
             "System theme · plain background",
             "Default (Roboto), 14–32 sp",
             "New pages 4×4 · standard rows · page grid in landscape",
-            "Long-press: default · haptics on",
+            "Long-press: default · Edit mode off after 10 s · haptics on",
             "performance mode off",
             "Default voice · normal speed",
             "Leaves off the last 0.25 s"
@@ -282,7 +282,23 @@ class DialogsUiTest : BoardUiTest() {
         assertEquals(!before.hideBlankTilesEnabled, board.hideBlankTilesEnabled)
         assertEquals(800, board.longPressDurationMillis)
         onNodeWithText("Back").performClick()
-        onNodeWithText("Long-press: long · haptics off").assertIsDisplayed()
+        onNodeWithText("Long-press: long · Edit mode off after 10 s · haptics off").assertIsDisplayed()
+    }
+
+    @Test
+    fun theTappingAndSpeechGroupSetsHowLongEditModeStaysOn() = runUiTest {
+        val app = launchBoard(oneTile())
+        assertEquals(10, app.vm.board.value.editModeTimeoutSeconds)
+
+        openSettingsGroup("Tapping & speech")
+        onNodeWithText("Turn off Edit mode after").performScrollTo().assertIsDisplayed()
+        pickOption("Turn off Edit mode after", "30 s")
+
+        waitUntil(timeoutMillis = 2_000) { app.vm.board.value.editModeTimeoutSeconds == 30 }
+        pickOption("Turn off Edit mode after", "Off")
+        waitUntil(timeoutMillis = 2_000) { app.vm.board.value.editModeTimeoutSeconds == 0 }
+        onNodeWithText("Back").performClick()
+        onNodeWithText("Long-press: default · Edit mode stays on · haptics on").assertIsDisplayed()
     }
 
     @Test

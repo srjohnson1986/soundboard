@@ -389,6 +389,26 @@ class BoardRepositoryTest {
     }
 
     @Test
+    fun `a board saved before the Edit mode timeout loads with ten seconds`() = runTest {
+        writeBoardJson(
+            """
+            {
+              "name": "Old Board",
+              "pages": [{"id": "p1", "name": "Page 1", "rows": 4, "columns": 4, "tiles": []}],
+              "currentPageIndex": 0,
+              "idleTimeoutMinutes": 2,
+              "longPressDurationMillis": 800
+            }
+            """
+        )
+
+        val loaded = repo.load()
+
+        assertEquals(10, loaded.editModeTimeoutSeconds)
+        assertEquals(2, loaded.idleTimeoutMinutes)
+    }
+
+    @Test
     fun `a board from before sticky home row and home page and page color loads with their defaults`() = runTest {
         writeBoardJson(
             """

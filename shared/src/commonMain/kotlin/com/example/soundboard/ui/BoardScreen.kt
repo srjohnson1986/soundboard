@@ -40,9 +40,11 @@ import com.example.soundboard.model.TileBorder
 import org.jetbrains.compose.resources.decodeToImageBitmap
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.withContext
 
 /**
@@ -236,6 +238,18 @@ private fun BoardScreenContent(vm: BoardViewModel) {
         vm.relockEditing()
     }
 
+    // Edit mode turns itself off after a few idle seconds (configurable in Settings; 0 disables
+    // it), so a stray hold doesn't leave the board unable to play (#344). Idle means nothing is
+    // being edited or moved: held off while a dialog is open or a hold or drag is under way, and
+    // restarted by any interaction (lastInteractionAt), as the relock timer above is.
+    val editModeSecond = LocalEditModeSecond.current
+    LaunchedEffect(editMode, lastInteractionAt, openDialog != null, isDragActive, board.editModeTimeoutSeconds) {
+        if (!editMode || openDialog != null || isDragActive || board.editModeTimeoutSeconds <= 0) return@LaunchedEffect
+        delay(editModeSecond * board.editModeTimeoutSeconds)
+        // Not setEditMode(false): nobody touched the board, so this isn't use, and mustn't restart the other idle timers.
+        editMode = false
+    }
+
     // Blank tiles only open the editor, so they're hidden while it's locked away.
     val hideBlankTiles = board.hideBlankTilesEnabled || editingLocked
 
@@ -261,6 +275,12 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                 vm.switchPage(page)
             }
         }
+    }
+
+    // A swipe under way counts as use however far it goes, so Edit mode's timer (above) waits
+    // for it; the page change above only restarts the timer once the swipe has crossed a page.
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.isScrollInProgress }.drop(1).collect { recordInteraction() }
     }
 
     // ViewModel -> pager: a tab tap or the idle timer scrolls the pager to match.
@@ -295,7 +315,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                     recentBoards = recentBoards,
                     builtInBoards = remember { vm.builtInBoards() },
                     editMode = editMode,
-                    onEditModeChange = { editMode = it },
+                    onEditModeChange = ::setEditMode,
                     showModeEnabled = showMode.enabled,
                     onShowModeChange = vm::setShowModeEnabled,
                     onSelectPage = { index ->
@@ -350,7 +370,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                 // Locking ends Edit mode, so this never shows locked; the check keeps it that way
                 // for the frame before that effect runs.
                 if (editMode && !editingLocked) {
-                    EditModeBanner(onTurnOff = { setEditMode(false) })
+                    EditModeBanner(timeoutSeconds = board.editModeTimeoutSeconds, onTurnOff = { setEditMode(false) })
                 }
                 // Not while locked: whoever set the lock is the one to act on it.
                 if (backupReminderDue && !editingLocked) {
@@ -432,6 +452,7 @@ private fun BoardScreenContent(vm: BoardViewModel) {
                             onPreviewMove = vm::previewMove,
                             onCommitOrder = vm::commitOrder,
                             onDragActiveChanged = { isDragActive = it },
+                            onScrolled = ::recordInteraction,
                             activeLanguage = activeLanguage
                         )
                     }
@@ -720,3 +741,6 @@ private const val BACKUP_FILE_NAME = "soundboard-backup.zip"
  * browser holds its only thread for as long as a real minute's frames take.
  */
 internal val LocalIdleMinute = staticCompositionLocalOf { 1.minutes }
+
+/** How long one second of the Edit mode timeout lasts (#344): a second, in the app, shortened by the UI tests like [LocalIdleMinute]. */
+internal val LocalEditModeSecond = staticCompositionLocalOf { 1.seconds }

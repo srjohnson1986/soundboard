@@ -113,7 +113,15 @@ keeps the APK as a workflow artifact.
    `versionName`/`versionCode`, and the in-app version label (`APP_VERSION` in
    `shared/.../ui/BoardTopBar.kt`) and its release-notes link read the same
    value, so there's nothing else to keep in sync.
-4. Once that's merged, tag the merge commit and push the tag:
+4. Once that's merged, check iOS still builds: run the **iOS** workflow on
+   `master` and wait for it to pass. It doesn't run on every pull request, only on
+   ones that change iOS code, plus weekly (#335), so this catches shared code that
+   has broken on iOS since:
+   ```bash
+   gh workflow run iOS --ref master
+   ```
+   (or **Run workflow** on its Actions page). Pushing the tag runs it again as a
+   backstop. Then tag the merge commit and push the tag:
    ```bash
    git tag -a vX.Y.Z <commit> -m "vX.Y.Z"
    git push origin vX.Y.Z

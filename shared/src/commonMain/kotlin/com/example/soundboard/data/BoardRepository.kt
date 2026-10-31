@@ -5,6 +5,8 @@ import com.example.soundboard.model.Page
 import com.example.soundboard.model.Tile
 import kotlin.uuid.Uuid
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -171,16 +173,50 @@ class BoardRepository(
         target.write(zip.write(entries))
     }.isSuccess
 
-    /** Zips board.json and every sound into [target]. The whole app state in one file. */
+    /**
+     * Zips board.json and every sound into [target]. The whole app state in one file.
+     *
+     * Inside the zip each sound is named after the tile that uses it (`sounds/Yes.m4a`, see
+     * [ClipNamer]) and the zip's copy of board.json says so, so a backup makes sense outside the
+     * app. Only the zip is renamed: the files on the device keep their IDs. Clips no tile on the
+     * board uses keep their ID names.
+     */
     suspend fun exportTo(target: SaveTarget): Boolean = runCatching {
+        val boardBytes = files.read(BOARD_FILE) ?: error("no board.json")
+        val sounds = files.list(SOUNDS_DIR).map { it.name }
+        val renames = readableSoundNames(sounds)
+        // If the rewrite can't be done, nothing is renamed: the ID names and the board still agree.
+        val rewrittenBoard = if (renames.isEmpty()) null else rewriteFileNames(boardBytes, renames)
+        val names = if (rewrittenBoard == null) emptyMap() else renames
         val entries = buildList {
-            add(ZipEntryData(BOARD_FILE, files.read(BOARD_FILE) ?: error("no board.json")))
-            addDirectory(SOUNDS_DIR, ZIP_SOUNDS_DIR)
+            add(ZipEntryData(BOARD_FILE, rewrittenBoard ?: boardBytes))
+            sounds.forEach { name ->
+                files.read(soundPath(name))?.let { add(ZipEntryData("$ZIP_SOUNDS_DIR${names[name] ?: name}", it)) }
+            }
             addDirectory(BACKGROUNDS_DIR, ZIP_BACKGROUNDS_DIR)
             addDirectory(ICONS_DIR, ZIP_ICONS_DIR)
         }
         target.write(zip.write(entries))
     }.isSuccess
+
+    /**
+     * A readable name for each of [sounds] (the names in `sounds/`) that a tile on the board
+     * uses, keyed by its stored name. A clip several tiles share gets the first tile's name.
+     * The other clips keep their names, which the readable ones steer clear of.
+     */
+    private suspend fun readableSoundNames(sounds: List<String>): Map<String, String> {
+        val board = load()
+        val present = sounds.toSet()
+        val namer = ClipNamer(taken = present - board.soundFileNames)
+        val renames = mutableMapOf<String, String>()
+        for (page in board.pages) {
+            for (tile in page.tiles) {
+                val stored = tile.fileName ?: continue
+                if (stored in present && stored !in renames) renames[stored] = namer.nameFor(tile, page.name, stored)
+            }
+        }
+        return renames
+    }
 
     private suspend fun MutableList<ZipEntryData>.addDirectory(dir: String, zipPrefix: String) {
         files.list(dir).forEach { info ->
@@ -239,19 +275,57 @@ class BoardRepository(
     /** Whether [assetName] is packaged in this build — some built-in boards only ship in debug builds. */
     fun hasAsset(assetName: String): Boolean = bundled.has(assetName)
 
+    /**
+     * Writes a zip's board and files into app storage. Every sound gets a fresh ID name, and the
+     * board's `fileName` values are rewritten to match: saved boards share `sounds/`, so a file
+     * that kept the zip's name (`Yes.m4a`) could replace one a saved board still plays. board.json
+     * goes in last, after every file it names.
+     */
     private suspend fun importZip(bytes: ByteArray) {
+        val renames = mutableMapOf<String, String>()
+        var boardBytes: ByteArray? = null
         for (entry in zip.read(bytes)) {
             when {
-                entry.name == BOARD_FILE -> files.write(BOARD_FILE, entry.bytes)
-                entry.name.startsWith(ZIP_SOUNDS_DIR) ->
-                    entry.fileNameAfter(ZIP_SOUNDS_DIR)?.let { files.write(soundPath(it), entry.bytes) }
+                entry.name == BOARD_FILE -> boardBytes = entry.bytes
+                entry.name.startsWith(ZIP_SOUNDS_DIR) -> entry.fileNameAfter(ZIP_SOUNDS_DIR)?.let { name ->
+                    val fresh = freshSoundName(name)
+                    files.write(soundPath(fresh), entry.bytes)
+                    renames[name] = fresh
+                }
                 entry.name.startsWith(ZIP_BACKGROUNDS_DIR) ->
                     entry.fileNameAfter(ZIP_BACKGROUNDS_DIR)?.let { files.write("$BACKGROUNDS_DIR/$it", entry.bytes) }
                 entry.name.startsWith(ZIP_ICONS_DIR) ->
                     entry.fileNameAfter(ZIP_ICONS_DIR)?.let { files.write("$ICONS_DIR/$it", entry.bytes) }
             }
         }
+        boardBytes?.let { files.write(BOARD_FILE, if (renames.isEmpty()) it else rewriteFileNames(it, renames) ?: it) }
     }
+
+    /** A new random name for a sound that was called [original], with its extension, that no file in `sounds/` has. */
+    private suspend fun freshSoundName(original: String): String {
+        val extension = ClipNames.extensionOf(original)
+        while (true) {
+            val name = "${Uuid.random()}$extension"
+            if (!files.exists(soundPath(name))) return name
+        }
+    }
+
+    /**
+     * [boardJson] with every `fileName` value that's a key of [renames] replaced by its entry; null
+     * if it isn't JSON. It walks the whole tree for that key rather than decoding a [Board], so
+     * boards from before pages existed work too, and nothing else in the file changes.
+     */
+    private fun rewriteFileNames(boardJson: ByteArray, renames: Map<String, String>): ByteArray? = runCatching {
+        fun JsonElement.rewritten(): JsonElement = when (this) {
+            is JsonObject -> JsonObject(mapValues { (key, value) ->
+                val renamed = (value as? JsonPrimitive)?.takeIf { key == "fileName" && it.isString }?.let { renames[it.content] }
+                if (renamed != null) JsonPrimitive(renamed) else value.rewritten()
+            })
+            is JsonArray -> JsonArray(map { it.rewritten() })
+            else -> this
+        }
+        json.encodeToString(JsonElement.serializer(), json.parseToJsonElement(boardJson.decodeToString()).rewritten()).encodeToByteArray()
+    }.getOrNull()
 
     /** The plain file name after [prefix]; null for anything that would land outside that one folder. */
     private fun ZipEntryData.fileNameAfter(prefix: String): String? =

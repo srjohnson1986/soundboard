@@ -70,7 +70,8 @@ class ShippedBoardsTest {
         allTiles.mapNotNull { it.fileName }.forEach { name ->
             assertTrue("missing sound file $name", soundFile(name).exists())
         }
-        assertEquals("chime.wav", allTiles.first { it.label == "Chime" }.fileName)
+        // Restoring gives every clip a fresh ID name, so it is the extension that survives.
+        assertTrue(allTiles.first { it.label == "Chime" }.fileName.orEmpty().endsWith(".wav"))
     }
 
     @Test
@@ -147,7 +148,8 @@ class ShippedBoardsTest {
         allTiles.mapNotNull { it.fileName }.forEach { name ->
             assertTrue("missing sound file $name", soundFile(name).exists())
         }
-        assertEquals("chime.wav", allTiles.first { it.label == "Chime" }.fileName)
+        // Restoring gives every clip a fresh ID name, so it is the extension that survives.
+        assertTrue(allTiles.first { it.label == "Chime" }.fileName.orEmpty().endsWith(".wav"))
 
         val trouble = board.pages.first { it.name == "Trouble" }
         assertEquals(
@@ -195,6 +197,7 @@ class ShippedBoardsTest {
         allTiles.mapNotNull { it.fileName }.forEach { name ->
             assertTrue("missing sound file $name", soundFile(name).exists())
         }
-        assertEquals("chime.wav", allTiles.first { it.label == "Chime" }.fileName)
+        // Restoring gives every clip a fresh ID name, so it is the extension that survives.
+        assertTrue(allTiles.first { it.label == "Chime" }.fileName.orEmpty().endsWith(".wav"))
     }
 }

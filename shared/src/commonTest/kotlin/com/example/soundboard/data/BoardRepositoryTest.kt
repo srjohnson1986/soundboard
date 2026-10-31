@@ -93,8 +93,11 @@ class BoardRepositoryTest {
         val restored = BoardRepository(restoredFiles, zip, FakeBundledBoards())
         assertTrue(restored.importFrom(FakePickedFile(target.written)))
 
-        assertEquals(board, restored.load())
-        assertContentEquals(byteArrayOf(1, 2), restoredFiles.read(restored.soundPath("a.m4a")))
+        // Same board, except that the sound now has a fresh ID (see importZip).
+        val loaded = restored.load()
+        val soundName = loaded.findTile("a")!!.fileName!!
+        assertEquals(board.copy(pages = board.pages.map { page -> page.copy(tiles = page.tiles.map { if (it.id == "a") it.copy(fileName = soundName) else it }) }), loaded)
+        assertContentEquals(byteArrayOf(1, 2), restoredFiles.read(restored.soundPath(soundName)))
         assertContentEquals(byteArrayOf(9), restored.readBackground(background))
     }
 
@@ -111,7 +114,9 @@ class BoardRepositoryTest {
 
         assertTrue(repo.importFrom(FakePickedFile(backup)))
 
-        assertEquals(listOf("ok.m4a"), files.list("sounds").map { it.name })
+        // The one sound that was inside its folder came in, under a fresh name.
+        assertEquals(1, files.list("sounds").size)
+        assertContentEquals(byteArrayOf(1), files.readNow(repo.soundPath(files.list("sounds").single().name)))
         assertFalse(files.exists("board.json"))
         assertTrue(files.list("backgrounds").isEmpty())
     }
@@ -459,5 +464,191 @@ class BoardRepositoryTest {
 
         assertEquals(listOf("ok.png"), files.list("icons").map { it.name })
         assertFalse(files.exists("evil.png"))
+    }
+
+    // Sounds in a backup are named after their tiles (#329).
+
+    /** Puts a sound on the device under [name], holding [bytes]. */
+    private fun sound(name: String, vararg bytes: Byte) = files.put(repo.soundPath(name), bytes)
+
+    /** What a backup of the saved board holds, by entry name. */
+    private suspend fun backupEntries(): Map<String, ByteArray> {
+        val target = CapturingSaveTarget()
+        assertTrue(repo.exportTo(target))
+        return zip.read(target.written!!).associate { it.name to it.bytes }
+    }
+
+    private fun Map<String, ByteArray>.soundNames() = keys.filter { it.startsWith("sounds/") }.map { it.removePrefix("sounds/") }.toSet()
+
+    private fun Map<String, ByteArray>.board() = BoardJson.decodeFromString<Board>(getValue("board.json").decodeToString())
+
+    @Test
+    fun `a backup names each sound after its tile and numbers duplicates by page`() = runTest {
+        listOf("id1.m4a", "id2.m4a", "id3.m4a", "id4.m4a", "id5.m4a", "id6.m4a", "id7.m4a").forEachIndexed { i, name -> sound(name, i.toByte()) }
+        repo.save(
+            Board(
+                pages = listOf(
+                    Page(
+                        name = "Home", rows = 1, columns = 4,
+                        tiles = listOf(
+                            Tile(id = "yes", label = "Yes", fileName = "id1.m4a"),
+                            Tile(id = "no", label = "No?", fileName = "id2.m4a"),
+                            Tile(id = "emoji", emoji = "😀", fileName = "id3.m4a"),
+                            Tile(id = "blank", fileName = "id4.m4a")
+                        )
+                    ),
+                    Page(
+                        name = "Food", rows = 1, columns = 3,
+                        tiles = listOf(
+                            Tile(id = "yes2", label = "yes", fileName = "id5.m4a"),
+                            Tile(id = "yes3", label = "YES", fileName = "id6.m4a"),
+                            Tile(id = "yes4", label = "Yes", fileName = "id1.m4a")
+                        )
+                    )
+                )
+            ).normalized()
+        )
+
+        val backup = backupEntries()
+
+        // id7 is on no tile, so it keeps its name; id1 is on two tiles and is in once, as the first.
+        assertEquals(
+            setOf("Yes.m4a", "No.m4a", "Happy.m4a", "Sound.m4a", "yes (Food).m4a", "YES (Food) 2.m4a", "id7.m4a"),
+            backup.soundNames()
+        )
+        val tiles = backup.board().pages.flatMap { it.tiles }.associateBy { it.id }
+        assertEquals("Yes.m4a", tiles.getValue("yes").fileName)
+        assertEquals("No.m4a", tiles.getValue("no").fileName)
+        assertEquals("Happy.m4a", tiles.getValue("emoji").fileName)
+        assertEquals("Sound.m4a", tiles.getValue("blank").fileName)
+        assertEquals("yes (Food).m4a", tiles.getValue("yes2").fileName)
+        assertEquals("YES (Food) 2.m4a", tiles.getValue("yes3").fileName)
+        assertEquals("Yes.m4a", tiles.getValue("yes4").fileName)
+        assertContentEquals(byteArrayOf(0), backup.getValue("sounds/Yes.m4a"))
+        // The device itself is untouched.
+        assertEquals("id1.m4a", repo.load().findTile("yes")?.fileName)
+        assertEquals(7, files.list("sounds").size)
+    }
+
+    @Test
+    fun `a backup only renames fileName and leaves the rest of board json alone`() = runTest {
+        sound("id1.m4a", 1)
+        repo.save(boardWith(Tile(id = "a", label = "id1.m4a", ttsScript = "id1.m4a", fileName = "id1.m4a")))
+
+        val tile = backupEntries().board().pages.first().tiles.first()
+
+        assertEquals("id1.m4a.m4a", tile.fileName)
+        assertEquals("id1.m4a", tile.label)
+        assertEquals("id1.m4a", tile.ttsScript)
+    }
+
+    @Test
+    fun `backing up then restoring gives every tile the same audio bytes`() = runTest {
+        sound("id1.m4a", 1, 1)
+        sound("id2.m4a", 2, 2)
+        sound("id3.m4a", 3, 3)
+        repo.save(
+            Board(
+                pages = listOf(
+                    Page(name = "A", rows = 1, columns = 2, tiles = listOf(Tile(id = "a", label = "Hi", fileName = "id1.m4a"), Tile(id = "b", label = "Hi", fileName = "id2.m4a"))),
+                    Page(name = "B", rows = 1, columns = 2, tiles = listOf(Tile(id = "c", label = "Hi", fileName = "id3.m4a"), Tile(id = "d", label = "Again", fileName = "id1.m4a")))
+                )
+            ).normalized()
+        )
+        val target = CapturingSaveTarget()
+        assertTrue(repo.exportTo(target))
+
+        val restoredFiles = InMemoryFileStore()
+        val restored = BoardRepository(restoredFiles, zip, FakeBundledBoards())
+        assertTrue(restored.importFrom(FakePickedFile(target.written)))
+        val board = restored.load()
+
+        fun bytesOf(tileId: String) = restoredFiles.readNow(restored.soundPath(board.findTile(tileId)!!.fileName!!))
+        assertContentEquals(byteArrayOf(1, 1), bytesOf("a"))
+        assertContentEquals(byteArrayOf(2, 2), bytesOf("b"))
+        assertContentEquals(byteArrayOf(3, 3), bytesOf("c"))
+        assertContentEquals(byteArrayOf(1, 1), bytesOf("d"))
+        assertEquals(board.findTile("a")?.fileName, board.findTile("d")?.fileName)
+        assertEquals(3, restoredFiles.list("sounds").size)
+        // Every restored clip has a fresh ID rather than the backup's readable name.
+        board.soundFileNames.forEach { name ->
+            assertTrue(name.endsWith(".m4a"))
+            assertFalse(name in setOf("Hi.m4a", "Hi (A).m4a", "Hi (B).m4a", "Again.m4a"), name)
+        }
+    }
+
+    @Test
+    fun `an old backup with ID names still restores`() = runTest {
+        val backup = zip.write(
+            listOf(
+                ZipEntryData("board.json", GoldenBackup.BOARD_JSON.encodeToByteArray()),
+                ZipEntryData("sounds/hi.m4a", GoldenBackup.SOUND_BYTES)
+            )
+        )
+
+        assertTrue(repo.importFrom(FakePickedFile(backup)))
+
+        val tile = repo.load().findTile("t")!!
+        assertEquals("Hi", tile.label)
+        assertContentEquals(GoldenBackup.SOUND_BYTES, files.readNow(repo.soundPath(tile.fileName!!)))
+    }
+
+    @Test
+    fun `a backup from before pages existed restores its sounds too`() = runTest {
+        val backup = zip.write(
+            listOf(
+                ZipEntryData(
+                    "board.json",
+                    """{"rows":1,"columns":2,"tiles":[{"id":"x","label":"Old","fileName":"x.mp3","volume":1.0},{"id":"y","fileName":null}]}""".encodeToByteArray()
+                ),
+                ZipEntryData("sounds/x.mp3", byteArrayOf(5, 6))
+            )
+        )
+
+        assertTrue(repo.importFrom(FakePickedFile(backup)))
+
+        val board = repo.load()
+        val tile = board.findTile("x")!!
+        assertContentEquals(byteArrayOf(5, 6), files.readNow(repo.soundPath(tile.fileName!!)))
+        assertTrue(tile.fileName.orEmpty().endsWith(".mp3"))
+        assertNull(board.findTile("y")?.fileName)
+    }
+
+    @Test
+    fun `restoring never overwrites a file a saved board uses`() = runTest {
+        // A saved board's tile plays sounds/Yes.m4a (a name an older build or backup left there)...
+        sound("Yes.m4a", 9)
+        val backup = zip.write(
+            listOf(
+                ZipEntryData("board.json", BoardJson.encodeToString(boardWith(Tile(id = "t", label = "Yes", fileName = "Yes.m4a"))).encodeToByteArray()),
+                ZipEntryData("sounds/Yes.m4a", byteArrayOf(1))
+            )
+        )
+
+        // ...and two restores of a backup with its own Yes.m4a come in.
+        assertTrue(repo.importFrom(FakePickedFile(backup)))
+        val first = repo.load().findTile("t")!!.fileName!!
+        assertTrue(repo.importFrom(FakePickedFile(backup)))
+        val second = repo.load().findTile("t")!!.fileName!!
+
+        assertContentEquals(byteArrayOf(9), files.readNow(repo.soundPath("Yes.m4a")))
+        assertContentEquals(byteArrayOf(1), files.readNow(repo.soundPath(first)))
+        assertContentEquals(byteArrayOf(1), files.readNow(repo.soundPath(second)))
+        assertEquals(3, files.list("sounds").size)
+        assertTrue(first != "Yes.m4a" && second != "Yes.m4a" && first != second)
+    }
+
+    @Test
+    fun `a built-in board's sounds come in under fresh IDs as well`() = runTest {
+        val repo = BoardRepository(
+            files, zip,
+            FakeBundledBoards(mapOf("built-in.zip" to builtInZip(Tile(id = "w", label = "Water", fileName = "water.wav"), sounds = mapOf("water.wav" to byteArrayOf(4)))))
+        )
+
+        assertTrue(repo.importFromAsset("built-in.zip"))
+
+        val name = repo.load().findTile("w")!!.fileName!!
+        assertTrue(name != "water.wav" && name.endsWith(".wav"))
+        assertContentEquals(byteArrayOf(4), files.readNow(repo.soundPath(name)))
     }
 }

@@ -335,10 +335,34 @@ either. A backup is built and read whole, in memory, rather than streamed, since
 that's what the web can do too; boards with a few hundred short clips are a few
 MB. `importFrom()` only takes files that land directly in their own folder (an
 entry like `sounds/../board.json` is skipped), and fails on a file that isn't a
-zip rather than seeming to work. It overwrites `board.json` and merges files into
-`sounds/` — it does not clear `sounds/` first, so an import after manually
-adding stray files there could leave orphans; in practice the app is the only
-thing that ever writes there, so this hasn't mattered.
+zip rather than seeming to work.
+
+**Sounds are named after their tiles inside a backup, and nowhere else** (#329).
+On the device a sound is `sounds/<uuid>.<ext>`; `exportTo()` gives each one a
+readable name in the zip (`sounds/Yes.m4a`) and rewrites the `fileName` values in
+the zip's copy of `board.json` to match, so the backup still restores exactly. The
+rules live in `ClipNamer`/`ClipNames` (`data/ClipNames.kt`), which the unused-clips
+export reuses: the tile's label, else its emoji's name (`EmojiNames`), else `Sound`;
+`\ / : * ? " < > |` and control characters taken out, spaces collapsed, trailing dots
+and spaces trimmed, about 60 characters, Windows' reserved names (`CON`, `NUL`,
+`COM1`...) avoided, letters from any language kept, the extension kept. A name that's
+taken (compared ignoring case, so it also works on Windows and macOS) gets the page's
+name (`Yes (Food).m4a`), then a number (`Yes (Food) 2.m4a`); a clip shared by several
+tiles is in once, under the first tile's name (pages and tiles in board order). A clip
+no tile on the board uses keeps its ID name, and readable names steer clear of it.
+The `fileName` rewrite walks the JSON tree for that key instead of decoding a `Board`,
+so a `board.json` from before pages existed works too, and nothing else in the file is
+touched.
+
+**`importZip()` gives every sound a fresh ID** (`<uuid>.<its extension>`, checked not
+to exist) and rewrites `fileName` in the restored `board.json` the same way, for
+backups from any version and for the built-in boards, which come in through the same
+code. This is the data-safety part: saved boards share `sounds/`, so a restored file
+that kept the zip's name (`Yes.m4a`) could overwrite one a saved board still plays,
+and that tile would play the wrong sound with no warning. `board.json` is written
+last, after every file it names, so a restore that stops halfway leaves the old board
+pointing at files that are all still there. It doesn't clear `sounds/` first: the old
+board's clips stay until the next `commit()` prunes the ones nothing uses.
 
 ## Saved boards
 

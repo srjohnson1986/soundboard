@@ -17,6 +17,9 @@ class InMemoryFileStore : FileStore {
     /** [exists], for checking a test's outcome outside a coroutine. */
     fun has(path: String): Boolean = path in files
 
+    /** The content of the file at [path] ([read], for a test's outcome outside a coroutine); fails if there's none. */
+    fun readNow(path: String): ByteArray = files.getValue(path).copyOf()
+
     /** The size of the file at [path], or 0 if there's none. */
     fun sizeOf(path: String): Int = files[path]?.size ?: 0
 

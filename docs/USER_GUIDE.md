@@ -398,8 +398,16 @@ new device.
 
 - **Export backup** asks where to save the file (the name starts as
   `soundboard-backup.zip`).
+  Inside the zip each sound is named after its tile, so you can tell what's
+  what if you open it on a computer: `sounds/Yes.m4a`, `sounds/Water.m4a`. A tile
+  with no name uses its emoji's name, or `Sound`. When two tiles have the same
+  name, the second gets its page's name (`Yes (Food).m4a`), then a number if it
+  still clashes (`Yes (Food) 2.m4a`). A sound that no tile on the board uses keeps
+  its long ID name. The files on your device aren't renamed.
 - **Import backup** asks you to pick a backup zip, then replaces the current
-  board and its sounds with it.
+  board and its sounds with it. Each restored sound gets a new internal name, so
+  restoring never replaces a sound a saved board still uses. Backups from older
+  versions, with the long ID names, restore the same way.
 
 **Heads up:** importing replaces everything. It doesn't merge, so whatever's
 on the board now is gone once the backup loads. Export first if you want to

@@ -92,7 +92,7 @@ kotlin {
         commonMain {
             kotlin.srcDir(generateAppVersion.map { layout.buildDirectory.dir("generated/appVersion/commonMain/kotlin").get() })
             dependencies {
-                api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+                api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
                 api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
                 // JetBrains' multiplatform builds of androidx.lifecycle; on Android they resolve
                 // to Google's own artifacts, so BoardViewModel is an ordinary androidx ViewModel.

@@ -106,7 +106,7 @@ dependencies {
     // On-device translation (#332): the Spanish model downloads once (about 30 MB), then works offline.
     implementation("com.google.mlkit:translate:17.0.3")
     implementation(project(":shared"))
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

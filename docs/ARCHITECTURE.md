@@ -1249,12 +1249,11 @@ tests, so its entries cover what the others use; they restore the most recent en
 their runner OS (setup-gradle's fallback when a job has none of its own) and download the
 odd dependency only they need, such as lint's or the instrumented tests'. A merge to
 `master` therefore adds at most one set (the `web` job's), and it replaces the one before
-it, which goes after 7 idle days or sooner if the limit forces it. Keep it that way:
-a new Gradle job that wants to save its own caches needs a reason. The macOS runner has one
-Gradle job (`ios.yml`), so it is the only writer there. A new Gradle job on `master`
-should be read-only unless it is the `web` job's replacement. `gh cache list` shows what's
-there; a stale `gradle-home-v2|Linux-X64|android[...]` entry left from before this
-change makes that job keep restoring its own old set, so delete any such entry.
+it, which goes after 7 idle days or sooner if the limit forces it. A new Gradle job should
+be read-only too, unless it replaces `web` as the writer. The macOS runner has one Gradle
+job (`ios.yml`), which is therefore the only writer there. `gh cache list` shows what's
+cached; a `gradle-home-v2|Linux-X64|<job>[...]` entry left from before this change would
+keep that job restoring its own stale set, so those were deleted by hand.
 
 The **iOS** workflow (`.github/workflows/ios.yml`) builds for iOS and runs the shared
 tests on the iPhone simulator, on a macOS runner. It's advisory too, and until iOS has

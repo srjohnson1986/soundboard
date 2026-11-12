@@ -50,8 +50,17 @@ jobs:
 
   # The jobs below run side by side, each on its own runner; build-and-test waits for all
   # of them. Gradle's parallel mode, build cache and configuration cache are on in
-  # gradle.properties, and setup-gradle keeps the build cache between runs (written by runs
-  # on master, read by pull requests), so unchanged modules aren't rebuilt.
+  # gradle.properties, and setup-gradle keeps Gradle's caches (dependencies, transforms,
+  # build cache) between runs, so unchanged modules aren't rebuilt.
+  #
+  # Only the `web` job writes those caches, and only on master; every other Gradle job here
+  # and in ui-tests.yml is read-only (`cache-read-only: true`). setup-gradle saves a whole
+  # new set of entries, named by a hash of their content, from every job that writes, so
+  # with four writers each merge added four sets of 0.8-1.5 GB each, which stayed for 7
+  # idle days and filled the repository's 10 GB (#356). `web` runs `:shared:allTests`, which
+  # includes the Android host tests, so what it saves covers the other jobs; they restore
+  # the most recent entry on the runner OS, and fetch the odd extra dependency (lint's, say)
+  # themselves.
   android:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -68,6 +77,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true  # only the web job saves Gradle's caches (see above)
 
       - name: Make gradlew executable
         run: chmod +x gradlew
@@ -228,6 +239,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true  # only the web job saves Gradle's caches (see above)
 
       - name: Make gradlew executable
         run: chmod +x gradlew

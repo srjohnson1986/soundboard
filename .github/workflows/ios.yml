@@ -55,10 +55,13 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # The Kotlin/Native compiler and its dependencies, downloaded on first use; about a
-      # gigabyte, so kept between runs. The key changes when the Kotlin version does.
-      - name: Cache Kotlin/Native
-        uses: actions/cache@v6
+      # The Kotlin/Native compiler and its dependencies, downloaded on first use; about half
+      # a gigabyte, so kept between runs. The key changes when the Kotlin version does.
+      # Everyone restores; only master saves (below), because a pull request's own copy
+      # would be one more on a repository whose cache limit is 10 GB (#356).
+      - name: Restore Kotlin/Native
+        id: konan
+        uses: actions/cache/restore@v6
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('build.gradle.kts', 'settings.gradle.kts', 'gradle.properties') }}
@@ -70,6 +73,14 @@ jobs:
       # The device build as well as the simulator's, since some code only compiles for one.
       - name: Build for iOS and test on the simulator
         run: ./gradlew :shared:compileKotlinIosArm64 :ios:compileKotlinIosArm64 :shared:iosSimulatorArm64Test --continue --stacktrace
+
+      # Saved here, once Gradle has downloaded it, and even if a test failed.
+      - name: Save Kotlin/Native
+        if: always() && steps.konan.outputs.cache-hit != 'true' && github.ref == 'refs/heads/master'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.konan
+          key: ${{ steps.konan.outputs.cache-primary-key }}
 
       # The app itself (#266): its Xcode project is generated from ios/app/project.yml, and
       # its build phase has Gradle build the SoundboardKit framework for the simulator.

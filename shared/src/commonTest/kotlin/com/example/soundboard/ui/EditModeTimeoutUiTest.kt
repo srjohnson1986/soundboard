@@ -250,7 +250,10 @@ class EditModeTimeoutUiTest : BoardUiTest() {
         assertEditModeOn()
 
         mainClock.autoAdvance = false
-        onNodeWithText("Tile 1").performTouchInput { swipeUp() }
+        // A drag five tiles long, so the drag alone scrolls Tile 1 away. A swipe across Tile 1
+        // only (68 px) relied on the fling after it: iOS, like UIScrollView, drops a fling slower
+        // than 500 px/s, so there the grid barely moved.
+        onNodeWithText("Tile 1").performTouchInput { swipeUp(startY = bottom + height * 3, endY = top - height) }
         mainClock.advanceTimeBy(500)
         mainClock.autoAdvance = true
         waitForIdle()

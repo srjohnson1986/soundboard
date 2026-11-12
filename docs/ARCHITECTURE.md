@@ -1201,12 +1201,29 @@ Gradle project the Markdown names exists, #274), which runs on docs-only changes
 `build-and-test`, the required check, passes when all four do. The build cache is saved by runs on master and
 read by pull requests, so a PR only rebuilds and retests what it changed. The
 separate **UI tests** workflow (`.github/workflows/ui-tests.yml`) runs the
-latter on an API 35 emulator for every PR, after every merge to master (which
-keeps the emulator snapshot cached for PRs), and on demand via **Run workflow**.
+latter on an API 35 emulator for every PR, after every merge to master, on
+Mondays and Thursdays at 06:00 UTC, and on demand via **Run workflow**.
 It's advisory, not a merge gate, because emulators on shared runners
 occasionally flake on timing-sensitive gestures. Its HTML report is uploaded as
 the `ui-test-report` artifact. `LayoutAndLabelTest` rotates the device itself
 (`UiAutomation.setRotation`) and restores portrait afterwards.
+
+**The emulator snapshot cache.** Booting a fresh emulator for the first time is slow, so the
+workflow caches the AVD (`avd-35-google_apis-x86_64-pixel_6`, about 2.4 GB) and restores it
+instead of creating it. The repository's cache limit is 10 GB, so there must be only one
+copy: only runs on `master` save it (`actions/cache/save`, straight after "Create AVD
+snapshot for the cache", skipped on a hit), and every other run only restores it
+(`actions/cache/restore`). A pull request can read master's caches but not another
+branch's, so when master has none, the pull request creates a snapshot for its own run and
+discards it. (Before #352 pull requests saved theirs too; two of them, #350 and #351,
+filled the cache to 9,969 MB.) GitHub deletes a cache that hasn't been read for 7 days, and
+Dependabot's merges don't start workflows on `master`, so the scheduled runs, twice a week
+before Dependabot's Monday 05:00 Eastern run, read it and recreate it if it's gone. A run on
+`master` isn't cancelled by the next merge (`cancel-in-progress` is off for that branch),
+because it may be the one that saves the snapshot; a pull request's run still cancels its
+older ones. `paths-ignore` applies only to pushes and pull requests, so a scheduled run
+always runs. To see what's cached: `gh cache list`; to run the workflow on master by hand
+after clearing it: `gh workflow run "UI tests" --ref master`.
 
 The **iOS** workflow (`.github/workflows/ios.yml`) builds for iOS and runs the shared
 tests on the iPhone simulator, on a macOS runner. It's advisory too, and until iOS has

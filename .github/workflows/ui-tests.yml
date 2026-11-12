@@ -6,9 +6,12 @@ name: UI tests
 # before a release.
 
 # Documentation-only changes skip the emulator run (see the matching note in ci.yml).
-# It also runs on master after each merge: that's what fills the caches pull requests read
-# (GitHub keeps each branch's caches to itself, apart from master's), so they can reuse the
-# emulator snapshot instead of recreating it every time.
+# It also runs on master after each merge and twice a week: that's what fills and keeps
+# alive the emulator snapshot cache pull requests read (GitHub keeps each branch's caches to
+# itself, apart from master's, and deletes one nobody has read for 7 days). Only master
+# saves that snapshot (it's 2.4 GB, and the repository's cache limit is 10 GB, so a copy
+# per pull request fills it); a pull request restores it, or on a miss builds its own for
+# that run and throws it away.
 on:
   push:
     branches: [master]
@@ -16,14 +19,23 @@ on:
   pull_request:
     branches: [master]
     paths-ignore: ['**/*.md', 'docs/**']
+  # Monday and Thursday at 06:00 UTC: Monday's is before Dependabot's 05:00 Eastern run
+  # (09:00 or 10:00 UTC), whose pull requests read the snapshot; Thursday's keeps the gap
+  # between two reads well under the 7 days a cache survives unread (one run a week would
+  # have to land within minutes of the same time each week). Scheduled runs only ever
+  # happen on the default branch, and paths-ignore doesn't apply to them.
+  schedule:
+    - cron: '0 6 * * 1,4'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+# A newer pull request run cancels the older one, but a run on master is never cancelled
+# by the next merge: it may be the one that saves the snapshot cache.
 concurrency:
   group: ui-tests-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 env:
   API_LEVEL: 35
@@ -62,8 +74,10 @@ jobs:
       - name: Build app and test APKs
         run: ./gradlew assembleDebug assembleDebugAndroidTest --stacktrace
 
-      - name: Cache AVD
-        uses: actions/cache@v6
+      # Everyone restores; only master saves (below), so there is one snapshot, on master,
+      # which every pull request can read.
+      - name: Restore AVD cache
+        uses: actions/cache/restore@v6
         id: avd-cache
         with:
           path: |
@@ -83,6 +97,16 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
           script: echo "Generated AVD snapshot for caching."
+
+      # Saved here rather than at the end of the job, so a failing test run still leaves it.
+      - name: Save AVD cache
+        if: steps.avd-cache.outputs.cache-hit != 'true' && github.ref == 'refs/heads/master'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: ${{ steps.avd-cache.outputs.cache-primary-key }}
 
       - name: Run UI tests
         uses: reactivecircus/android-emulator-runner@v2

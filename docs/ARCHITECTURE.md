@@ -1232,7 +1232,7 @@ older ones. `paths-ignore` applies only to pushes and pull requests, so a schedu
 always runs. To see what's cached: `gh cache list`; to run the workflow on master by hand
 after clearing it: `gh workflow run "UI tests" --ref master`.
 
-**The Gradle caches** (#356). `gradle/actions/setup-gradle` restores Gradle's dependencies,
+**The Gradle caches** (#356). The `setup-gradle` action restores Gradle's dependencies,
 artifact transforms and local build cache at the start of a job and saves them at the end,
 as entries named by a hash of their content (`gradle-dependencies-v2-<hash>`,
 `gradle-transforms-v2-<hash>`, `gradle-build-cache-v2-<hash>`, and a small

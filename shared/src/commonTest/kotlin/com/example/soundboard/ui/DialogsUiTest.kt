@@ -404,6 +404,30 @@ class DialogsUiTest : BoardUiTest() {
         onNodeWithText("doesn't offer other voices", substring = true).assertIsDisplayed()
     }
 
+    @Test
+    fun resettingThisDevicesSettingsAsksFirstAndWarnsAboutTheBackupReminder() = runUiTest {
+        val app = launchBoard(oneTile())
+        app.vm.setPerformanceModeEnabled(true)
+        app.vm.setSpeechRatePercent(150)
+        openSettings()
+        onNodeWithText("performance mode on", substring = true).performScrollTo().assertIsDisplayed()
+
+        onNodeWithText(RESET_DEVICE_SETTINGS_TITLE).performScrollTo().performClick()
+        onNodeWithText("$RESET_DEVICE_SETTINGS_TITLE?").assertIsDisplayed()
+        onNodeWithText("The backup reminder is cleared too", substring = true).performScrollTo().assertIsDisplayed()
+        onNodeWithText("Cancel").performClick()
+        // Cancel goes back to the Settings list and changes nothing.
+        onNodeWithText("performance mode on", substring = true).performScrollTo().assertIsDisplayed()
+        assertTrue(app.vm.performanceModeEnabled.value)
+
+        onNodeWithText(RESET_DEVICE_SETTINGS_TITLE).performScrollTo().performClick()
+        onNodeWithText("Reset").performClick()
+
+        onNodeWithText("performance mode off", substring = true).performScrollTo().assertIsDisplayed()
+        onNodeWithText("Default voice · normal speed", substring = true).performScrollTo().assertIsDisplayed()
+        assertEquals(SpeechSettings(), app.vm.speech.value)
+    }
+
     // --- Page dialogs ---
 
     @Test

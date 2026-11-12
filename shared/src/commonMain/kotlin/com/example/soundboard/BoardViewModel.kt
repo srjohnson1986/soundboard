@@ -831,6 +831,24 @@ class BoardViewModel(
         if (value) startFill(allowDownload = true) else fillJob?.cancel()
     }
 
+    /**
+     * Puts this device's settings back to their defaults (#358); see [DevicePreferences.resetToDefaults].
+     * The board and its settings, and the caregiver lock, stay as they are.
+     */
+    override fun resetDeviceSettings() {
+        devicePrefs.resetToDefaults()
+        _performanceModeEnabled.value = devicePrefs.performanceModeEnabled
+        _recordingTrimEndMillis.value = devicePrefs.recordingTrimEndMillis
+        _speech.value = devicePrefs.speech
+        speaker.configure(_speech.value)
+        _showMode.value = devicePrefs.showMode
+        dismissShownText()
+        // Back on EN: anything still filling in Spanish stops, as when the switch is turned off.
+        setSecondLanguageOn(false)
+        refreshBackupReminder()
+        _message.value = "Settings reset to defaults"
+    }
+
     private fun updateSpeech(transform: (SpeechSettings) -> SpeechSettings) {
         devicePrefs.speech = transform(_speech.value)
         _speech.value = devicePrefs.speech

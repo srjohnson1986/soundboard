@@ -466,6 +466,21 @@ the device. (In Voice, the voices, speed and pitch belong to the device;
 **Speak Spanish too** and each tile's Spanish are on the board. Whether the
 switch is on **ES** is the device's too.)
 
+### Resetting this device's settings
+
+**Reset this device's settings**, at the bottom of the Settings list, puts the
+settings that belong to the device back to their defaults: the voice, speed and
+pitch (and the Spanish voice), Performance mode, Show mode, Recording, and the
+**EN / ES** switch (back on **EN**). It asks first.
+
+It doesn't touch the board: its tiles, recordings and the settings saved with it
+stay as they are (open a built-in board for a fresh start instead). The caregiver
+lock stays as it is too.
+
+It also clears the backup reminder, so the app treats the board as backed up
+until its next change. **Export a backup first** if the board has changes you
+haven't saved (see "Backup").
+
 ## Label text
 
 **Settings → Tile labels** sets how every tile label looks on this board.

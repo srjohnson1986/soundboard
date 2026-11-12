@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.TouchApp
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -38,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -307,6 +310,7 @@ internal fun SettingsDialog(
     voices: List<SpeechVoice>,
     spanishVoices: List<SpeechVoice>?,
     onOpenGroup: (SettingsGroup) -> Unit,
+    onResetDeviceSettings: () -> Unit,
     onDismiss: () -> Unit
 ) {
     AppDialog(
@@ -326,9 +330,53 @@ internal fun SettingsDialog(
                         onClick = { onOpenGroup(group) }
                     )
                 }
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                DropdownMenuItem(
+                    text = {
+                        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                            Text(RESET_DEVICE_SETTINGS_TITLE)
+                            HelperText("Voice, Show mode, performance mode, recording trim and EN / ES")
+                        }
+                    },
+                    leadingIcon = { Icon(Icons.Filled.RestartAlt, contentDescription = null) },
+                    onClick = onResetDeviceSettings
+                )
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } }
+    )
+}
+
+internal const val RESET_DEVICE_SETTINGS_TITLE = "Reset this device's settings"
+
+/**
+ * Asks before [SettingsDialog]'s reset (#358), saying what goes back to its default, what stays, and
+ * that the backup reminder is cleared too, so nobody loses the reminder without being told.
+ */
+@Composable
+internal fun ConfirmResetDeviceSettingsDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AppDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("$RESET_DEVICE_SETTINGS_TITLE?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "The voice, speed and pitch, Show mode, performance mode, recording trim and the " +
+                        "EN / ES switch go back to their defaults on this device."
+                )
+                Text(
+                    "The board stays as it is: its tiles, recordings and board settings. So does the " +
+                        "caregiver lock."
+                )
+                Text(
+                    "The backup reminder is cleared too. Export a backup first if this board has " +
+                        "changes you haven't saved.",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onConfirm) { Text("Reset") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 

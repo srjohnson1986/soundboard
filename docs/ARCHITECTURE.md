@@ -1153,6 +1153,12 @@ that is left into a failure of that one test. Code that must not follow the syst
 animation scale, like the hold to unlock (`HoldToUnlockItem`, timed in frames), can't use
 an animation for its timing.
 
+Flings differ by platform. On iOS, Compose flings the way `UIScrollView` does
+(`CupertinoFlingBehavior`) and drops any fling slower than 500 px/s; the JVM and the
+browser fling at any speed. A test that scrolls must drag far enough to get where it's
+going without a fling. `swipeUp()` across one tile isn't far enough, and on iOS the grid
+barely moved (#354).
+
 **The browser tests' npm packages** (#347). The Wasm test bundles are built by webpack, from
 `build/wasm/node_modules`, which Gradle fills with `kotlinWasmNpmInstall` (`@js-joda/core`,
 pulled in by kotlinx-datetime, and `fflate`, which `shared/build.gradle.kts` asks for; the

@@ -96,5 +96,8 @@ iOS (on a Mac): see docs/IOS.md, "Build and run it".
   fails one test with a timeout; that test is the one to look at. Don't time something
   with an animation (`Animatable`, `tween`) if it must not follow the system's animation
   scale, and don't rely on an animation's length in a Skia-drawn test.
+- **iOS drops a fling slower than 500 px/s** (like `UIScrollView`), but the JVM and the browser
+  fling at any speed. A test that scrolls must drag the whole distance itself; a `swipeUp()`
+  across one tile passed everywhere but iOS (#354).
 - A menu's or dialog's open state must live above anything that recomposes differently
   by orientation, or rotating closes it (#237).

@@ -1204,8 +1204,9 @@ jobs side by side: `android` (lint, the app's unit tests, the debug APK),
 and on master the production web bundle and its smoke test) and `coverage` (below),
 plus `docs` (`scripts/check-docs.py`: every relative link, heading anchor, repo path and
 Gradle project the Markdown names exists, #274), which runs on docs-only changes too.
-`build-and-test`, the required check, passes when all four do. The build cache is saved by runs on master and
-read by pull requests, so a PR only rebuilds and retests what it changed. The
+`build-and-test`, the required check, passes when all four do. Gradle's caches (below)
+are saved by runs on master and read by pull requests, so a PR only rebuilds and retests
+what it changed. The
 separate **UI tests** workflow (`.github/workflows/ui-tests.yml`) runs the
 latter on an API 35 emulator for every PR, after every merge to master, on
 Mondays and Thursdays at 06:00 UTC, and on demand via **Run workflow**.
@@ -1231,13 +1232,39 @@ older ones. `paths-ignore` applies only to pushes and pull requests, so a schedu
 always runs. To see what's cached: `gh cache list`; to run the workflow on master by hand
 after clearing it: `gh workflow run "UI tests" --ref master`.
 
+**The Gradle caches** (#356). The `setup-gradle` action restores Gradle's dependencies,
+artifact transforms and local build cache at the start of a job and saves them at the end,
+as entries named by a hash of their content (`gradle-dependencies-v2-<hash>`,
+`gradle-transforms-v2-<hash>`, `gradle-build-cache-v2-<hash>`, and a small
+`gradle-home-v2|<os>|<job>[...]-<sha>` that lists which of those a job restores). A job that
+writes saves a whole new set whenever its content changed, and the old set stays until
+nothing has read it for 7 days. When all four Linux jobs that run Gradle (`android`,
+`coverage` and `web` in `ci.yml`, `connected-tests` in `ui-tests.yml`) wrote on `master`,
+every merge added four sets of 0.8-1.5 GB each, and together with the emulator snapshot
+they filled the 10 GB limit (10,957 MB on 2026-11-12), at which point GitHub deletes the
+least recently used caches, Gradle's included. So **only the `web` job saves them, and
+only on `master`**: the other three set `cache-read-only: true` (a pull request's job is
+read-only by default). `web` runs `:shared:allTests`, which includes the Android host
+tests, so its entries cover what the others use; they restore the most recent entry on
+their runner OS (setup-gradle's fallback when a job has none of its own) and download the
+odd dependency only they need, such as lint's or the instrumented tests'. A merge to
+`master` therefore adds at most one set (the `web` job's), and it replaces the one before
+it, which goes after 7 idle days or sooner if the limit forces it. A new Gradle job should
+be read-only too, unless it replaces `web` as the writer. The macOS runner has one Gradle
+job (`ios.yml`), which is therefore the only writer there. `gh cache list` shows what's
+cached; a `gradle-home-v2|Linux-X64|<job>[...]` entry left from before this change would
+keep that job restoring its own stale set, so those were deleted by hand.
+
 The **iOS** workflow (`.github/workflows/ios.yml`) builds for iOS and runs the shared
 tests on the iPhone simulator, on a macOS runner. It's advisory too, and until iOS has
 real development work it runs only on pull requests that change iOS code
 (`shared/src/iosMain`, `shared/src/iosTest`, `ios/`), weekly on Mondays, on release tags,
 and on demand (#335). A release runs it on `master` before tagging (docs/RELEASING.md).
 Filtering a whole workflow by path is only safe because it isn't a required check: a
-required check that never runs leaves the pull request waiting.
+required check that never runs leaves the pull request waiting. Its Kotlin/Native cache
+(`~/.konan`, about 0.5 GB) follows the emulator snapshot's rule: every run restores it
+(`actions/cache/restore`) and only a run on `master`, which the weekly run is, saves it, so
+pull requests don't each keep a copy.
 
 **The Docs reminder** (#275, `.github/workflows/docs-reminder.yml`) comments on a pull
 request that changes user-facing code (a UI package, resources, an app's own screens or

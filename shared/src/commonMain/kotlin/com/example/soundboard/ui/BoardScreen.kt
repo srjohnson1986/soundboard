@@ -64,6 +64,8 @@ internal sealed interface BoardDialog {
     data object Settings : BoardDialog
     /** One group of Settings, opened from the Settings list; Back returns to that list. */
     data class SettingsGroupDetail(val group: SettingsGroup) : BoardDialog
+    /** "Reset this device's settings?", opened from the Settings list; either answer returns to it. */
+    data object ConfirmResetDeviceSettings : BoardDialog
     data object RenameBoard : BoardDialog
     data object SaveBoardAs : BoardDialog
     data object OpenBoard : BoardDialog
@@ -527,7 +529,16 @@ private fun BoardScreenContent(vm: BoardViewModel) {
             voices = speechVoices,
             spanishVoices = spanishVoices,
             onOpenGroup = { showDialog(BoardDialog.SettingsGroupDetail(it)) },
+            onResetDeviceSettings = { showDialog(BoardDialog.ConfirmResetDeviceSettings) },
             onDismiss = ::closeDialog
+        )
+
+        BoardDialog.ConfirmResetDeviceSettings -> ConfirmResetDeviceSettingsDialog(
+            onConfirm = {
+                vm.resetDeviceSettings()
+                showDialog(BoardDialog.Settings)
+            },
+            onDismiss = { showDialog(BoardDialog.Settings) }
         )
 
         is BoardDialog.SettingsGroupDetail -> SettingsGroupDialog(

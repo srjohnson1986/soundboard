@@ -59,4 +59,7 @@ interface BoardSettingsActions {
 
     /** Downloads the language model translating needs, if it isn't here yet. */
     fun prepareTranslator()
+
+    /** Puts this device's settings back to their defaults (#358), leaving the board and the caregiver lock alone. */
+    fun resetDeviceSettings()
 }

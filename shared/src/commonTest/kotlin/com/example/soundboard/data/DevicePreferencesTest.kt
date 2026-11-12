@@ -94,4 +94,40 @@ class DevicePreferencesTest {
 
         assertEquals(SpeechSettings(voiceId = null, ratePercent = 25, pitchPercent = 400), prefs().speech)
     }
+
+    @Test
+    fun `resetting puts every device setting back to its default and keeps the caregiver lock`() {
+        prefs().apply {
+            performanceModeEnabled = true
+            recordingTrimEndMillis = 0
+            showMode = ShowModeSettings(enabled = true, timerSeconds = 3, tapToClose = false, muteSounds = true, flipped = true)
+            speech = SpeechSettings(voiceId = "en-1", ratePercent = 150, pitchPercent = 75, spanishVoiceId = "es-1")
+            secondLanguageActive = true
+            translatorUnavailableNoteSeen = true
+            unbackedChangesSince = 1_000L
+            backupReminderSnoozedUntil = 2_000L
+            editingLockEnabled = true
+        }
+
+        prefs().resetToDefaults()
+
+        // A fresh instance, so what's checked is what the next launch reads.
+        val reset = prefs()
+        assertFalse(reset.performanceModeEnabled)
+        assertEquals(DevicePreferences.DEFAULT_RECORDING_TRIM_END_MILLIS, reset.recordingTrimEndMillis)
+        assertEquals(ShowModeSettings(), reset.showMode)
+        assertEquals(SpeechSettings(), reset.speech)
+        assertFalse(reset.secondLanguageActive)
+        assertFalse(reset.translatorUnavailableNoteSeen)
+        assertNull(reset.unbackedChangesSince)
+        assertNull(reset.backupReminderSnoozedUntil)
+        assertTrue(reset.editingLockEnabled)
+    }
+
+    @Test
+    fun `resetting leaves the caregiver lock off when it was off`() {
+        prefs().resetToDefaults()
+
+        assertFalse(prefs().editingLockEnabled)
+    }
 }

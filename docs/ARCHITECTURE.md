@@ -331,6 +331,11 @@ and is exposed the same way as `showMode: StateFlow<ShowModeSettings>`.
 `ShowModeSettings.withTimerSeconds`/`withTapToClose` refuse a change that
 would leave neither a timer nor tap to close, and `DevicePreferences` repairs
 such a combination on read, so the text screen can never strand anyone.
+`DevicePreferences.resetToDefaults()` (#358, Settings' "Reset this device's settings",
+through `BoardViewModel.resetDeviceSettings()`) puts all of these back, clears the backup
+reminder's two timestamps as well, and deliberately leaves `editingLockEnabled` alone, so a
+reset can't quietly turn the caregiver lock off. A setting added to `DevicePreferences` should
+be added to the reset too, or say why not.
 
 **Backup** (`exportTo/importFrom`) is just those two things zipped: `board.json`
 at the zip root, every file under `sounds/` mirrored into a `sounds/` entry (and

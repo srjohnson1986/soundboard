@@ -244,6 +244,59 @@ class BoardViewModelTest {
         assertFalse(vm.backupReminderDue.value)
     }
 
+    // --- Reset this device's settings (#358) ---
+
+    @Test
+    fun `resetting device settings brings back the defaults and leaves the board and lock alone`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a", label = "Water")).copy(idleTimeoutMinutes = 2))
+        val vm = newViewModel()
+        vm.setPerformanceModeEnabled(true)
+        vm.setRecordingTrimEndMillis(0)
+        vm.setShowModeEnabled(true)
+        vm.setShowModeFlipped(true)
+        vm.setSpeechVoice("v2")
+        vm.setSpeechRatePercent(150)
+        vm.setEditingLockEnabled(true)
+        val board = vm.board.value
+
+        vm.resetDeviceSettings()
+
+        assertFalse(vm.performanceModeEnabled.value)
+        assertEquals(DevicePreferences.DEFAULT_RECORDING_TRIM_END_MILLIS, vm.recordingTrimEndMillis.value)
+        assertEquals(ShowModeSettings(), vm.showMode.value)
+        assertEquals(SpeechSettings(), vm.speech.value)
+        assertEquals(SpeechSettings(), speaker.configured)
+        assertFalse(vm.secondLanguageOn.value)
+        assertTrue(vm.editingLockEnabled.value)
+        assertEquals(board, vm.board.value)
+        assertEquals("Settings reset to defaults", vm.message.value)
+        // And it lasts: the next launch reads the defaults too.
+        assertEquals(SpeechSettings(), newViewModel().speech.value)
+    }
+
+    @Test
+    fun `resetting device settings clears the backup reminder until the next change`() = runTest(dispatcher) {
+        repo.save(boardWith(Tile(id = "a")))
+        val vm = newViewModel()
+        vm.setLabel("a", "Water")
+        clock += week
+        vm.activate(tile(vm, "a"))
+        vm.snoozeBackupReminder()
+
+        vm.resetDeviceSettings()
+
+        assertNull(devicePrefs.unbackedChangesSince)
+        assertNull(devicePrefs.backupReminderSnoozedUntil)
+        clock += 4 * week
+        vm.activate(tile(vm, "a"))
+        assertFalse(vm.backupReminderDue.value)
+
+        vm.setLabel("a", "Juice")
+        clock += week
+        vm.activate(tile(vm, "a"))
+        assertTrue(vm.backupReminderDue.value)
+    }
+
     @Test
     fun `a tap checks the media volume again in case a change went unreported`() = runTest(dispatcher) {
         val vm = newViewModel()

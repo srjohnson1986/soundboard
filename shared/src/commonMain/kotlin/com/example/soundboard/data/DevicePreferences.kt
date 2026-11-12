@@ -104,6 +104,23 @@ class DevicePreferences(private val prefs: KeyValueStore) {
         get() = prefs.getString(KEY_BACKUP_REMINDER_SNOOZED_UNTIL)?.toLongOrNull()
         set(value) = prefs.putString(KEY_BACKUP_REMINDER_SNOOZED_UNTIL, value?.toString())
 
+    /**
+     * Puts this device's settings back to their defaults (#358): voice, speed and pitch, Show mode,
+     * performance mode, recording trim, the EN / ES switch, the translator note, and the backup
+     * reminder (clearing [unbackedChangesSince] counts the board as backed up until its next change).
+     * The caregiver lock ([editingLockEnabled]) stays as it is, so a reset can never quietly turn it off.
+     */
+    fun resetToDefaults() {
+        performanceModeEnabled = false
+        recordingTrimEndMillis = DEFAULT_RECORDING_TRIM_END_MILLIS
+        showMode = ShowModeSettings()
+        speech = SpeechSettings()
+        secondLanguageActive = false
+        translatorUnavailableNoteSeen = false
+        unbackedChangesSince = null
+        backupReminderSnoozedUntil = null
+    }
+
     companion object {
         /** The SharedPreferences file these live in on Android. */
         const val PREFS_NAME = "device_preferences"

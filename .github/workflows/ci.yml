@@ -69,18 +69,26 @@ jobs:
           fi
 
   # The jobs below run side by side, each on its own runner; build-and-test waits for all
-  # of them. Gradle's parallel mode, build cache and configuration cache are on in
-  # gradle.properties, and setup-gradle keeps Gradle's caches (dependencies, transforms,
-  # build cache) between runs, so unchanged modules aren't rebuilt.
+  # of them. Each JVM test runs in exactly one job, so none is paid for twice:
+  #   android   lint and the debug APK (no tests),
+  #   web       the Wasm tests in headless Chrome, the web app's tests and the iOS compile,
+  #   coverage  every JVM test (shared's Android host tests and the app's unit tests), under
+  #             Kover, which also gives the coverage report and floor.
+  # Gradle's parallel mode, build cache and configuration cache are on in gradle.properties,
+  # and setup-gradle keeps Gradle's caches (dependencies, transforms, build cache) between
+  # runs, so unchanged modules aren't rebuilt.
   #
   # Only the `web` job writes those caches, and only on master; every other Gradle job here
   # and in ui-tests.yml is read-only (`cache-read-only: true`). setup-gradle saves a whole
   # new set of entries, named by a hash of their content, from every job that writes, so
   # with four writers each merge added four sets of 0.8-1.5 GB each, which stayed for 7
-  # idle days and filled the repository's 10 GB (#356). `web` runs `:shared:allTests`, which
-  # includes the Android host tests, so what it saves covers the other jobs; they restore
-  # the most recent entry on the runner OS, and fetch the odd extra dependency (lint's, say)
-  # themselves.
+  # idle days and filled the repository's 10 GB (#356). The other jobs restore the most
+  # recent entry on the runner OS and find in it only what the writing job ran: Gradle's
+  # build cache holds the output of the cacheable tasks the writer executed, and nothing
+  # else. So the writer has to run what the others run: on master `web` also compiles and
+  # lints the Android side (the "Warm the caches" step). While it ran only the Wasm tests,
+  # `android` found nothing of its own in the entry and compiled and linted the app from
+  # scratch, 250-300 s instead of about 60 (#369).
   android:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -104,8 +112,9 @@ jobs:
         run: chmod +x gradlew
 
       # One Gradle run, so tasks run in parallel; --continue reports every failure, not just the first.
-      - name: Lint, unit tests and debug APK
-        run: ./gradlew lintDebug :shared:lintAndroidMain testDebugUnitTest assembleDebug --continue --stacktrace
+      # The unit tests run in `coverage`, once, under Kover.
+      - name: Lint and debug APK
+        run: ./gradlew lintDebug :shared:lintAndroidMain assembleDebug --continue --stacktrace
 
       - name: Upload lint report
         if: always()
@@ -117,17 +126,12 @@ jobs:
             shared/build/reports/lint-results-androidMain.html
           if-no-files-found: ignore
 
-      - name: Upload unit test report
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: unit-test-report
-          path: app/build/reports/tests/testDebugUnitTest
-          if-no-files-found: ignore
-
-  # The shared module's tests, on the JVM and compiled to WebAssembly (run in the runner's
-  # headless Chrome), and the web app's own tests: this is what keeps shared code building
-  # for the web version as well as Android (#193).
+  # The shared module's tests compiled to WebAssembly (run in the runner's headless Chrome)
+  # and the web app's own tests: this is what keeps shared code building for the web version
+  # as well as Android (#193). It also compiles shared's iOS code and its tests, which
+  # Kotlin does on any host (only the link and the run need a Mac), so a compile error in
+  # iosMain or iosTest fails here and not only in the iOS workflow. `:shared:allTests` used
+  # to do that and run the JVM tests too; now `coverage` runs the JVM ones.
   web:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -167,8 +171,21 @@ jobs:
           echo "::error::The npm packages are still missing after 3 installs (#347)"
           exit 1
 
-      - name: Shared and web app tests (JVM + Wasm)
-        run: ./gradlew :shared:allTests :web:allTests --continue --stacktrace
+      - name: Shared and web app tests (Wasm), and the iOS compile
+        run: >
+          ./gradlew :shared:wasmJsBrowserTest :web:allTests
+          :shared:compileKotlinIosSimulatorArm64 :shared:compileTestKotlinIosSimulatorArm64
+          --continue --stacktrace
+
+      # The one job that saves Gradle's caches, on master only, so what it saves has to cover
+      # the other two jobs as well (see the comment above `android`): compile and lint the
+      # Android side, and compile the JVM tests, without running anything.
+      - name: Warm the caches for android and coverage
+        if: github.ref == 'refs/heads/master'
+        run: >
+          ./gradlew lintDebug :shared:lintAndroidMain assembleDebug
+          :shared:compileAndroidHostTest :app:compileDebugUnitTestKotlin
+          --continue --stacktrace
 
       # If the packages go missing anyway, this shows what the install left (#347).
       - name: Record what the npm install left behind
@@ -221,29 +238,20 @@ jobs:
           path: web/build/dist/wasmJs/productionExecutable
           if-no-files-found: error
 
-      # A screenshot test that failed leaves the new image and a comparison next to it (#221).
-      - name: Upload screenshot differences
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: screenshot-differences
-          path: shared/build/outputs/roborazzi
-          if-no-files-found: ignore
-
-      - name: Upload shared test report
+      - name: Upload Wasm test report
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: shared-test-report
+          name: wasm-test-report
           path: |
-            shared/build/reports/tests/allTests
-            web/build/reports/tests/allTests
+            shared/build/reports/tests/wasmJsBrowserTest
+            web/build/reports/tests/wasmJsBrowserTest
           if-no-files-found: ignore
 
-  # Test coverage of the JVM tests (the app's and shared's), with a floor for the core (#222):
-  # the data and model packages and BoardViewModel each keep at least 90% of their lines
-  # covered. See build.gradle.kts (kover, verifyCoreCoverage). It runs beside the other two, since
-  # measuring means running the tests again with Kover's agent.
+  # The JVM tests (the app's unit tests and shared's Android host tests), run once, under
+  # Kover's agent, which also gives the coverage report and a floor for the core (#222): the
+  # data and model packages and BoardViewModel each keep at least 90% of their lines covered.
+  # See build.gradle.kts (kover, verifyCoreCoverage). A failing test fails this job.
   coverage:
     needs: changes
     if: needs.changes.outputs.code == 'true'
@@ -266,8 +274,27 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Coverage report and floor
+      - name: JVM tests, coverage report and floor
         run: ./gradlew :koverHtmlReportUnit :verifyCoreCoverage --continue --stacktrace
+
+      # A screenshot test that failed leaves the new image and a comparison next to it (#221).
+      - name: Upload screenshot differences
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshot-differences
+          path: shared/build/outputs/roborazzi
+          if-no-files-found: ignore
+
+      - name: Upload JVM test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jvm-test-report
+          path: |
+            shared/build/reports/tests/testAndroidHostTest
+            app/build/reports/tests/testDebugUnitTest
+          if-no-files-found: ignore
 
       - name: Upload coverage report
         if: always()

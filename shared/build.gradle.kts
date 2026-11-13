@@ -73,7 +73,8 @@ kotlin {
     }
 
     // iOS (#265): built and tested on the iPhone simulator by the iOS workflow, on a macOS
-    // runner. Kotlin/Native only builds these on macOS; other hosts skip them.
+    // runner. Linux only compiles the Kotlin (CI's web job does, so an iOS compile error fails
+    // the required check); linking and running need macOS, and Windows skips these targets.
     iosArm64()
     iosSimulatorArm64()
 

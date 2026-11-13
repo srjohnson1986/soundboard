@@ -1369,3 +1369,5 @@ data class StrayClip(
     /** What it was: "Yes, Food page" (the last tile it was on), or "Unused clip 1" if that isn't known. */
     val description: String = fileName
 )
+
+// scratch measurement 3 (#369)

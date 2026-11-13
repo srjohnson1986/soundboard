@@ -502,3 +502,5 @@ data class Board(
         const val CURRENT_SCHEMA_VERSION = 1
     }
 }
+
+// scratch measurement 1 (#369)

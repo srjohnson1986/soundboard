@@ -47,3 +47,5 @@ fun main() {
 }
 
 private fun removeLoadingMessage(): Unit = js("{ const el = document.getElementById('loading'); if (el) el.remove(); }")
+
+// scratch measurement 4 (#369)

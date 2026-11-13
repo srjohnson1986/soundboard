@@ -49,6 +49,12 @@ android {
         }
         release {
             isMinifyEnabled = false
+            // ML Kit's translator ships its native library for four ABIs (#332), 17 MB
+            // each for the two x86 ones. Phones are ARM; x86 is only emulators, which
+            // the debug build (left alone, so the x86_64 UI tests run) still covers (#362).
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
             if (keystoreProperties.isNotEmpty()) {
                 signingConfig = signingConfigs.getByName("release")
             }

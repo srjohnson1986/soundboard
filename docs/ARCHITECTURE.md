@@ -1214,14 +1214,22 @@ where a four-column row is too narrow for "Something's" even at the smallest lab
 classes (`test` alone skips `shared`, which has no task by that name);
 `./gradlew connectedAndroidTest` runs those against a connected device or
 emulator. In CI, the **CI** workflow runs the former and gates merging, as three
-jobs side by side: `android` (lint, the app's unit tests, the debug APK),
-`web` (`:shared:allTests` on the JVM and in headless Chrome, `:web:allTests`,
-and the production web bundle and its smoke test, below) and `coverage` (below),
-plus `docs` (`scripts/check-docs.py`: every relative link, heading anchor, repo path and
-Gradle project the Markdown names exists, #274), which runs on docs-only changes too.
-`build-and-test`, the required check, passes when all four do. Gradle's caches (below)
-are saved by runs on master and read by pull requests, so a PR only rebuilds and retests
-what it changed.
+jobs side by side, each JVM test in exactly one of them (#369): `android` (lint and the
+debug APK, no tests), `web` (the Wasm tests, `:shared:wasmJsBrowserTest` in headless
+Chrome and `:web:allTests`, the iOS compile, and the production web bundle and its smoke
+test, below) and `coverage` (every JVM test, shared's Android host tests and the app's unit
+tests, under Kover, below), plus `docs` (`scripts/check-docs.py`: every relative link,
+heading anchor, repo path and Gradle project the Markdown names exists, #274), which runs
+on docs-only changes too. `build-and-test`, the required check, passes when all four do.
+Gradle's caches (below) are saved by runs on master and read by pull requests, so a PR
+only rebuilds and retests what it changed.
+
+The `web` job also compiles shared's iOS code and its tests (`:shared:compileKotlinIosSimulatorArm64`
+and `:shared:compileTestKotlinIosSimulatorArm64`). Kotlin compiles those to klibs on any
+host; only linking the test binary and running it on the simulator need a Mac, and
+`:shared:allTests` skips those two on Linux. So a compile error in `iosMain` or `iosTest`
+fails the required check on a Linux runner, and the **iOS** workflow is only needed for
+what the compiler can't see: that it links, runs and draws.
 
 **The production web bundle and the weekly run** (#364). The tests build the web app in
 development mode; the production bundle (`:web:wasmJsBrowserDistribution`, which webpack and
@@ -1291,16 +1299,24 @@ every merge added four sets of 0.8-1.5 GB each, and together with the emulator s
 they filled the 10 GB limit (10,957 MB on 2026-11-12), at which point GitHub deletes the
 least recently used caches, Gradle's included. So **only the `web` job saves them, and
 only on `master`**: the other three set `cache-read-only: true` (a pull request's job is
-read-only by default). `web` runs `:shared:allTests`, which includes the Android host
-tests, so its entries cover what the others use; they restore the most recent entry on
-their runner OS (setup-gradle's fallback when a job has none of its own) and download the
-odd dependency only they need, such as lint's or the instrumented tests'. A merge to
-`master` therefore adds at most one set (the `web` job's), and it replaces the one before
-it, which goes after 7 idle days or sooner if the limit forces it. A new Gradle job should
-be read-only too, unless it replaces `web` as the writer. The macOS runner has one Gradle
-job (`ios.yml`), which is therefore the only writer there. `gh cache list` shows what's
-cached; a `gradle-home-v2|Linux-X64|<job>[...]` entry left from before this change would
-keep that job restoring its own stale set, so those were deleted by hand.
+read-only by default). A job that has no entry of its own restores the most recent one on
+its runner OS, and that holds only what the writer ran: the local build cache has the
+output of every cacheable task the writing job executed, the dependency and transform
+entries the artifacts it resolved. When `web` ran `:shared:allTests`, which includes the
+Android host tests, that covered `coverage` but not `android`: the app's compile, lint and
+packaging were in no entry, so `android` ran them from scratch on every pull request, 245-295 s
+where it had taken about 60 s while it wrote its own entry (#369). Now that the JVM tests
+run in `coverage` alone, `web` has less of what the others need, so **on `master` it also runs
+a "Warm the caches" step**: `lintDebug`, `:shared:lintAndroidMain`, `assembleDebug` and the
+compilation of both modules' JVM tests, which executes nothing but puts the Android side's
+outputs and dependencies in the one set. Pull requests skip that step. A merge to `master`
+therefore adds at most one set (the `web` job's), and it replaces the one before it, which
+goes after 7 idle days or sooner if the limit forces it. A new Gradle job should be
+read-only too, unless it replaces `web` as the writer; one that runs tasks `web` doesn't
+needs them added to that step. The macOS runner has one Gradle job (`ios.yml`), which is
+therefore the only writer there. `gh cache list` shows what's cached; a
+`gradle-home-v2|Linux-X64|<job>[...]` entry left from before this change would keep that
+job restoring its own stale set, so those were deleted by hand.
 
 The **iOS** workflow (`.github/workflows/ios.yml`) builds for iOS and runs the shared
 tests on the iPhone simulator, on a macOS runner. It's advisory too, and until iOS has
@@ -1319,7 +1335,9 @@ shell) without `docs/USER_GUIDE.md` or `README.md`, and removes the comment once
 change or the **no docs needed** label is added. It never fails; it's a reminder.
 
 **Coverage** (#222) is measured with Kover over the JVM tests: the app's debug unit
-tests and `shared`'s Android host tests together, configured in the root
+tests and `shared`'s Android host tests together, which the `coverage` job runs once
+(nothing else in CI runs them, #369; it uploads their reports as `jvm-test-report`, and the
+screenshot differences of a failed comparison), configured in the root
 `build.gradle.kts`. `./gradlew :koverHtmlReportUnit` writes the report for all the
 code to `build/reports/kover/htmlUnit` (CI uploads it as the `coverage-report`
 artifact), and `./gradlew :verifyCoreCoverage` fails if the `data` or `model` package or

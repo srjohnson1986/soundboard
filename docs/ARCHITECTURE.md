@@ -1311,7 +1311,14 @@ a "Warm the caches" step**: `lintDebug`, `:shared:lintAndroidMain`, `assembleDeb
 compilation of both modules' JVM tests, which executes nothing but puts the Android side's
 outputs and dependencies in the one set. Pull requests skip that step. A merge to `master`
 therefore adds at most one set (the `web` job's), and it replaces the one before it, which
-goes after 7 idle days or sooner if the limit forces it. A new Gradle job should be
+goes after 7 idle days or sooner if the limit forces it. The set is about 1.7 GB (dependencies
+1.2 GB, transforms 0.4 GB, build cache 0.2 GB; 6.2 GB for the whole repository with the
+emulator snapshot and the macOS caches), and each merge saves a new build cache of 0.2 GB,
+plus new transforms or dependencies when those changed. The first merge after changing what
+`web` runs leaves the old set beside the new one for a week (8.4 GB on 2026-11-13, after
+#370), so delete the old `gradle-*` entries of the Linux jobs by hand then (`gh cache list`,
+`gh cache delete <id>`, keeping what the newest `gradle-home-v2|Linux-X64|web[...]` entry
+names in a run's "Restore Gradle state from cache" log). A new Gradle job should be
 read-only too, unless it replaces `web` as the writer; one that runs tasks `web` doesn't
 needs them added to that step. The macOS runner has one Gradle job (`ios.yml`), which is
 therefore the only writer there. `gh cache list` shows what's cached; a

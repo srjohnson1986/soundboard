@@ -1,0 +1,13 @@
+name: TEMP test failure issue
+on:
+  push:
+    branches: ['claude/ci-bumps-and-scheduled-failures-6d3f93']
+permissions:
+  contents: read
+jobs:
+  report:
+    permissions:
+      issues: write
+    uses: ./.github/workflows/scheduled-failure-issue.yml
+    with:
+      workflow-name: TEMP test of the failure issue (#364)

@@ -148,6 +148,8 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: false  # SCRATCH #369
 
       - name: Make gradlew executable
         run: chmod +x gradlew
@@ -181,7 +183,7 @@ jobs:
       # the other two jobs as well (see the comment above `android`): compile and lint the
       # Android side, and compile the JVM tests, without running anything.
       - name: Warm the caches for android and coverage
-        if: github.ref == 'refs/heads/master'
+        if: ${{ !cancelled() }}  # SCRATCH #369
         run: >
           ./gradlew lintDebug :shared:lintAndroidMain assembleDebug
           :shared:compileAndroidHostTest :app:compileDebugUnitTestKotlin

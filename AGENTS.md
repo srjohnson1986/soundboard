@@ -80,9 +80,13 @@ iOS (on a Mac): see docs/IOS.md, "Build and run it".
 
 - **Test names**: no `,` `(` `)` `%` `.` `;` `:` `/` `[` `]` `<` `>`, even in backticks
   (Kotlin/Native, which builds the iOS tests, rejects them).
-- **Only macOS builds iOS.** On Windows or Linux the iOS targets are skipped silently, so
-  iOS breakage only shows in the iOS workflow, which skips shared-only pull requests. To
-  check one anyway: `gh workflow run iOS --ref <branch>`.
+- **Only macOS links and runs iOS.** Compiling Kotlin for iOS works on any host the gate
+  uses: CI's `web` job compiles `iosMain` and `iosTest` on Linux
+  (`:shared:compileKotlinIosSimulatorArm64`, `:shared:compileTestKotlinIosSimulatorArm64`), so a
+  compile error there fails `build-and-test`. Linking, running the tests and the Swift shell
+  need a Mac: that's the iOS workflow, which skips shared-only pull requests. To run it
+  anyway: `gh workflow run iOS --ref <branch>`. On Windows the iOS targets are skipped silently,
+  so a local build won't show an iOS compile error; push and let `web` tell you.
 - **Compose's test clock steps one frame at a time**, so waiting minutes in a UI test takes
   minutes. Make long delays injectable (as with `LocalRelockAfterIdle`) and shorten them in
   the test.

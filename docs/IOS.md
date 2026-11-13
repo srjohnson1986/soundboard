@@ -151,9 +151,12 @@ run too. A fix there reaches all three.
 
 ## Things that trip you up
 
-- **iOS code only compiles on macOS.** Windows and Linux skip the iOS targets without
-  complaint (`kotlin.native.ignoreDisabledTargets`), so an iOS mistake only shows up in
-  the iOS workflow, or on a Mac.
+- **Only macOS links and runs iOS.** Windows skips the iOS targets without complaint
+  (`kotlin.native.ignoreDisabledTargets`), so a local build there won't show an iOS compile
+  error. Linux compiles the Kotlin (`iosMain` and `iosTest`) but can't link or run it: CI's
+  `web` job does that compile, so an iOS compile error fails the required check. What only
+  the iOS workflow or a Mac shows is a link error, a test that fails on the simulator, and
+  anything in the Swift shell.
 - **Test names can't use `,` `(` `)` `%` `.` `;` `:` `/` `[` `]` `<` `>`**, even in
   backticks: Kotlin/Native rejects them, though the JVM and the browser don't.
 - **Objective-C category members are Kotlin extensions**, which need their own import:

@@ -1216,12 +1216,44 @@ classes (`test` alone skips `shared`, which has no task by that name);
 emulator. In CI, the **CI** workflow runs the former and gates merging, as three
 jobs side by side: `android` (lint, the app's unit tests, the debug APK),
 `web` (`:shared:allTests` on the JVM and in headless Chrome, `:web:allTests`,
-and on master the production web bundle and its smoke test) and `coverage` (below),
+and the production web bundle and its smoke test, below) and `coverage` (below),
 plus `docs` (`scripts/check-docs.py`: every relative link, heading anchor, repo path and
 Gradle project the Markdown names exists, #274), which runs on docs-only changes too.
 `build-and-test`, the required check, passes when all four do. Gradle's caches (below)
 are saved by runs on master and read by pull requests, so a PR only rebuilds and retests
-what it changed. The
+what it changed.
+
+**The production web bundle and the weekly run** (#364). The tests build the web app in
+development mode; the production bundle (`:web:wasmJsBrowserDistribution`, which webpack and
+the Wasm optimizer take a while over) is built by the `web` job, then served and checked in
+headless Chrome by `web/smoke` and uploaded as `web-app`. It runs on `master` and on pull
+requests that change a build input: `*.gradle.kts`, `gradle/`, `gradle.properties`,
+`kotlin-js-store/` or `web/smoke/` (the `build_inputs` output of the `changes` job). That
+covers every Dependabot Gradle bump, so a Kotlin, Compose or Wasm toolchain bump that breaks
+the bundle fails on its own pull request instead of on release day in `web.yml`; other pull
+requests skip those three steps. Dependabot's merges are queued with `GITHUB_TOKEN`, so
+they start no push run of CI on `master` (see "Dependency updates" below); to make up for
+that, CI also runs on a schedule, Mondays at 13:00 UTC, on `master`: three hours after
+Dependabot's 05:00 Eastern run (09:00 UTC in summer, 10:00 in winter) has opened its pull
+requests and had them merged. That gives the merged bumps their first full run and has the
+`web` job save fresh Gradle caches. `changes` treats a scheduled run like a manual one (it
+builds everything, bundle included), and the concurrency group is the commit's SHA as for a
+push, never cancelled; a scheduled run on a commit whose push run is still going waits for
+it.
+
+**Failed scheduled runs open an issue** (#364). Nobody watches a scheduled run, so when one
+of **CI**, **iOS** or **UI tests** fails or is cancelled, its `report-scheduled-failure` job
+calls `.github/workflows/scheduled-failure-issue.yml`, which opens an issue titled
+"Scheduled *workflow* run failed" with the run's link, or, if an issue with that title is
+already open, adds the link to it as a comment. Close the issue once it's dealt with; the
+next failure opens a fresh one. That job is the only one in those workflows with
+`issues: write`, and it runs only when `github.event_name == 'schedule'`: pull requests,
+pushes, tags and manual runs never open issues. The reusable workflow itself doesn't check
+the event, so call it only from behind that condition. The job depends on the workflow's
+last job (`build-and-test`, `ios-tests`, `connected-tests`) and runs if that one didn't
+succeed.
+
+The
 separate **UI tests** workflow (`.github/workflows/ui-tests.yml`) runs the
 latter on an API 35 emulator for every PR, after every merge to master, on
 Mondays and Thursdays at 06:00 UTC, and on demand via **Run workflow**.
@@ -1318,7 +1350,8 @@ queued merge picks it up. It never merges anything, and if it can't fix one it l
 pull request `needs-human` and sends a notification. Events caused by a workflow's
 `GITHUB_TOKEN` don't start other workflows, so the merge queued by that workflow may not
 trigger the push-time run of **CI** on `master`; the pull request's own run is the one that
-counted.
+counted (it builds the production web bundle too, for a bump of a build input), and the
+weekly scheduled run of **CI** is the first on `master` itself.
 
 - **`FakePlayer`, `FakeRecorder` and `FakeSpeaker`** exist twice: in
   `shared/src/commonTest/.../audio/Fakes.kt` for the shared tests, and in the app's

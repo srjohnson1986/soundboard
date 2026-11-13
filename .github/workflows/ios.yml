@@ -128,3 +128,15 @@ jobs:
           name: ios-test-report
           path: shared/build/reports/tests/iosSimulatorArm64Test
           if-no-files-found: ignore
+
+  # A scheduled run that fails or is cancelled opens an issue, or comments on the open one
+  # (#364); the weekly run is the only one nobody is watching. Pull requests, release tags
+  # and manual runs never open issues.
+  report-scheduled-failure:
+    needs: ios-tests
+    if: always() && github.event_name == 'schedule' && needs.ios-tests.result != 'success'
+    permissions:
+      issues: write
+    uses: ./.github/workflows/scheduled-failure-issue.yml
+    with:
+      workflow-name: iOS

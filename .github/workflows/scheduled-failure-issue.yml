@@ -1,0 +1,42 @@
+name: Scheduled failure issue
+
+# Reusable: opens an issue for a scheduled run that failed or was cancelled, or comments on
+# the one already open for that workflow, so the same failure week after week doesn't open a
+# pile of duplicates (#364). CI, iOS and UI tests call it from a job that runs only when
+# `github.event_name == 'schedule'` and that has `issues: write` as its only permission; the
+# run link is the calling run's. Nothing here knows about schedules, so it must only ever be
+# called behind that check.
+on:
+  workflow_call:
+    inputs:
+      workflow-name:
+        description: The calling workflow's name, as it appears in the issue's title.
+        required: true
+        type: string
+
+permissions:
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open an issue, or comment on the open one
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WORKFLOW: ${{ inputs.workflow-name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Scheduled $WORKFLOW run failed"
+          # Listing, not searching: a search index can lag a few minutes behind a new issue.
+          number="$(gh issue list --state open --limit 200 --json number,title \
+            | jq -r --arg t "$title" 'map(select(.title == $t)) | first | .number // empty')"
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "It failed (or was cancelled) again: $RUN_URL"
+            echo "Commented on #$number"
+          else
+            gh issue create --title "$title" --body "The scheduled **$WORKFLOW** run failed or was cancelled: $RUN_URL
+
+          Nothing is wrong with a pull request or a release because of this, but a scheduled run is how a broken dependency bump, or a cache that has gone, shows up. Look at the run, fix what it shows (or re-run it if it was only cancelled), and close this issue. Later failed runs of $WORKFLOW will be added here as comments while it stays open."
+          fi

@@ -129,3 +129,14 @@ jobs:
           name: ui-test-report
           path: app/build/reports/androidTests/connected
           if-no-files-found: ignore
+
+  # A scheduled run that fails or is cancelled opens an issue, or comments on the open one
+  # (#364). Pull requests, merges and manual runs never open issues.
+  report-scheduled-failure:
+    needs: connected-tests
+    if: always() && github.event_name == 'schedule' && needs.connected-tests.result != 'success'
+    permissions:
+      issues: write
+    uses: ./.github/workflows/scheduled-failure-issue.yml
+    with:
+      workflow-name: UI tests

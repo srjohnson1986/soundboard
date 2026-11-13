@@ -5,13 +5,22 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
+  # Weekly on master, Monday 13:00 UTC: three hours after Dependabot's 05:00 Eastern run
+  # (09:00 UTC in summer, 10:00 in winter) has had time to open its pull requests and have them
+  # merged. Dependabot's merges start no push run (see below), so this is the first full run
+  # on master with the new versions, and it's the `web` job's chance to refresh Gradle's
+  # caches. A scheduled run that fails opens an issue (report-scheduled-failure, #364).
+  schedule:
+    - cron: '0 13 * * 1'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 # A newer push to the same pull request makes the older run pointless; cancel it. Runs on
-# master are never cancelled, so every merge gets a full result.
+# master are never cancelled, so every merge gets a full result. A scheduled run has no pull
+# request, so it is grouped by the commit it runs on (like a push) and is never cancelled; if
+# a push run is still going on that very commit, the scheduled one waits its turn.
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -26,19 +35,25 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      build_inputs: ${{ steps.filter.outputs.build_inputs }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
+      # `code`: anything besides docs changed. `build_inputs`: a file that decides which
+      # versions the production web bundle is built with changed, so the pull request builds
+      # and smoke-tests it too (the `web` job); that covers every Dependabot Gradle bump,
+      # whose merge starts no push run on master (#364). Other pull requests skip the bundle.
       - name: Did anything besides docs change?
         id: filter
         run: |
           case "${{ github.event_name }}" in
             pull_request) range="${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}" ;;
             push) range="${{ github.event.before }}..${{ github.sha }}" ;;
-            *) echo "code=true" >> "$GITHUB_OUTPUT"; exit 0 ;;  # manual runs always build
+            # Manual and scheduled runs always build, and always bundle.
+            *) printf 'code=true\nbuild_inputs=true\n' >> "$GITHUB_OUTPUT"; exit 0 ;;
           esac
           changed="$(git diff --name-only "$range")"
           echo "$changed"
@@ -46,6 +61,11 @@ jobs:
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
             echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+          if echo "$changed" | grep -qE '(\.gradle\.kts$|^gradle/|^gradle\.properties$|^kotlin-js-store/|^web/smoke/)'; then
+            echo "build_inputs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build_inputs=false" >> "$GITHUB_OUTPUT"
           fi
 
   # The jobs below run side by side, each on its own runner; build-and-test waits for all
@@ -177,23 +197,24 @@ jobs:
           if-no-files-found: ignore
 
       # The production bundle takes a while to optimize, and the tests above already build the
-      # web app, so it's only built on master, where it's kept as an artifact. Releases build
-      # their own (web.yml).
+      # web app, so it's built on master, where it's kept as an artifact, and on pull requests
+      # that change a build input (the `changes` job), since a toolchain bump that breaks the
+      # bundle must not first show on release day (#364). Releases build their own (web.yml).
       - name: Build web app
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || needs.changes.outputs.build_inputs == 'true'
         run: ./gradlew :web:wasmJsBrowserDistribution --stacktrace
 
       # Serves the bundle from /soundboard/ as GitHub Pages does and checks it in headless
       # Chrome, online and offline (#223; web/smoke/smoke.mjs).
       - name: Smoke-test the web app
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || needs.changes.outputs.build_inputs == 'true'
         working-directory: web/smoke
         run: |
           npm ci --no-audit --no-fund
           node smoke.mjs
 
       - name: Upload web app
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' || needs.changes.outputs.build_inputs == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: web-app
@@ -287,3 +308,15 @@ jobs:
           if [ "${{ needs.changes.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then exit 1; fi
           if [ "${{ needs.changes.outputs.code }}" != "true" ]; then exit 0; fi
           [ "${{ needs.android.result }}" = "success" ] && [ "${{ needs.web.result }}" = "success" ] && [ "${{ needs.coverage.result }}" = "success" ]
+
+  # A scheduled run that fails or is cancelled tells nobody otherwise: it opens an issue, or
+  # comments on the one already open (#364). It only ever runs for the schedule, and it's the
+  # only job here that may write issues.
+  report-scheduled-failure:
+    needs: build-and-test
+    if: always() && github.event_name == 'schedule' && needs.build-and-test.result != 'success'
+    permissions:
+      issues: write
+    uses: ./.github/workflows/scheduled-failure-issue.yml
+    with:
+      workflow-name: CI

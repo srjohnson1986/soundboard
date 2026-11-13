@@ -107,6 +107,12 @@ keeps the APK as a workflow artifact.
    4. Open it and check all of that is still there, the saved board under
       **Switch board**, and no tile newly showing "needs recording" (load drops
       a clip whose file is missing, so that would mean lost recordings).
+   The release APK has native libraries for ARM only (#362), so use an emulator
+   whose `adb shell getprop ro.product.cpu.abilist` includes `arm64-v8a`. The
+   x86_64 Google APIs image on API 30 or newer (such as the Pixel 6 API 35 AVD)
+   does, by translating ARM code, and installs it fine. On an emulator without
+   `arm64-v8a`, the install fails with `INSTALL_FAILED_NO_MATCHING_ABIS`: use an
+   arm64 system image instead.
    Only then tag the release.
 3. Bump `appVersionName` (and `appVersionCode`) in `gradle.properties`,
    through the usual issue/branch/PR flow. The Android build reads them for

@@ -541,6 +541,16 @@ returns null on failure with `status` saying why. `Failed` allows trying again.
   once, on whatever connection there is, since someone asked. ML Kit reports no download progress, so
   `Downloading` has no percentage and the bar moves instead of filling. The model's presence is
   checked at start (`RemoteModelManager`), so `Ready` is known before anyone asks. One call at a time, behind a mutex.
+  ML Kit's native library (`libtranslate_jni.so`) is 12-17 MB per CPU type, and it ships for four,
+  which made the first v1.2.0 APK 89 MB. So the **release** build type keeps only `arm64-v8a` and
+  `armeabi-v7a` (`ndk { abiFilters }` in `app/build.gradle.kts`, #362): phones are ARM, and the
+  published APK is about 54 MB. The **debug** build keeps all four, so the x86_64 emulator runs
+  the UI tests natively. An x86_64 emulator on API 30+ (the `google_apis` image CI and the
+  Pixel 6 AVD use) also runs the release APK, by translating ARM code (it lists `arm64-v8a` in
+  `ro.product.cpu.abilist`), which is how RELEASING.md's update check installs it. An x86
+  image without that translation can't install the release APK at all
+  (`INSTALL_FAILED_NO_MATCHING_ABIS`). A new native dependency adds its size per ABI, so
+  check `unzip -l app/build/outputs/apk/release/app-release-unsigned.apk | sort -n -r | head`.
 - **Web** (`ChromeTranslator`): Chrome's `Translator` API (Chrome and Edge on a computer, 138+; not
   Firefox, Safari, phones or workers). Without it the status is `Unavailable` with that reason. Chrome
   reports every pair as "downloadable" until a page has created a translator for it, so

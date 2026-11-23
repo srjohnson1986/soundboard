@@ -106,8 +106,8 @@ dependencies {
     // superset with the full Material icon set this app's menu/tile icons need.
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.13.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.1")
     implementation("androidx.core:core-ktx:1.19.1")
     // On-device translation (#332): the Spanish model downloads once (about 30 MB), then works offline.
     implementation("com.google.mlkit:translate:17.0.3")

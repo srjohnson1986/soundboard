@@ -122,7 +122,7 @@ kotlin {
             implementation("org.jetbrains.compose.ui:ui-test:1.12.2")
         }
         getByName("androidHostTest").dependencies {
-            implementation("org.robolectric:robolectric:4.17")
+            implementation("org.robolectric:robolectric:4.18.1")
             implementation("androidx.test:core:1.7.0")
             implementation("junit:junit:4.13.2")
             // Screenshot tests (#221).

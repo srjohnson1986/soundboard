@@ -41,7 +41,9 @@ val generateAppVersion = tasks.register("generateAppVersion") {
 kotlin {
     android {
         namespace = "com.example.soundboard.shared"
-        compileSdk = 37
+        compileSdk {
+            version = release(37) { minorApiLevel = 1 }
+        }
         minSdk = 24
         // Host tests run on the JVM, the shared UI tests under Robolectric (#219), which needs
         // the Android resources (the bundled fonts among them).

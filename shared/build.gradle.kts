@@ -131,7 +131,7 @@ kotlin {
             // Back, to close a menu (closeMenu).
             implementation("androidx.test.espresso:espresso-core:3.7.0")
             // Declares the empty activity runComposeUiTest starts on Android.
-            implementation("androidx.compose.ui:ui-test-manifest:1.12.1")
+            implementation("androidx.compose.ui:ui-test-manifest:1.13.0")
         }
     }
 }
